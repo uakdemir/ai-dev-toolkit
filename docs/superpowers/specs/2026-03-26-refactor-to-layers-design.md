@@ -22,7 +22,7 @@ AI agents waste context and make architectural mistakes when dependency directio
 
 ### 1.2 Success Criteria
 
-- Discovery phase correctly maps >50% of source files to layers without manual classification (remaining files flagged for user review)
+- Discovery phase assigns a layer classification (not "unclassified") to >50% of source files (remaining files flagged for user review)
 - Every dependency direction violation is detected and reported with source file, target file, and direction
 - Generated import-scanning tests pass on a clean architecture and fail on any backward dependency
 - Generated ESLint configs (Node.js) and ArchUnitNET tests (.NET) are valid and runnable without modification
@@ -45,9 +45,16 @@ AI agents waste context and make architectural mistakes when dependency directio
 - Modify CI/CD pipelines — it recommends CI integration but doesn't write pipeline configs
 - Replace existing architectural test setups — it detects and works alongside them
 
+**Post-skill human steps** (what remains manual after the skill runs):
+1. Write provider implementations behind the generated interface skeletons
+2. Update existing code to receive providers via DI instead of direct imports
+3. Move files to match the proposed layer folder structure (guided by the restructuring steps in the strategy spec)
+4. Wire the composition root to register provider implementations (e.g., `Program.cs`, root Fastify plugin)
+5. Run the generated structural tests and fix violations iteratively
+
 ### 1.4 Relationship to Other Skills
 
-The three skills in `ai-dev-toolkit` are independent but complementary. Typical workflow:
+Once implemented, the three skills in `ai-dev-toolkit` are independent but complementary. (Note: `plugin.json` description will need updating to reflect the third skill.) Typical workflow:
 
 1. `/refactor-to-monorepo` → define module boundaries, produce migration plan
 2. Execute the monorepo migration
@@ -79,15 +86,25 @@ description: "Use when the user wants to enforce architectural layers within a m
 ---
 ```
 
+### File Map
+
+| File | Target Lines | Content |
+|---|---|---|
+| `SKILL.md` | ~250-300 | Workflow orchestration, pipeline phases, mode detection |
+| `references/tech-stacks.md` | ~120-150 | Per-stack layer mappings, DI patterns, file heuristics, monorepo detection |
+| `references/layer-definitions.md` | ~60-80 | Expanded layer descriptions, responsibility boundaries, dependency rules, examples |
+| `references/structural-test-templates.md` | ~120-150 | Complete test file templates per stack and tier, allowlist format |
+| `references/provider-patterns.md` | ~80-100 | Interface + DI registration templates per stack, injection examples |
+
 ### Progressive Disclosure
 
-SKILL.md targets ~250-300 lines. References are loaded on-demand:
+SKILL.md targets ~250-300 lines (guideline, not hard limit). References are loaded on-demand:
 
 - After tech stack selection → read `references/tech-stacks.md` (only the relevant stack section)
 - During discovery phase → read `references/layer-definitions.md`
 - During scaffolding phase → read `references/structural-test-templates.md` and `references/provider-patterns.md`
 
-The AI never loads all references at once. If the user selected "Other" tech stack, skip `tech-stacks.md` and use follow-up answers to determine patterns.
+The AI never loads all references at once. Reference files use clear `## Stack: Node.js + Fastify`, `## Stack: .NET MVC`, `## Stack: Python + FastAPI` level-2 headers so the AI can locate the relevant section after loading. If the user selected "Other" tech stack, skip `tech-stacks.md` and use follow-up answers to determine patterns.
 
 ---
 
@@ -99,7 +116,7 @@ The AI never loads all references at once. If the user selected "Other" tech sta
 Types → Config → Data → Service → Providers (lateral) → API → UI
 ```
 
-Dependencies flow left-to-right ("forward"). A layer may import from any layer to its left, never to its right.
+Dependencies generally flow left-to-right ("forward"). Each layer's specific allowed dependencies are defined in the table below — the general left-to-right flow is further restricted per layer to enforce cleaner separation (e.g., API goes through Service, not directly to Data).
 
 **Providers** is a lateral injection point — any layer can *receive* a Provider through dependency injection, but no layer directly imports Provider implementations. Layers depend on Provider *interfaces*, which are injected at runtime.
 
@@ -140,6 +157,8 @@ Dependencies flow left-to-right ("forward"). A layer may import from any layer t
 
 **DI mechanism:** `@fastify/awilix` for full DI container support, or `fastify.decorate()` for simpler projects. The skill detects which is already in use and follows suit.
 
+**Frontend (React/Vue) UI layer:** If the frontend lives in a separate monorepo package (e.g., `packages/web/`), it gets its own independent layer analysis with its own ANALYZE run. If co-located in the same package, frontend components are classified under the UI layer at `src/ui/` or `src/components/`. The UI layer's structural tests enforce that UI files do not import from Data or Service directly — they go through API (for server-rendered apps) or consume API responses via hooks/stores.
+
 **.NET MVC:**
 
 | Layer | .NET Equivalent | Project/Folder Convention |
@@ -156,13 +175,31 @@ Dependencies flow left-to-right ("forward"). A layer may import from any layer t
 
 **DI mechanism:** Built-in `IServiceCollection` / `IServiceProvider`. The skill generates extension methods for provider registration (e.g., `services.AddAuthProvider()`).
 
+**Python + FastAPI:**
+
+| Layer | Python Equivalent | Folder Convention |
+|---|---|---|
+| Types | Pydantic models, dataclasses, TypedDict, Protocol classes | `src/types/` or `app/types/` |
+| Config | Pydantic `BaseSettings`, env parsing, feature flags | `src/config/` or `app/config/` |
+| Data | SQLAlchemy models, repository classes, database sessions | `src/data/` or `app/data/` |
+| Service | Business logic modules | `src/services/` or `app/services/` |
+| Providers | Protocol/ABC interfaces for cross-cutting concerns | `src/providers/` or `app/providers/` |
+| API | FastAPI route handlers, APIRouter definitions | `src/api/` or `app/api/` |
+| UI | N/A for API-only; separate frontend package in monorepo | Separate package |
+
+**Python-specific note:** Python uses `import`/`from...import` statements. Discovery heuristics: `*_model.py` or `models.py` → Data, `*_service.py` → Service, `*_router.py` or `routes.py` → API, `Depends()` usage → Provider candidates. `__init__.py` files serve as barrel files.
+
+**DI mechanism:** FastAPI's `Depends()` for web projects. For non-FastAPI Python projects, `dependency-injector` library or manual constructor injection. The skill detects FastAPI by checking for `fastapi` in `pyproject.toml` dependencies.
+
+**Structural test tooling:** Tier 1 import-scanning tests use pytest. Tier 2 enforcement uses `import-linter` (the Python equivalent of ESLint import restrictions) with contracts defined in `pyproject.toml` or `.importlinter` config.
+
 ---
 
 ## 4. Invocation Flow
 
 ### 4.1 Step 1 — Tech Stack Selection
 
-Same preset list as the other skills:
+Same preset list as the other skills; follow-up questions differ per skill:
 
 > What's your tech stack?
 > 1. Node.js + React (default)
@@ -172,12 +209,16 @@ Same preset list as the other skills:
 > 5. Python + React
 > 6. Other (specify)
 
-**Validation:** After selection, scan for expected config files (`package.json` for Node.js, `.csproj`/`.sln` for .NET, `pyproject.toml` for Python). If not found, warn: "Expected [file] not found for [stack]. Is this the right tech stack?"
+**Node.js backend framework follow-up:** After selecting option 1 or 2, ask: "What's your backend framework? (Fastify / Express / NestJS / Other)". This determines which DI mechanism and structural test patterns to use. Section 3.4 provides detailed mapping for Fastify; for Express/NestJS, the skill adapts the same layer model using the framework's native DI patterns (NestJS has built-in DI; Express uses manual injection or `awilix`).
+
+**Validation:** After selection, scan for expected config files as defined in `references/tech-stacks.md` for the selected stack. If not found, warn: "Expected [file] not found for [stack]. Is this the right tech stack?"
 
 **"Other" handling:** Ask follow-up questions:
 1. "What's your backend language/framework?"
 2. "What's your frontend framework?" (if any)
 3. "What's your DI/IoC mechanism?" (if any)
+4. "What test runner do you use?" (e.g., pytest, JUnit, go test)
+5. "What's your build system?" (e.g., Bazel, Gradle, Make)
 
 ### 4.2 Step 2 — Scope Detection
 
@@ -189,7 +230,7 @@ Same preset list as the other skills:
 
 When applying to a whole monorepo, the skill processes each package independently. Each gets its own layer map, structural tests, and provider interfaces. Shared/common packages may use a subset of layers (e.g., Types + Config + Data only, no API/UI) — missing layers in shared packages are not flagged as gaps.
 
-Monorepo detection uses the same heuristics as the other skills (see `refactor-to-monorepo` spec Section 4.5).
+Monorepo detection heuristics are defined in this skill's own `references/tech-stacks.md` under "General Monorepo Detection" — the same detection table that the other two skills carry in their respective reference files (Node.js: `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, `lerna.json`, or `package.json` with `"workspaces"`; .NET: `.sln` with multiple `.csproj`; Python: `pyproject.toml` with `[tool.uv.workspace]`; General: `rush.json`, `.moon/workspace.yml`, `pants.toml`).
 
 ### 4.3 Step 3 — Existing Layering Detection
 
@@ -203,6 +244,8 @@ Quick scan for signals that layers already exist:
 | No layering detected | Proceed with full discovery + scaffolding |
 | Partial layering detected | Note what exists, focus analysis on gaps and violations |
 | Strong layering already in place | Report findings, ask: "Audit existing layers or restructure?" |
+
+If `docs/layer-architecture/strategy.md` and `tests/structural/.layer-allowlist.json` exist from a previous run, read them to import previously approved intentional violations into the allowlist. Present only new violations separately during Phase 2.
 
 ### 4.4 Step 4 — Mode Selection
 
@@ -224,14 +267,14 @@ Single-pass data gathering. No user interaction — this is collecting facts.
 - Use tech-stack-specific heuristics from `references/tech-stacks.md`:
   - **Node.js+Fastify:** `*.entity.ts` → Data, `*.service.ts` → Service, `*.route.ts` → API, plugin `decorate()` calls → Provider candidates
   - **.NET MVC:** `*Repository.cs` → Data, `*Service.cs` → Service, `*Controller.cs` → API, `IServiceCollection` registrations → Provider candidates
+  - **Python+FastAPI:** `*_model.py` or `models.py` → Data, `*_service.py` → Service, `*_router.py` or `routes.py` → API, `Depends()` usage → Provider candidates
 - Files that don't match any pattern → flagged as "unclassified" for user review in Phase 2
 
 **Step 1.2 — Dependency Direction Analysis:**
-- Trace all import/require statements (Node.js) or `using` directives + `<ProjectReference>` (.NET)
+- Trace all import/require statements (Node.js), `using` directives + `<ProjectReference>` (.NET), or `import`/`from...import` statements (Python)
 - For each file, record: assigned layer (from 1.1) and which layers it imports from
 - Build a directional dependency matrix: Layer A → Layer B (count of imports)
-- Flag **hard violations** — any import that goes "backward" against the prescribed flow (e.g., Data importing from Service)
-- Flag **soft violations** — any import that skips a layer (e.g., API importing from Data, bypassing Service)
+- Flag **violations** — any import where the target layer is not in the source layer's allowed dependencies (Section 3.2). e.g., Data importing from Service (backward), or API importing from Data (not in API's allowed list)
 - Flag **circular dependencies** between layers
 
 **Step 1.3 — Cross-Cutting Concern Inventory:**
@@ -256,9 +299,9 @@ Synthesizes discovery data into a concrete proposal.
 - For missing layers: whether the codebase needs it (e.g., no UI layer for a pure API service is fine, not a gap)
 
 **2. Dependency Violations Found:**
-- Each violation: source file, target file, direction, severity (hard/soft)
-- e.g., "Data → Service: `userRepo.ts` imports from `authService.ts`" (hard violation)
-- Count summary: "Found 12 hard violations, 8 soft violations across 47 source files"
+- Each violation: source file, target file, direction (which layer rule is broken per Section 3.2)
+- e.g., "Data → Service: `userRepo.ts` imports from `authService.ts`" (Data's allowed deps are Types, Config only)
+- Count summary: "Found 20 violations across 47 source files"
 
 **3. Provider Candidates:**
 - Each cross-cutting concern: what it is, how many files use it directly, proposed provider interface name
@@ -280,7 +323,7 @@ Generates concrete artifacts after user approval.
 
 **3.1 — Machine-Actionable Spec:**
 
-Written to `docs/layer-architecture/strategy.md`:
+Written to `docs/layer-architecture/strategy.md` for single repos. In monorepo mode, output paths are scoped per package (e.g., `packages/auth/docs/layer-architecture/strategy.md`). Similarly, structural tests and provider interfaces are written within each package's directory.
 
 ```markdown
 ---
@@ -315,25 +358,50 @@ This is the spec a future `implement-plan` skill would consume.
 **3.2 — Structural Tests (3 tiers):**
 
 **Tier 1 — Import-scanning tests** (zero dependencies, works immediately):
-- Written to `tests/structural/layer-boundaries.test.ts` (Node.js) or `Tests/Structural/LayerBoundaryTests.cs` (.NET)
-- One test per layer rule: "files in Data/ do not import from Service/"
-- Parses source files, resolves imports, asserts no violations
-- Runs with the project's existing test runner (Jest/Vitest for Node.js, xUnit/NUnit for .NET)
-- Includes an allowlist mechanism for user-approved intentional violations
+- Written to `tests/structural/layer-boundaries.test.ts` (Node.js), `Tests/Structural/LayerBoundaryTests.cs` (.NET), or `tests/structural/test_layer_boundaries.py` (Python)
+- One test per layer rule, derived from the allowed dependencies table (Section 3.2). For each layer, assert that its files only import from allowed layers.
+- Runs with the project's existing test runner (Jest/Vitest for Node.js, xUnit/NUnit for .NET, pytest for Python)
+
+**Import resolution strategy per stack:**
+- **Node.js:** Regex scan for `import ... from '...'` and `require('...')` statements. Resolve relative paths against file location. For path aliases (e.g., `@/`), read `tsconfig.json` `paths` field; if no tsconfig, note path aliases as a limitation in the strategy spec.
+- **.NET:** Regex scan for `using` directives. Match namespace prefixes against project folder structure (e.g., `using MyApp.Data` → Data layer). Also check `<ProjectReference>` elements in `.csproj` files for project-level dependencies.
+- **Python:** Regex scan for `import` and `from ... import` statements. Resolve against project package structure using `__init__.py` presence. For non-standard layouts, note as limitation.
+
+**Allowlist mechanism:** A JSON file at `tests/structural/.layer-allowlist.json` containing entries of `{"source": "path/to/file", "target": "path/to/dependency", "reason": "..."}`. User-approved intentional violations from Phase 2 are pre-populated. The import-scanning tests read this file and skip matching entries.
+
+**Composition root exemption:** The composition root file(s) are excluded from import-scanning tests since they by definition import from every layer to wire DI. Identified per stack: Node.js — file creating the Fastify/Express instance (typically `src/app.ts` or `src/server.ts`); .NET — `Program.cs` or `Startup.cs`; Python — file creating the ASGI/WSGI application (typically `src/main.py` or `app/main.py`). These files are recorded in the strategy spec under a `composition_root` field.
+
+**Concrete test case example (Node.js):**
+```typescript
+// For each file in src/data/**, collect import targets, resolve to layers,
+// assert each target layer is in Data's allowed set: [Types, Config]
+const dataFiles = glob.sync('src/data/**/*.ts');
+for (const file of dataFiles) {
+  const imports = extractImports(file);
+  for (const imp of imports) {
+    const targetLayer = resolveToLayer(imp);
+    expect(['types', 'config']).toContain(targetLayer);
+  }
+}
+```
 
 **Tier 2 — Framework-specific enforcement:**
-- **Node.js:** `.eslintrc` rules using `eslint-plugin-import` with `no-restricted-paths` — one rule per forbidden layer crossing
+- **Node.js:** Detect ESLint config format — if `eslint.config.js` (flat config) exists, generate flat config using `eslint-plugin-import-x` with `no-restricted-paths`; if `.eslintrc.*` exists, generate legacy format using `eslint-plugin-import`. Default to flat config for new projects. One rule per forbidden layer crossing.
 - **.NET:** ArchUnitNET test class with fluent assertions like `Types().That().ResideIn("Data").Should().NotDependOnAny("Service")`
+- **Python:** `import-linter` contracts in `pyproject.toml` or `.importlinter` config. One contract per layer rule.
 
 **Tier 3 — CI integration recommendation:**
 - A section in the strategy doc recommending how to add structural tests to CI
 - Not generated as pipeline config — that's infrastructure the skill doesn't own
+
+**"Other" stack test generation:** For stacks not covered by presets, Tier 1 tests are generated in the user's stated backend language using the test runner from the follow-up questions. Tier 2 framework-specific enforcement is skipped with a note in the strategy doc explaining that no matching linter/architecture test library was identified. Provider interfaces are generated in the stated language with a "skeleton — adapt to your DI framework" header.
 
 **3.3 — Provider Interface Templates:**
 
 For each identified provider candidate:
 - **Node.js:** TypeScript interface file + Fastify plugin that registers it via `fastify.decorate()` or awilix container
 - **.NET:** `I[Name]Provider` interface + DI registration extension method for `IServiceCollection`
+- **Python:** Protocol class (or ABC) + FastAPI `Depends()` factory function, or `dependency-injector` container registration
 
 Written to the project source (e.g., `src/providers/` or `Providers/`). These are skeleton files — interface definitions with method signatures, not implementations. The implementations stay where the cross-cutting concern currently lives, but now behind the interface.
 
@@ -377,7 +445,7 @@ If changes requested: update the machine spec, regenerate affected tests/interfa
    - **Barrel files / index files** per layer with a comment explaining the layer's responsibility and dependency rules
    - **Structural tests** — same 3-tier output as the ANALYZE path, enforcing the clean state from day one
    - **Provider interface skeletons** based on the user's stated concerns
-   - **Strategy spec** in `docs/layer-architecture/strategy.md` — same format as ANALYZE, but file mapping and violations sections are empty, restructuring steps replaced with "initial architecture" notes
+   - **Strategy spec** in `docs/layer-architecture/strategy.md` — same format as ANALYZE, but file mapping and violations sections are empty, restructuring steps replaced with "initial architecture" notes. Frontmatter defaults: `scope` from project name in `package.json`/`.csproj`/`pyproject.toml`, `layers` is the full default set.
 4. No human summary needed for empty projects — present the generated structure inline and confirm
 
 This implements the OpenAI insight that layer enforcement is "an early prerequisite, not something you postpone."
@@ -412,13 +480,14 @@ This implements the OpenAI insight that layer enforcement is "an early prerequis
 | Strategy spec | `docs/layer-architecture/strategy.md` | Machine-actionable restructuring plan | Source of truth — kept |
 | Human summary | `docs/tmp/layer-summary.md` | Human review of proposed changes | Throwaway — disposable after review |
 | Import-scanning tests | `tests/structural/layer-boundaries.test.ts` or `.cs` | Immediate layer enforcement | Kept — runs in CI |
-| ESLint config (Node.js) | `.eslintrc` additions or separate config | Layer-aware linting | Kept — runs on save + CI |
+| ESLint config (Node.js) | `eslint-layers.config.js` (flat) or `.eslintrc.layers.js` (legacy) | Layer-aware linting | Kept — runs on save + CI |
+| import-linter config (Python) | `pyproject.toml` `[tool.importlinter]` section | Layer-aware import contracts | Kept — runs in CI |
 | ArchUnitNET tests (.NET) | `Tests/Structural/ArchitectureTests.cs` | Framework-level layer enforcement | Kept — runs in CI |
 | Provider interfaces | `src/providers/` or `Providers/` | DI interface skeletons | Kept — extended by implementation |
 
 ### SCAFFOLD Mode
 
-Same artifacts as ANALYZE, minus violations and human summary. Folder structure and barrel files are additional outputs.
+Same artifacts as ANALYZE, minus violations and human summary. Folder structure and barrel files are additional outputs. (Barrel files are only generated in SCAFFOLD mode; ANALYZE mode operates on existing file structures.)
 
 ---
 
@@ -435,4 +504,4 @@ Same artifacts as ANALYZE, minus violations and human summary. Folder structure 
 | SCAFFOLD mode for empty projects | Layer enforcement is most valuable when set up before code exists (OpenAI's "early prerequisite" insight). Prevents violations from ever forming. |
 | Generate code files (tests + interfaces), not just markdown | Structural tests and interfaces are scaffolding, not strategy. They need to be runnable, not copy-pasted from a doc. Analysis docs stay in `docs/`. |
 | Intentional violation allowlist | Real codebases have legitimate exceptions. Hard-blocking all violations would make the tests unusable. Named exceptions with justifications keep enforcement honest. |
-| Tech stack mapping for Fastify and .NET MVC specifically | These are the user's primary stacks. The default layer template maps cleanly to both with no conflicts — Fastify's plugin model and .NET's built-in DI are natural fits. |
+| Tech stack mapping for Fastify, .NET MVC, and Python+FastAPI | These are the user's primary stacks. The default layer template maps cleanly to all three — Fastify's plugin model, .NET's built-in DI, and FastAPI's `Depends()` are natural fits. Node.js backend framework follow-up question handles Express/NestJS variants. |
