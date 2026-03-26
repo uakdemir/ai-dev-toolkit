@@ -1,0 +1,8 @@
+{
+  "name": "ai-dev-toolkit",
+  "version": "1.0.0",
+  "description": "AI-optimized documentation generation and monorepo refactoring strategy",
+  "author": {
+    "name": "ai-dev-toolkit"
+  }
+}
