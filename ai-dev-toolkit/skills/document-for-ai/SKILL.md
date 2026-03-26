@@ -95,6 +95,7 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
    - **data-model** — generate if schema, model, or migration files are found matching the stack's data model patterns.
    - **guide** — generate if setup scripts (`Makefile`, `docker-compose.yml`), test configs (`jest.config.*`, `pytest.ini`), or CI configs (`.github/workflows/`, `.gitlab-ci.yml`) are found.
    - **troubleshooting** — generate if error-handling middleware, logging configurations, or known-issues/FAQ files are found.
+   > Note: A single matching file is sufficient to trigger generation of that doc type.
 3. **Load templates.** Read `references/doc-templates.md` for section structures and `references/frontmatter-schema.md` for required frontmatter fields.
 4. **Generate docs.** Create each doc using the matched template. Place files under `docs/{scope}/{purpose}.md`. Populate frontmatter with correct `scope`, `purpose`, `ai_keywords` (3-8 terms), `code_paths`, and `last_verified` set to today.
 5. **Generate per-module CLAUDE.md** files in each module directory.
@@ -111,7 +112,7 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
    - Match folder name against the Example Mapping table.
    - If no folder match, analyze file content against Template Selection Rules.
    - If a single doc spans multiple templates, split it into separate files — one per template.
-   - If still unclassifiable, default to `architecture`.
+   - If still unclassifiable, place in `docs/unclassified/` and list in migration report. Ask user to manually classify.
 3. **Restructure in place.** Rewrite each doc to match its assigned template's section structure. Git history serves as backup — do not create separate backup copies. Non-Markdown files found in docs directories are listed as "unsupported format" in the migration report and not processed.
 4. **Fill gaps.** Analyze code to fill missing sections. Generate frontmatter for each doc per `references/frontmatter-schema.md`. Set `last_verified` to today.
 5. **Generate CLAUDE.md hierarchy** (root + per-module) and **AI_INDEX.md**.
@@ -134,7 +135,7 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
    - List of orphaned docs with their stale `code_paths`.
    - List of undocumented modules with suggested doc types.
    - Priority-ranked fix list (urgent red > yellow > green).
-6. **Offer to fix** issues by category:
+6. **Offer to fix** issues by category. Prompt: "Want me to fix the issues found? (all / specific items / skip)"
    - **Accuracy** — rewrite sections that contradict current code.
    - **Completeness** — fill empty or stub sections from code analysis.
    - **Format** — correct frontmatter fields and align sections to template structure.
@@ -156,8 +157,15 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
 Best-effort rendering for human readers. No quality gate applied.
 
 1. **Determine scope.** If a path argument is provided, humanize that single file. Otherwise, humanize all AI-optimized docs in the project.
-2. **Transform content.** Strip YAML frontmatter. Expand terse, keyword-dense bullet points into readable prose paragraphs. Preserve code blocks and examples unchanged.
-3. **Write output** to `docs/tmp/{original-filename}`. Do not modify the original AI-optimized files.
+2. **Transform content.** Strip YAML frontmatter. Apply these transformation rules:
+   - Expand terse, keyword-dense bullet points into readable prose paragraphs.
+   - Expand abbreviations and technical shorthand into full terms.
+   - Replace frontmatter keyword lists with introductory context sentences.
+   - Convert table-format API docs into narrative descriptions with examples.
+   - Target reading level: technical professional who hasn't seen the code.
+   - Preserve code blocks and examples unchanged.
+3. **Insert snapshot header** at the top of each humanized file: `Generated from AI docs on [date] — this is a one-time snapshot, not a source of truth.`
+4. **Write output** to `docs/tmp/{original-filename}`. Do not modify the original AI-optimized files.
 
 **Error handling:**
 
@@ -181,7 +189,9 @@ Best-effort rendering for human readers. No quality gate applied.
 {Stack name and key dependencies.}
 
 ## Module Map
-{List each module with one-line description.}
+| Module | Purpose | Path |
+|--------|---------|------|
+| {module} | {one-line description} | {path} |
 
 ## Documentation
 {Links to AI_INDEX.md and key docs.}
@@ -212,6 +222,9 @@ Best-effort rendering for human readers. No quality gate applied.
 
 ## Key Commands
 {Module-specific build, test, or run commands.}
+
+## Conventions
+{Module-specific patterns, if any differ from root.}
 ```
 
 ### Existing CLAUDE.md Handling
@@ -236,7 +249,7 @@ Generate a lookup table with four columns:
 | Auth API | api | login, logout, refresh | docs/auth/api.md |
 | Payments Data Model | data-model | Stripe, charges, refunds | docs/payments/data-model.md |
 
-**Monorepo layout:** Group rows under module headers (`## auth`, `## payments`, etc.).
+**Monorepo layout:** Group rows under module headers (`## Module: auth`, `## Module: payments`, etc.).
 
 **Single repo layout:** Flat table with no section headers.
 
@@ -247,11 +260,11 @@ Generate a lookup table with four columns:
 | Scenario | Behavior |
 |----------|----------|
 | No git history available | Skip accuracy checks requiring commit comparison. Warn in report. |
-| Unclassifiable doc during migrate | Default to `architecture` template. Note in migration report. |
+| Unclassifiable doc during migrate | Place in `docs/unclassified/`, ask user to classify. |
 | Non-Markdown file in docs directory | List as "unsupported format." Do not process. |
-| Large codebase (>100K LOC) | Limit analysis to entry points, routes, and data models only. Warn about partial coverage in report. |
-| Small codebase (<5 files) | Generate a single architecture doc + root CLAUDE.md. Skip per-module CLAUDE.md and AI_INDEX.md. |
-| Module with no matching doc | Flag as undocumented in audit report. Offer to generate. |
-| Conflicting info between code and doc | Trust code as source of truth. Flag the contradicting doc section for rewrite. |
+| Large codebase (>100K LOC) | Process one module at a time, report progress per module. |
+| Small codebase (<5 files) | Report insufficient code, suggest running later. |
+| Unmatched module | List closest matches from AI_INDEX.md, ask for clarification. |
+| Conflicting info between code and doc | Flag conflict with both doc's claim and code's reality. Don't auto-fix — present to user. |
 | Partial failure during generation | Write all completed docs to disk. Report failures with file paths. Continue with remaining work. |
 | Pre-existing CLAUDE.md | Preserve existing content. Append generated sections under `## AI-Generated Context`. |
