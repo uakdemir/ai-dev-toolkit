@@ -1,0 +1,27 @@
+# Shell configs
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+
+# Editor / IDE
+.idea
+.vscode
+
+# Git configs
+.gitconfig
+.gitmodules
+
+# Tool configs
+.mcp.json
+.ripgreprc
+
+# Claude Code
+.claude/
+
+# Working directories
+tmp/
+global/
+local/
+mnt
