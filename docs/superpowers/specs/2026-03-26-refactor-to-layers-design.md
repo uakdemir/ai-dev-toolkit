@@ -107,7 +107,7 @@ SKILL.md targets ~250-300 lines (guideline, not hard limit). References are load
 - During discovery phase → read `references/layer-definitions.md`
 - During scaffolding phase → read `references/structural-test-templates.md` and `references/provider-patterns.md`
 
-The AI never loads all references at once. Reference files use clear `## Stack: Node.js + Fastify`, `## Stack: .NET MVC`, `## Stack: Python + FastAPI` level-2 headers so the AI can locate the relevant section after loading. If the user selected "Other" tech stack, skip `tech-stacks.md` and use follow-up answers to determine patterns.
+The AI never loads all references at once. Reference files use clear `## Stack: Node.js + Fastify`, `## Stack: .NET MVC`, `## Stack: Python + FastAPI` level-2 headers so the AI can locate the relevant section after loading. Note: unlike the other skills whose headers are keyed by frontend framework (e.g., `## Stack: Node.js + React`), this skill's reference headers are keyed by backend framework because layer architecture is a backend concern. If the user selected "Other" tech stack, skip `tech-stacks.md` and use follow-up answers to determine patterns.
 
 ---
 
@@ -214,9 +214,13 @@ Same preset list as the other skills; follow-up questions differ per skill:
 
 **Node.js backend framework follow-up:** After selecting option 1 or 2, ask: "What's your backend framework? (Fastify / Express / NestJS / Other)". This determines which DI mechanism and structural test patterns to use. Section 3.4 provides detailed mapping for Fastify; for Express/NestJS, the skill adapts the same layer model using the framework's native DI patterns (NestJS has built-in DI; Express uses manual injection or `awilix`).
 
+**.NET backend pattern follow-up:** After selecting option 3 or 4, ask: "What's your backend pattern? (MVC Controllers / Minimal APIs / Other)". Section 3.4 provides detailed mapping for MVC Controllers. For Minimal APIs, the API layer detection adapts to scan for `app.MapGet`/`app.MapPost` patterns instead of Controller classes (same layer rules apply).
+
+**Python backend framework follow-up:** After selecting option 5, ask: "What's your backend framework? (FastAPI / Django / Flask / Other)". Section 3.4 provides detailed mapping for FastAPI. For Django, the skill maps `views.py` → API, `models.py` → Data, and uses Django's middleware for Provider patterns. For Flask, similar to FastAPI but uses Flask blueprints for API layer detection.
+
 **Validation:** After selection, scan for expected config files as defined in `references/tech-stacks.md` for the selected stack. If not found, warn: "Expected [file] not found for [stack]. Is this the right tech stack?"
 
-**"Other" handling:** Ask follow-up questions:
+**"Other" handling:** Ask 5 follow-up questions (vs 3 for document-for-ai) because layer enforcement requires knowledge of the DI mechanism, test runner, and build system:
 1. "What's your backend language/framework?"
 2. "What's your frontend framework?" (if any)
 3. "What's your DI/IoC mechanism?" (if any)
@@ -287,7 +291,7 @@ Single-pass data gathering. No user interaction — this is collecting facts.
   - **Telemetry:** Metrics, tracing, span creation
   - **Config access:** Direct `process.env` / `IConfiguration` reads outside the Config layer
   - **Error handling:** Try/catch patterns, error middleware
-- Each occurrence is a **Provider candidate** — something that should be injected via an interface rather than directly imported
+- A cross-cutting concern becomes a **Provider candidate** only if it appears in **3+ files across 2+ different layers**. Single-layer usage is a local concern, not cross-cutting. Below-threshold occurrences are noted in the strategy spec's limitations section but not proposed as Providers.
 
 **Output of Phase 1:** Raw data — file-to-layer mapping, dependency matrix, violation list, provider candidate list. All internal, feeds directly into Phase 2.
 
@@ -331,13 +335,17 @@ Changes feed back into the layer map. Once approved, the **approved layer map be
 - **Renamed layers:** Update all references: folder paths, structural test assertions, strategy spec, and provider interfaces. The dependency rules follow the layer, not the name.
 - **Modified dependency rules:** If the user says "API should be allowed to import from Data directly," update the allowed dependencies for API. Structural tests reflect the approved rules, not the Section 3.2 defaults.
 
-Section 3.2 defines the **default** layer template. After Phase 2 approval, the approved layer map supersedes it for all downstream generation. Proceed to Phase 3.
+Section 3.2 defines the **default** layer template. After Phase 2 approval, the approved layer map supersedes it for all downstream generation.
+
+**Full rejection path:** If the user rejects the default layer template entirely (e.g., prefers hexagonal architecture or a custom layering), ask them to define their custom layers: name, responsibility, and allowed dependencies for each. Use their custom definitions in place of the Section 3.2 defaults. Re-run Phase 1 classification using the custom layer names as heuristic targets.
+
+Proceed to Phase 3.
 
 ### 5.3 Phase 3: Scaffolding
 
 Generates concrete artifacts after user approval.
 
-**3.1 — Machine-Actionable Spec:**
+**5.3.1 — Machine-Actionable Spec:**
 
 Written to `docs/layer-architecture/strategy.md` for single repos. In monorepo mode, output paths are scoped per package (e.g., `packages/auth/docs/layer-architecture/strategy.md`). Similarly, structural tests and provider interfaces are written within each package's directory.
 
@@ -363,8 +371,13 @@ composition_root: [path to composition root file(s)]
 [Each provider: name, responsibility, methods, which layers consume it]
 
 ## Restructuring Steps
-[Ordered list of file moves, import rewrites, interface extractions —
- ordered by dependency depth: fix Types first, then Config, etc.]
+[Ordered by dependency depth: fix Types first, then Config, etc.
+ Each step includes:
+ - action: move-file | extract-interface | rewrite-import | create-folder
+ - source: current file path
+ - target: target path or layer
+ - affected_imports: files that import the moved/changed file
+ - verify: command to confirm the step succeeded]
 
 ## Structural Test Inventory
 [Which tests were generated, what each enforces]
@@ -372,7 +385,7 @@ composition_root: [path to composition root file(s)]
 
 This is the spec a future `implement-plan` skill would consume.
 
-**3.2 — Structural Tests (3 tiers):**
+**5.3.2 — Structural Tests (3 tiers):**
 
 **Tier 1 — Import-scanning tests** (zero dependencies, works immediately):
 - Written to `tests/structural/layer-boundaries.test.ts` (Node.js), `Tests/Structural/LayerBoundaryTests.cs` (.NET), or `tests/structural/test_layer_boundaries.py` (Python)
@@ -386,7 +399,12 @@ This is the spec a future `implement-plan` skill would consume.
 
 **Allowlist mechanism:** A JSON file at `tests/structural/.layer-allowlist.json` containing entries of `{"source": "path/to/file", "target": "path/to/dependency", "reason": "..."}`. User-approved intentional violations from Phase 2 are pre-populated. The import-scanning tests read this file and skip matching entries.
 
-**Composition root exemption:** The composition root file(s) are excluded from import-scanning tests since they by definition import from every layer to wire DI. Identified per stack: Node.js — file creating the Fastify/Express instance (typically `src/app.ts` or `src/server.ts`); .NET — `Program.cs` or `Startup.cs`; Python — file creating the ASGI/WSGI application (typically `src/main.py` or `app/main.py`). These files are recorded in the strategy spec under a `composition_root` field.
+**Composition root exemption:** The composition root file(s) are excluded from import-scanning tests since they by definition import from every layer to wire DI. Detection per stack:
+- **Node.js:** Scan for files that import the framework constructor (`fastify()`, `express()`, `new Hono()`) AND call `.listen()` or `.ready()` or export the app instance. Common locations: `src/app.ts`, `src/server.ts`, `src/index.ts`, `src/main.ts`.
+- **.NET:** `Program.cs` or `Startup.cs` (conventional, reliable).
+- **Python:** Scan for files that create the ASGI/WSGI application instance (`FastAPI()`, `Flask(__name__)`, `Django` `wsgi.py`/`asgi.py`). Common locations: `src/main.py`, `app/main.py`.
+
+If multiple files match, list all as composition root candidates and ask the user to confirm. These files are recorded in the strategy spec under a `composition_root` field.
 
 **Concrete test case example (Node.js):**
 ```typescript
@@ -413,7 +431,7 @@ for (const file of dataFiles) {
 
 **"Other" stack test generation:** For stacks not covered by presets, Tier 1 tests are generated in the user's stated backend language using the test runner from the follow-up questions. Tier 2 framework-specific enforcement is skipped with a note in the strategy doc explaining that no matching linter/architecture test library was identified. Provider interfaces are generated in the stated language with a "skeleton — adapt to your DI framework" header.
 
-**3.3 — Provider Interface Templates:**
+**5.3.3 — Provider Interface Templates:**
 
 For each identified provider candidate:
 - **Node.js:** TypeScript interface file + Fastify plugin that registers it via `fastify.decorate()` or awilix container
@@ -458,7 +476,7 @@ If changes requested: update the machine spec, regenerate affected tests/interfa
 
 ## 6. SCAFFOLD Mode — Empty Projects
 
-**Detection:** No source files found (or only config files like `package.json`, `*.csproj`).
+**Detection:** No source files found (or only config/infrastructure files). Source files are files matching the tech stack's scan patterns: `.ts`/`.js`/`.tsx`/`.jsx` for Node.js, `.cs` for .NET, `.py` for Python. All other files (`package.json`, `tsconfig.json`, `*.csproj`, `Dockerfile`, `*.md`, `*.json`, `*.yaml`) are config/infrastructure. SCAFFOLD triggers when zero source files are found.
 
 **Behavior:**
 
@@ -467,6 +485,7 @@ If changes requested: update the machine spec, regenerate affected tests/interfa
 3. Generate:
    - **Folder structure** matching the layer template (e.g., `src/types/`, `src/config/`, `src/data/`, `src/services/`, `src/providers/`, `src/api/`)
    - **Barrel files / index files** per layer with a comment explaining the layer's responsibility and dependency rules
+   - **Composition root stub** — `src/app.ts` (Node.js), `Program.cs` (.NET), or `src/main.py` (Python) with a DI wiring comment and placeholder provider registrations. Pre-populated in the strategy spec's `composition_root` field. Structural tests exempt this file.
    - **Structural tests** — same 3-tier output as the ANALYZE path, enforcing the clean state from day one
    - **Provider interface skeletons** based on the user's stated concerns
    - **Strategy spec** in `docs/layer-architecture/strategy.md` — same format as ANALYZE, but file mapping and violations sections are empty, restructuring steps replaced with "initial architecture" notes. Frontmatter defaults: `scope` from project name in `package.json`/`.csproj`/`pyproject.toml`, `layers` is the full default set.
@@ -482,7 +501,7 @@ This implements the OpenAI insight that layer enforcement is "an early prerequis
 |---|---|
 | No clear file-to-layer mapping (>50% files unclassified) | Present unclassified files to user, ask for manual classification hints. If still unclear, suggest a custom layer template. |
 | Dynamic imports / reflection-based DI | Flag as "not statically analyzable" in the violation list. Structural tests mark these as skipped with a comment. |
-| Very large module (>50K LOC) | Process one layer at a time during discovery. Report progress. |
+| Very large module (>50K LOC) | Process one top-level directory at a time during discovery. Build the dependency matrix incrementally. Report progress after each directory is classified. |
 | Very small module (<5 source files) | Report that the module has insufficient code for meaningful layer separation. Suggest running after the module grows. |
 | No cross-cutting concerns found | Skip provider generation. Note in strategy doc that no Provider candidates were identified. |
 | Existing structural tests conflict with generated ones | Detect existing architecture tests, report them, ask: "Merge with existing tests or generate separately?" Never overwrite existing test files. **If "generate separately":** use alternate filenames — `layer-boundaries-generated.test.ts` (Node.js), `LayerBoundaryTests.Generated.cs` (.NET), `test_layer_boundaries_generated.py` (Python), `eslint-layers-generated.config.js` (ESLint). **If "merge":** for test files, append new test cases to the existing file after a `// --- Generated by refactor-to-layers ---` marker. For `pyproject.toml` sections, append under a new `[tool.importlinter.contracts.layers]` subsection. Record which path was chosen in the strategy spec under a `conflict_resolution` field. |
@@ -503,7 +522,7 @@ This implements the OpenAI insight that layer enforcement is "an early prerequis
 |---|---|---|---|
 | Strategy spec | `docs/layer-architecture/strategy.md` | Machine-actionable restructuring plan | Source of truth — kept |
 | Human summary | `docs/tmp/layer-summary.md` | Human review of proposed changes | Throwaway — disposable after review |
-| Import-scanning tests | `tests/structural/layer-boundaries.test.ts` or `.cs` | Immediate layer enforcement | Kept — runs in CI |
+| Import-scanning tests | `tests/structural/layer-boundaries.test.ts` (Node.js), `Tests/Structural/LayerBoundaryTests.cs` (.NET), `tests/structural/test_layer_boundaries.py` (Python) | Immediate layer enforcement | Kept — runs in CI |
 | ESLint config (Node.js) | `eslint-layers.config.js` (flat) or `.eslintrc.layers.js` (legacy) | Layer-aware linting | Kept — runs on save + CI |
 | import-linter config (Python) | `pyproject.toml` `[tool.importlinter]` section | Layer-aware import contracts | Kept — runs in CI |
 | ArchUnitNET tests (.NET) | `Tests/Structural/ArchitectureTests.cs` | Framework-level layer enforcement | Kept — runs in CI |
