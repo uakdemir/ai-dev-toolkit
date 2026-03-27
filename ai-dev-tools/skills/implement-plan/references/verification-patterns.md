@@ -89,7 +89,7 @@ Generated at `tmp/execution-report.md` after execution completes.
 ```markdown
 # Execution Report
 
-Date: YYYY-MM-DD
+> Generated from implement-plan execution on YYYY-MM-DD — this is a one-time report, not a source of truth.
 Execution mode: Serena / fallback (regex)
 Verification granularity: per-step / per-phase / end-only
 

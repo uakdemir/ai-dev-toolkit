@@ -86,6 +86,7 @@ Update imports using per-stack regex:
 | `source` | Concrete class file being extracted from |
 | `target` | Path where the interface file will be created |
 | `affected_imports` | Consumer files that need to be updated |
+| `verify` | Build/type-check command to confirm extraction succeeded |
 
 ### Dependency Ordering
 
@@ -95,7 +96,7 @@ Update imports using per-stack regex:
 
 ## Circular Dependency Classification
 
-Advisory only — these patterns inform the proposed resolution in the strategy spec. They are NOT auto-executed.
+Advisory only — these patterns inform the proposed resolution recorded in the execution report. They are NOT auto-executed.
 
 | Pattern | Description | Detection Heuristic | Confidence |
 |---|---|---|---|
@@ -106,7 +107,7 @@ Advisory only — these patterns inform the proposed resolution in the strategy 
 | Unclassified | Pattern is ambiguous and does not fit the above | Fails all heuristics | — |
 
 - All classifications include a confidence level (high / medium / low).
-- Unclassified cycles get no proposed resolution in the strategy spec.
+- Unclassified cycles get no proposed resolution — user must decide.
 
 ---
 
