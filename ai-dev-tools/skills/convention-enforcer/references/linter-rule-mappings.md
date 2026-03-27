@@ -56,14 +56,18 @@ no-empty  [with allowEmptyCatch: false]
 **Legacy JSON (`.eslintrc.json`) insertion:**
 
 ```json
-"_conventionEnforcer": { "error-handling": ["no-throw-literal", "@typescript-eslint/no-throw-literal", "no-empty"] },
-"rules": {
-  // convention-enforcer: error-handling
-  "no-throw-literal": "error",
-  "@typescript-eslint/no-throw-literal": "error",
-  "no-empty": ["error", { "allowEmptyCatch": false }]
+{
+  "_conventionEnforcer": { "error-handling": ["no-throw-literal", "@typescript-eslint/no-throw-literal", "no-empty"] },
+  "rules": {
+    "no-throw-literal": "error",
+    "@typescript-eslint/no-throw-literal": "error",
+    "no-empty": ["error", { "allowEmptyCatch": false }]
+  }
 }
 ```
+
+Note: JSON does not support comments. The `_conventionEnforcer` metadata key serves as
+the marker for dedup/detection instead of inline comments.
 
 **Flat config (`eslint.config.js`) insertion:**
 
@@ -132,14 +136,15 @@ Example config enforcing camelCase for functions and PascalCase for classes:
 **Legacy JSON (`.eslintrc.json`) insertion:**
 
 ```json
-"_conventionEnforcer": { "naming-conventions": ["@typescript-eslint/naming-convention"] },
-"rules": {
-  // convention-enforcer: naming-conventions
-  "@typescript-eslint/naming-convention": [
-    "error",
-    { "selector": "function", "format": ["camelCase"] },
-    { "selector": "class", "format": ["PascalCase"] }
-  ]
+{
+  "_conventionEnforcer": { "naming-conventions": ["@typescript-eslint/naming-convention"] },
+  "rules": {
+    "@typescript-eslint/naming-convention": [
+      "error",
+      { "selector": "function", "format": ["camelCase"] },
+      { "selector": "class", "format": ["PascalCase"] }
+    ]
+  }
 }
 ```
 
@@ -226,17 +231,18 @@ import/order  (requires eslint-plugin-import)
 **Legacy JSON (`.eslintrc.json`) insertion:**
 
 ```json
-"_conventionEnforcer": { "import-ordering": ["import/order"] },
-"rules": {
-  // convention-enforcer: import-ordering
-  "import/order": [
-    "error",
-    {
-      "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
-      "newlines-between": "always",
-      "alphabetize": { "order": "asc", "caseInsensitive": true }
-    }
-  ]
+{
+  "_conventionEnforcer": { "import-ordering": ["import/order"] },
+  "rules": {
+    "import/order": [
+      "error",
+      {
+        "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
+        "newlines-between": "always",
+        "alphabetize": { "order": "asc", "caseInsensitive": true }
+      }
+    ]
+  }
 }
 ```
 
@@ -305,10 +311,11 @@ no-console  [with allow: ["warn", "error"]]
 **Legacy JSON (`.eslintrc.json`) insertion:**
 
 ```json
-"_conventionEnforcer": { "logging": ["no-console"] },
-"rules": {
-  // convention-enforcer: logging
-  "no-console": ["warn", { "allow": ["warn", "error"] }]
+{
+  "_conventionEnforcer": { "logging": ["no-console"] },
+  "rules": {
+    "no-console": ["warn", { "allow": ["warn", "error"] }]
+  }
 }
 ```
 
