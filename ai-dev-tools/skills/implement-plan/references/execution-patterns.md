@@ -37,9 +37,9 @@ Each step in the strategy spec maps to one of four action types executed in orde
 
 ### Serena Mode
 
-1. Use the reference graph captured during `move-file` to locate all files referencing the moved file's symbols.
-2. Update import paths to reflect the new file location. Do not rename symbols.
-3. Note: `rename_symbol` is for renaming symbols, NOT for updating import paths — do not use it here.
+1. Use the reference graph captured during `move-file` (via `find_referencing_symbols`) to locate all files referencing the moved file's symbols.
+2. For each referencing file, use `replace_content` (or targeted file edits) to update the import path from the old location to the new location. Symbol names remain unchanged — only the module path is rewritten.
+3. Note: `rename_symbol` is for renaming symbols, NOT for updating import paths — do not use it here. The correct approach is `find_referencing_symbols` to identify references + targeted content replacement to update paths.
 
 ### Fallback Mode
 

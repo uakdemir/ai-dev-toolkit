@@ -59,13 +59,18 @@ Read the strategy spec and extract:
   - `composition_root` → exempt from import rewrites.
   - `scope` → used in commit messages.
 
-- **Restructuring Steps:** parse the step list from the spec body. Each step has an action type (`create-folder`, `move-file`, `rewrite-import`, `extract-interface`), source, target, and optional metadata.
+- **Restructuring Steps:** parse the step list from the spec body. Every step must have five fields: `action`, `source`, `target`, `affected_imports`, `verify`. Field semantics vary by action type:
+
+| Action | source | target | affected_imports | verify |
+|--------|--------|--------|------------------|--------|
+| `move-file` | Current file path | New file path | Files that import from source | Command to check move succeeded |
+| `rewrite-import` | File containing the import | New import path | N/A (single file) | Build/type-check command |
+| `extract-interface` | Concrete class file | New interface file path | Consumer files to update | Build/type-check command |
+| `create-folder` | N/A | Directory path | N/A | Directory existence check |
 
 - **Validation rules:**
-  - Every step must have a valid action type.
-  - `move-file` and `extract-interface` require both source and target.
-  - `rewrite-import` requires a file path and old/new import specifiers.
-  - `create-folder` requires a target path.
+  - Every step must have a valid action type and all required fields for that type (N/A fields may be empty).
+  - Malformed steps → error with step number and missing field. Do not proceed.
 
 - **Skip completed:** steps prefixed with `[DONE]` are skipped. Report: "Found N total steps: X remaining, Y already completed."
 
@@ -110,9 +115,9 @@ Execute all `create-folder` actions.
 
 - Dependency ordering: parent directories before children.
 - Idempotent — existing directories are skipped silently.
-- No verification needed — folder creation cannot break builds.
+- Verification: check directories exist. No build check needed.
 
-Commit: `refactor(<scope>): prepare — create target directories`
+Commit: `refactor: create folder structure (prepare phase)`
 
 ### Phase 1: Move
 
@@ -123,18 +128,18 @@ Execute all `move-file` actions.
 - Dependency ordering: if file B imports file A and both are moving, move A first.
 - After all moves, run verification if granularity permits.
 
-Commit: `refactor(<scope>): move — relocate files to target layers`
+Commit: `refactor: move N files to target locations (move phase)`
 
 ### Phase 2: Rewrite
 
 Execute all `rewrite-import` actions.
 
-- **Serena mode:** use the reference graph captured in Phase 1 to rewrite each import precisely via `rename_symbol` or targeted find-and-replace.
+- **Serena mode:** use the reference graph captured in Phase 1 to rewrite each import precisely via `replace_content` or targeted find-and-replace. (Do not use `rename_symbol` — that renames symbols, not import paths.)
 - **Fallback mode:** regex match on `import`/`require`/`from` statements. Flag ambiguous matches for user resolution.
 - The composition root file (from frontmatter) is exempt from automatic rewrites.
 - After all rewrites, run verification if granularity permits.
 
-Commit: `refactor(<scope>): rewrite — update import paths`
+Commit: `refactor: rewrite imports for new structure (rewrite phase)`
 
 ### Phase 3: Extract
 
@@ -145,7 +150,7 @@ Execute all `extract-interface` actions.
 - **Fallback mode:** regex-based extraction of exported function/class signatures.
 - After all extractions, run verification if granularity permits.
 
-Commit: `refactor(<scope>): extract — create provider interfaces`
+Commit: `refactor: extract provider interfaces (extract phase)`
 
 ---
 
@@ -153,20 +158,26 @@ Commit: `refactor(<scope>): extract — create provider interfaces`
 
 Before executing Phase 3, scan for circular dependencies among files involved in extract-interface steps.
 
-**Detection:** trace import chains looking for cycles. Classify each cycle into one of four known patterns:
+**Detection:** trace import chains looking for cycles (Serena: `find_referencing_symbols`; fallback: regex scanning). Classify each cycle into one of four patterns. Assign confidence (high/medium/low) per classification.
 
-| Pattern | Description | Recommended Fix |
-|---------|-------------|-----------------|
-| Mutual service | Two services import each other | Extract shared interface |
-| Hub cycle | Central file creates a dependency star | Inject dependencies instead |
-| Layer violation | Upward import creates a cycle | Move shared type to lower layer |
-| Barrel re-export | Index file re-exports create false cycles | Rewrite to direct imports |
+| Pattern | What's Happening | Heuristic | Recommended Fix |
+|---------|------------------|-----------|-----------------|
+| Callback/notification | A calls B, B calls back to A | B receives A's function as parameter, or calls single void method on A | Replace with callback parameter |
+| Shared operation | Both A and B need the same operation | Both call the same function with similar arguments | Extract shared operation to lower layer |
+| Bidirectional data flow | A reads from B, B reads from A | Property/field access in both directions | One side owns the data, other receives as parameter |
+| Misplaced responsibility | Code in A belongs in B (or vice versa) | One direction has only 1 call | Move the code to the correct layer |
 
-Cycles that do not match a known pattern are classified as **unclassified** with a confidence note.
+Cycles that do not match a known pattern are classified as **unclassified** — present without a proposed resolution.
 
-**Batch decision table:** present all detected cycles and ask the user to acknowledge each. Options per cycle: fix now (apply recommended fix), defer (add to execution report as "Recommended Manual Steps"), or ignore.
+**All resolutions are advisory only — not auto-executed.** The resolution patterns involve code edits outside the declared action model (create/move/rewrite/extract) and cannot be safely automated.
 
-This step is advisory only — acknowledged and ignored items are recorded, but Phase 3 proceeds regardless.
+**Batch decision table:** present all detected cycles in a numbered table. Options per item:
+- **(1) Acknowledge** — record the suggested resolution in the execution report's "Recommended Manual Steps" section
+- **(2) Dismiss** — ignore this circular dependency (proceed with extract-interface, accept potential issues)
+
+Respond in bulk: "1 for all", "2 for all", "1 for 1.1, 1.2 and 2 for the rest", etc.
+
+Acknowledged items are recorded for the user to apply manually. Phase 3 proceeds regardless. If an extract-interface step fails due to an unresolved circular dep, the failure analysis references the pre-Phase 3 classification.
 
 ---
 
@@ -202,9 +213,11 @@ Execution can be resumed after a mid-phase failure or an interrupted session.
 **On re-run:**
 
 1. Parse the strategy spec again. All `[DONE]` steps are skipped automatically.
-2. Reconcile the filesystem — verify that source files for remaining steps still exist at expected paths (they may have been moved by a partial Phase 1).
-3. Re-validate dependency ordering among remaining steps only.
-4. Resume execution from the first incomplete step in the current phase.
+2. Reconcile the filesystem — for each remaining step, check if source is gone but target exists → auto-mark `[DONE]` (manual move detected). If source is gone and target is also gone → stop and suggest re-running the analysis skill.
+3. Report: "Found N total steps, M already completed. Resuming from step M+1."
+4. Re-validate dependency ordering among remaining steps only.
+5. Ask verification granularity fresh (do not assume the previous session's choice).
+6. Resume execution from the first incomplete step in the current phase.
 
 **Fully executed:** if all steps are marked `[DONE]`, report: "All restructuring steps are already completed. Nothing to do."
 
@@ -221,15 +234,21 @@ Two artifacts are produced:
 - Limitations section noting regex-only rewrites or unresolved cycles.
 - Generated date timestamp.
 
-**2. Execution report at `docs/tmp/execution-report.md`:**
+**2. Execution report at `tmp/execution-report.md`:**
 
 This is a throwaway review document, not a source of truth.
 
-- Header: `Generated on [date] — this is a one-time review document, not a source of truth.`
+- Header: `Generated from implement-plan execution on [date] — this is a one-time report, not a source of truth.`
 - Phase-by-phase summary with step counts and verification results.
 - File mapping table (old path → new path) for quick reference.
 - Recommended Manual Steps section listing deferred circular dependencies and unresolved items from the advisory.
 - Warnings section noting any regex-only rewrites, Serena fallbacks, or skipped verifications.
+
+**Post-execution next steps** (printed to user, not written to a file):
+1. Review the execution report for any regex-based rewrites flagged for manual verification (fallback mode only).
+2. Apply any circular dependency resolutions recorded in "Recommended Manual Steps."
+3. Run the full test suite to confirm end-to-end correctness beyond structural verification.
+4. Run `/ai-dev-tools:document-for-ai` to update documentation for the new structure.
 
 ---
 
@@ -240,12 +259,15 @@ This is a throwaway review document, not a source of truth.
 | No Restructuring Steps found | Error: "Strategy spec contains no restructuring steps. Regenerate with `/refactor-to-layers`." |
 | Malformed step (missing fields) | Error with line number and missing field. Do not proceed. |
 | Source file missing | Report all missing sources in pre-flight. Ask: abort or adjust plan. |
+| Source gone, target exists | File was manually moved. Mark `[DONE]`, skip, note in report. |
+| Source gone, target also gone | Stop, suggest re-running `/ai-dev-tools:refactor-to-layers` to generate updated strategy spec. |
 | Target file already exists | Prompt: overwrite or stop. No skip. |
-| Target file gone (mid-rewrite) | Stop. Likely a prior step failed silently. Run resume flow. |
+| Target directory missing during move | Create it automatically (defensive fallback for Phase 0 gaps). |
 | Regex ambiguity (multiple matches) | Flag the file and matches. Ask user to select the correct replacement. |
 | Build/test fails after phase | Stop. Analyze, propose fix, wait for user decision. |
-| Circular deps detected (pre-Phase 3) | Advisory. Classify, present batch table, proceed regardless. |
-| Serena drops mid-execution | Warn. Fall back to regex for remaining steps. Note in execution report. |
+| Circular deps detected (pre-Phase 3) | Advisory only. Classify pattern, present batch table (Acknowledge/Dismiss). Acknowledged → "Recommended Manual Steps." Phase 3 proceeds regardless. |
+| Extract-interface fails due to circular dep | Reference the pre-Phase 3 classification in failure analysis. Suggest applying the recommended manual resolution before retrying. |
+| Serena drops mid-execution | Pause, attempt reconnect. If fails: "Continue in fallback mode or stop?" Note mode switch in execution report. |
 | Dirty working tree | Block execution. Require commit or stash first. |
 | Tech stack mismatch | Warn if strategy spec tech_stack does not match detected project stack. Ask to continue. |
 | All steps already `[DONE]` | Report: "All steps completed. Nothing to do." |
