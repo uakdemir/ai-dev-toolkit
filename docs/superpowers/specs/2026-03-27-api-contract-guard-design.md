@@ -1,7 +1,7 @@
 # api-contract-guard — Design Spec
 
 **Date:** 2026-03-27
-**Status:** Approved
+**Status:** Approved (R1 revisions applied)
 **Plugin:** ai-dev-tools
 **Skill:** api-contract-guard
 
@@ -16,8 +16,8 @@ The core scaling constraint is that each module managed by its own AI agent shou
 ## Success Criteria
 
 - Every module has an explicit barrel file defining its public API (or the user has consciously skipped it)
-- Generated barrel files are syntactically valid — validated by a post-generation syntax check
-- Generated structural tests are syntactically valid — validated by a compile-only / syntax-only check
+- Generated barrel files are syntactically valid — validated by post-generation checks (see Step 9a)
+- Generated structural tests are syntactically valid — validated by compile-only / syntax-only checks (see Step 9a)
 - Structural tests detect all direct internal imports that bypass barrel files
 - Import scanning covers the full codebase (no sampling — import path scanning is cheap even at 1M+ lines)
 - Re-running the skill on an already-guarded codebase produces no new artifacts (idempotent)
@@ -33,7 +33,7 @@ The core scaling constraint is that each module managed by its own AI agent shou
 - Generate barrel files after approval
 - Update existing barrel files when user chooses "add to barrel" for discrepancies
 - Generate structural tests into `tests/structural/` that enforce import-through-barrel
-- Remove previously-generated artifacts on "Start fresh" — with user confirmation
+- Remove previously-generated test artifacts and violations report on "Start fresh" — with user confirmation (barrel files are NOT removed — see Barrel Ownership)
 
 **What this skill DOES NOT do:**
 - Enforce the shape/signature of exported symbols (type system concern)
@@ -41,11 +41,14 @@ The core scaling constraint is that each module managed by its own AI agent shou
 - Install dependencies or modify CI
 - Modify any file without user approval
 - Run the generated tests
+- Generate barrel files for .NET (v1 — .NET uses `internal` keyword; see .NET section)
 
 **Post-skill manual steps:**
 1. Rewrite flagged consumer imports to go through barrel files instead of internal paths
 2. Add generated structural tests to CI if not already covered
 3. Run structural tests — tests will fail for consumers that still bypass barrels. Fix imports to make tests pass.
+
+**Plugin registration:** `plugin.json` description should be updated to include API contract enforcement when this skill is implemented.
 
 ---
 
@@ -66,8 +69,10 @@ User checkpoints between phases.
 
 Independent but layer-aware:
 - Works on any codebase, with or without refactor-to-layers output
-- If a layer strategy spec exists, load it to enrich analysis: modules in higher layers exposing to lower layers are higher-priority boundaries
-- Layer data affects priority ranking of findings, not detection logic
+- If a layer strategy spec exists (at `docs/layer-architecture/strategy.md` or detected via refactor-to-layers output paths), load it
+- Extract module-to-layer mapping and use it for priority enrichment
+- Modules crossing layer boundaries (e.g., Service module consumed by API layer) get a "critical" priority tag, sorted to top of findings
+- Layer data affects presentation ordering only, not detection or generation logic
 
 ---
 
@@ -119,14 +124,14 @@ description: "Use when the user wants to define module API boundaries, enforce t
 
 1. **Serena Check** — check availability, present explicit choice if not available
 2. **Tech Stack Detection** — auto-detect stack (including sub-framework), mismatch gate
-3. **Scope Detection** — walk up from CWD to project root, monorepo check
+3. **Scope Detection** — walk up from CWD to project root, full-repo scan for monorepos (see Scope Detection section)
 4. **Previous Run Detection** — scan for existing api-contract-guard artifacts
 5. **Module Detection** — identify modules (monorepo packages or top-level src/ dirs)
-6. **Barrel File Analysis** — categorize each module: has barrel / missing / incomplete
+6. **Barrel File Analysis** — categorize each module: has barrel / missing / incomplete (load `references/barrel-patterns.md`)
 7. **Cross-Module Import Analysis** — full scan of import statements across all source files
-8. **Present Findings** — per-module: barrel status, proposed exports, discrepancies, violations (USER CHECKPOINT)
-9. **Generate Artifacts** — barrel files, structural tests, violations report
-9a. **Validate Artifacts** — syntax check barrels + tests
+8. **Present Findings** — summary table, then per-module detail in priority order (USER CHECKPOINT: approve/modify/skip per module)
+9. **Generate Artifacts** — barrel files, structural tests (one file per module), violations report (load `references/contract-test-templates.md`)
+9a. **Validate Artifacts** — parse barrel files, syntax-check tests (see Validation Commands)
 10. **Review Checkpoint** — git diff, accept/revert/discard (USER CHECKPOINT)
 
 ### Progressive Disclosure Schedule
@@ -134,65 +139,36 @@ description: "Use when the user wants to define module API boundaries, enforce t
 | Step | Reference file loaded |
 |---|---|
 | Step 2 (Tech Stack Detection) | `references/tech-stacks.md` |
-| Step 6-7 (Analysis) | `references/barrel-patterns.md` |
+| Step 6 (Barrel File Analysis) | `references/barrel-patterns.md` |
 | Step 9 (Generate Artifacts) | `references/contract-test-templates.md` |
 
 ### Reference Files
 
-- `references/tech-stacks.md` — stack detection, barrel file conventions, import syntax per stack
-- `references/barrel-patterns.md` — barrel file detection heuristics, export analysis patterns, cross-module import scanning (Serena mode + regex fallback)
-- `references/contract-test-templates.md` — structural test templates per stack for import-through-barrel enforcement
+- `references/tech-stacks.md` — stack detection, barrel file conventions, import syntax per stack, module detection heuristics per stack
+- `references/barrel-patterns.md` — barrel file detection, export analysis (Serena + regex), incomplete barrel detection algorithm, cross-module import scanning, import path resolution rules
+- `references/contract-test-templates.md` — per-stack structural test templates with placeholders for import-through-barrel enforcement
 
 ---
 
-## Workflow
+## Execution Model
 
-### Phase 1 — Discovery
+Single agent executing SKILL.md sequentially. Unlike convention-enforcer (which dispatches parallel sub-agents), api-contract-guard has no natural parallel decomposition — Steps 5-7 are sequential dependencies (module detection → barrel analysis → import analysis). No sub-agent dispatch needed.
 
-```
-User invokes api-contract-guard
-        |
-        |--- Step 1: Serena check (hard gate)
-        |       |
-        |       v
-        |--- Step 2: Tech stack auto-detection (+ sub-framework)
-        |       |
-        |       v
-        |--- Step 3: Scope detection (walk up to root, monorepo check)
-        |       |
-        |       v
-        |--- Step 4: Previous run detection
-        |       |
-        |       v
-        |--- Step 5: Module detection
-        |       |
-        |       v
-        |--- Step 6: Barrel file analysis (per module)
-        |       |
-        |       v
-        |--- Step 7: Cross-module import analysis (full scan)
-        |       |
-        |       v
-   Step 8: Present findings per module
-        |
-        v
-   USER CHECKPOINT: Per module approve/modify/skip
-```
+For large monorepos where context pressure is a concern, the agent processes modules in batches that fit within context limits, persisting intermediate results (the Module Analysis Format) between batches.
 
-### Phase 2 — Generation
+---
 
-```
-   Step 9: Generate barrel files + structural tests + violations report
-        |
-        v
-   Step 9a: Validate artifacts (syntax check)
-        |
-        v
-   Step 10: USER CHECKPOINT: Review via git diff
-        |
-        v
-   Accept all / Revert selected / Discard run
-```
+## Scope Detection (Step 3)
+
+After tech stack detection, determine the analysis scope:
+
+- **Single-project repo:** Walk up from CWD to find the project root (directory containing the detected stack marker file). Scan from that root.
+- **Monorepo detected:** Unlike convention-enforcer (which scopes to CWD only), api-contract-guard **scans the entire monorepo**. Cross-module import analysis is meaningless if you only see one module — the skill needs visibility into all modules to detect who imports from whom.
+
+**Monorepo workspace config files** (same list as convention-enforcer):
+`pnpm-workspace.yaml`, `lerna.json`, `turbo.json`, `nx.json`, `rush.json`, `workspaces` field in root `package.json`, `.moon/workspace.yml`, `pants.toml`, `Directory.Build.props` (.NET)
+
+Present to user: "Monorepo detected. Scanning all packages from root: `{path}`."
 
 ---
 
@@ -201,27 +177,83 @@ User invokes api-contract-guard
 **Monorepo (workspace detected):**
 - Each workspace package is a module
 - Read workspace config to find package paths
-- Barrel locations: `index.ts`/`index.js` at package root or `src/index.ts`, or `main`/`exports` field in package's `package.json`
+- **Node.js:** parse `workspaces` from `package.json`, or tool-specific configs (`pnpm-workspace.yaml` packages list, etc.)
+- **Python:** each directory with `pyproject.toml` or `__init__.py` under the workspace root
+- **.NET:** each `.csproj` listed in the `.sln` file
+
+**Barrel locations per stack:**
+- Node.js: `index.ts`/`index.js` at package root or `src/index.ts`, or the `.` entry in `package.json` `exports` field (subpath exports like `"./utils"` are additional public entry points — imports through them are NOT violations)
+- Python: `__init__.py` at module root
+- .NET: no barrel — see .NET section
 
 **Single-project repo:**
 - Each top-level directory under `src/` is a module
-- Infrastructure dirs (`src/types/`, `src/config/`, `src/utils/`) are included — they're modules too
+- Infrastructure dirs (`src/types/`, `src/config/`, `src/utils/`) are included
+- **Python:** each directory under `src/` with `__init__.py` (or without, for namespace packages)
+- **.NET:** each top-level namespace/folder under the project root, or each project in the solution
 - Barrel locations: `src/auth/index.ts`, `src/auth/__init__.py`
 
 **Edge cases:**
 - Nested modules (e.g., `src/auth/oauth/` inside `src/auth/`) — treat as sub-module only if it has its own barrel file. Otherwise internal to parent.
 - Single-file modules — skip, no meaningful boundary
 - Module with only a barrel and no other files — skip, nothing to protect
-- Module with no cross-module consumers — report: "No external consumers. Skip?" No barrel needed if nothing imports from it.
+- Module with no cross-module consumers — report: "No external consumers. Skip?"
 
-**If layer data exists:**
-- Load refactor-to-layers strategy spec
-- Use layer assignments to enrich priority: higher-layer modules (API, UI) exposing to lower layers (Service, Data) = critical boundaries
-- Present layer context alongside findings
+---
+
+## Module Analysis Format
+
+Both analysis steps (6 and 7) produce findings in this structured format, which flows into Step 8 (presentation) and Step 9 (generation):
+
+```
+{
+  module_path: string,                    // e.g. "src/auth" or "packages/billing"
+  module_name: string,                    // e.g. "auth" or "billing"
+  barrel_status: "complete" | "missing" | "incomplete",
+  barrel_location: string | null,         // e.g. "src/auth/index.ts", null if missing
+  current_exports: [                      // symbols currently in the barrel (empty if missing)
+    { symbol: string, source_file: string, export_kind: "named" | "default" | "type" }
+  ],
+  proposed_exports: [                     // for missing/incomplete barrels
+    { symbol: string, source_file: string, export_kind: "named" | "default" | "type",
+      consumers: [string] }              // which files consume this symbol
+  ],
+  discrepancies: [                        // for incomplete barrels only
+    { symbol: string, source_file: string, consumers: [string],
+      user_decision: "add_to_barrel" | "flag_consumer" | null }
+  ],
+  violations: [                           // direct internal imports bypassing barrel
+    { consumer_file: string, line: number, imported_symbol: string,
+      internal_path: string, barrel_path: string }
+  ],
+  consumer_count: number,                 // total external files that import from this module
+  priority: number                        // computed from Priority Model
+}
+```
+
+---
+
+## Priority Model
+
+Modules are ranked for presentation at Step 8 using this formula:
+
+**Base priority:** `consumer_count × status_weight`
+
+| Barrel status | Weight |
+|---|---|
+| Missing (no barrel) | 3 |
+| Incomplete (discrepancies) | 2 |
+| Complete (violations only) | 1 |
+
+**Layer enrichment:** If layer data exists, modules that are consumed across layer boundaries get a 2× multiplier. E.g., a Service module consumed by the API layer is 2× priority vs a Service module consumed by another Service module.
+
+**Presentation order:** Descending priority score. Ties broken by module name alphabetically.
 
 ---
 
 ## Barrel File Analysis (Step 6)
+
+Load `references/barrel-patterns.md` now.
 
 For each module, categorize into one of three states:
 
@@ -231,10 +263,16 @@ For each module, categorize into one of three states:
 
 ### State 2: No barrel file
 - Empty `__init__.py` / empty `index.ts` treated as "no barrel"
-- Analyze cross-module imports to determine de facto public API (with Serena: `find_referencing_symbols`; without: regex import scan)
-- For each symbol consumed by other modules, record: symbol name, source file, consumers
+- Analyze cross-module imports to determine de facto public API
+- **With Serena:** `find_referencing_symbols` from each file in the module → find external consumers → record symbol + source file + consumers
+- **Without Serena:** regex scan all files outside the module for imports targeting paths inside the module → extract symbol names from import statements
+- For each externally-consumed symbol, determine export kind from source file:
+  - **With Serena:** `get_symbols_overview` on source file → named/default/type export
+  - **Without Serena:** regex match `export class/function/const/default/type` in source
 - Propose barrel that re-exports exactly those symbols
-- Present to user:
+- Order: alphabetically within source file groups, grouped by source file in directory order
+
+**Proposed barrel presentation:**
 
 ```
 Module: src/auth/
@@ -252,9 +290,23 @@ Proposed barrel (src/auth/index.ts):
   > Approve  |  Modify exports  |  Skip module
 ```
 
+**Python barrel generation specifics:**
+- Generated `__init__.py` uses relative imports: `from .service import AuthService`
+- Includes `__all__` list matching exported symbols: `__all__ = ['AuthService', 'AuthError', 'verifyToken']`
+- Before generating, check for circular imports: if any submodule imports from the package's own `__init__.py`, warn: "Circular import risk detected. Review the generated barrel before committing."
+
+**"Modify exports" interaction:**
+Present the proposed export list as a numbered checklist. The user can:
+1. Remove items by number
+2. Add symbols by typing them (agent warns if symbol not found in module)
+After modification, re-present the updated barrel for final approval.
+
 ### State 3: Incomplete barrel (discrepancies)
 - Barrel exists but some cross-module consumers bypass it
-- For each discrepancy:
+- **Detection algorithm:**
+  - **With Serena:** `get_symbols_overview` on barrel → export set. From Step 7, collect all symbols imported from this module by external consumers → consumed set. Diff: symbols in consumed but not in export = discrepancies.
+  - **Without Serena:** regex-extract `export { X }` and `export { X } from` from barrel → export set. Same diff.
+- For each discrepancy, present:
 
 ```
 Module: src/billing/
@@ -270,6 +322,10 @@ Not in barrel but consumed externally:
 
 ### Wildcard re-exports
 If a barrel has `export * from './service'`, warn:
+
+**With Serena:** resolve all symbols via `get_symbols_overview` on the target file. Present resolved list.
+
+**Without Serena (regex fallback):** attempt to resolve one level by reading target file's exports. If target itself has `export *`, warn: "Nested wildcard re-exports. Cannot fully resolve without Serena. Recommend installing Serena or replacing with named exports."
 
 ```
 ⚠ Wildcard re-export in src/auth/index.ts defeats explicit contract.
@@ -293,30 +349,79 @@ Full scan of all source files — no sampling. Import path scanning reads import
 
 **Without Serena (regex fallback):**
 - Scan all source files for import/require/from statements
-- For each import, resolve the target path
+- **Path resolution rules** (detailed in `references/barrel-patterns.md`):
+  - Relative imports: resolve against dirname of importing file
+  - Monorepo bare specifiers: match against workspace package names
+  - `package.json` `exports` field: `.` entry = primary barrel; subpath exports = additional public entry points (NOT violations)
+  - Path aliases (tsconfig `paths`, Python namespace packages): warn about potential false negatives from unresolved aliases
 - If the target is inside another module AND the import path doesn't point to the barrel → violation
-- Less precise for: re-exports, path aliases (`@auth/service`), dynamic imports
 
 **What constitutes a violation:**
 - `import { AuthService } from '../auth/service'` → violation (bypasses barrel)
 - `import { AuthService } from '../auth'` → OK (goes through barrel)
+- `import { utils } from '@myorg/auth/utils'` → check if `./utils` is in `package.json` `exports` field; if yes, OK; if no, violation
 - `from auth.service import AuthService` → violation (Python, bypasses `__init__.py`)
 - `from auth import AuthService` → OK (Python, goes through `__init__.py`)
 
 ---
 
+## Step 8: Present Findings (USER CHECKPOINT)
+
+Present findings in two phases:
+
+**Phase 1 — Summary table:**
+
+```
+Module Analysis Results (sorted by priority):
+
+| # | Module | Status | Violations | Consumers | Priority |
+|---|--------|--------|-----------|-----------|----------|
+| 1 | src/auth | Missing barrel | 12 | 8 | ★★★ |
+| 2 | src/billing | Incomplete | 5 | 6 | ★★ |
+| 3 | src/users | Complete | 3 | 4 | ★ |
+| 4 | src/utils | No consumers | 0 | 0 | — |
+
+Batch operations:
+  > Approve all proposed barrels
+  > Review modules individually
+  > Skip all (abort)
+```
+
+**Phase 2 — Per-module detail** (in priority order):
+
+For each module that the user wants to review individually, present the State 1/2/3 detail from the Barrel File Analysis section. The user approves/modifies/skips each module.
+
+Structural test generation is automatic for all approved modules — no separate opt-in needed.
+
+---
+
 ## Structural Test Generation
+
+Load `references/contract-test-templates.md` now.
 
 After user approves, generate enforcement tests into `tests/structural/`.
 
-**File naming:** `api-contracts.test.{ext}` for JS/TS and Python, `ApiContractTests.cs` for .NET.
+**File naming: one file per module** (not a single combined file):
+- Node.js/TS: `api-contracts-{module-name}.test.ts`
+- Python: `api-contracts-{module-name}.test.py`
+- .NET: `ApiContracts{ModulePascal}Tests.cs`
 
 **Marker:** `{comment_char} --- Generated by api-contract-guard: {module_name} ---`
 
+**Dedup on re-run:** Match by filename (one file per module = simple file replacement). No start/end markers needed.
+
+**Template placeholders:**
+- `{MODULE_NAME}` — module name (e.g., "auth")
+- `{MODULE_PATH}` — module directory path (e.g., "src/auth")
+- `{BARREL_PATH}` — barrel file path (e.g., "src/auth/index.ts")
+- `{SOURCE_EXTENSIONS}` — file extensions to scan (e.g., `['.ts', '.js']`)
+- `{MODULE_INTERNAL_DIRS}` — directories within the module (everything except the barrel)
+
 **What the test does:**
-- For each guarded module, scan all source files outside that module
-- Check every import statement: if it resolves to a path inside the module, verify it points to the barrel (not an internal path)
-- Fail with: `"{consumer_file} imports {symbol} directly from {internal_path} — should import from {barrel_path}"`
+- Scan all source files outside `{MODULE_PATH}`
+- For each import statement, check if target resolves to a path inside `{MODULE_PATH}`
+- If yes, verify the import points to `{BARREL_PATH}` (not an internal file)
+- Fail with: `"{consumer_file}:{line} imports from {internal_path} — should import from {BARREL_PATH}"`
 
 **What the test does NOT do:**
 - Validate export shapes/signatures
@@ -327,25 +432,85 @@ After user approves, generate enforcement tests into `tests/structural/`.
 
 ---
 
+## Validation Commands (Step 9a)
+
+**Barrel file validation:**
+- Node.js: `npx tsc --noEmit {barrel_file}` (verifies re-export paths resolve)
+- Python: `python -c "import {module_name}"` (verifies imports in `__init__.py` resolve)
+- .NET: N/A (no barrel files generated for .NET in v1)
+
+**Structural test validation:**
+- Node.js: `npx tsc --noEmit {test_file}`
+- Python: `python -m py_compile {test_file}`
+- .NET: `dotnet build --no-restore` (project containing test file)
+
+**On validation failure:**
+- Common failures: re-export path typo → fix path. Missing source file → remove that export line and warn.
+- If auto-fix succeeds, proceed. If unfixable, skip that artifact with warning and continue.
+
+---
+
 ## Output Artifacts
 
 ### 1. Barrel Files (generated or updated)
 - Created at the module's standard barrel location (`index.ts`, `__init__.py`, etc.)
 - Named exports only — no wildcard re-exports in generated barrels
+- Node.js: `export { X } from './service';`
+- Python: `from .service import AuthService` + `__all__ = [...]`
 - Each generated barrel has a header comment: `{comment_char} Generated by api-contract-guard. Edit freely — this is now your module's public API.`
 - For updated barrels (discrepancy resolution): append new exports at the end with a comment marking the addition
 
 ### 2. Structural Tests → `tests/structural/`
-- File: `api-contracts.test.{ext}` (JS/TS/Python) or `ApiContractTests.cs` (.NET)
-- One test per guarded module
+- One file per guarded module: `api-contracts-{module-name}.test.{ext}`
 - Marker: `{comment_char} --- Generated by api-contract-guard: {module_name} ---`
-- Category-based dedup key (module name) for idempotent re-runs
+- Dedup by file replacement on re-runs
 
 ### 3. Violations Report → `docs/api-contract-guard/violations-report.md`
-- Per-module: barrel status, export list, violations (consumer file + internal path used)
+- Per-module: barrel status, export list, violations (consumer file + line + internal path used)
 - Summary: total modules, guarded modules, violations per module
 - Point-in-time snapshot, regenerated on each run
 - Should be committed for diff tracking
+
+---
+
+## Barrel Ownership
+
+Generated barrel files say "Edit freely" — they become the user's files after generation. This creates a tension with re-runs:
+
+**Rule:** "Start fresh" and "Re-analyze all" do NOT delete or overwrite user-modified barrel files.
+
+- **On re-run**, if a barrel file exists with the api-contract-guard header comment AND the user has not modified it (content matches what the skill would generate), it is safe to overwrite.
+- **If the user has edited the barrel** (added/removed exports, reorganized), treat it as user-owned. The skill re-analyzes it as an existing barrel (State 1 or State 3), not as a generated artifact.
+- **"Start fresh" removes:** test files (`api-contracts-*.test.*`) + violations report only. Barrel files are never removed by "Start fresh."
+
+---
+
+## .NET Support (v1 — Limited)
+
+.NET has no barrel file convention. It uses `internal` access modifier and namespace visibility instead. This is a fundamentally different mechanism from the barrel-based approach used for Node.js and Python.
+
+**v1 scope for .NET:**
+- Module detection works (projects in solution, top-level namespace folders)
+- Cross-module import analysis works (scan `using` statements for references to other modules' internal namespaces)
+- Structural test generation works (check no external project references `internal`-marked types)
+- Barrel file generation does NOT apply — the skill reports which types should be marked `internal` but does not modify source files
+
+**What the user checkpoint shows for .NET:**
+
+```
+Module: App.Auth (project)
+Status: Public types analysis
+Public types only used internally (candidates for 'internal'):
+  - TokenHasher (App.Auth.Utils) → no external references
+  - SessionStore (App.Auth.Internal) → no external references
+Public types used externally (keep public):
+  - AuthService (App.Auth) → used by App.Api, App.Workers
+  - AuthOptions (App.Auth) → used by App.Api
+
+  > Accept analysis  |  Skip module
+```
+
+The structural test checks: no external project `using` a namespace that contains only `internal` types for that module.
 
 ---
 
@@ -357,30 +522,35 @@ Same auto-detection pattern as convention-enforcer. Uses own `references/tech-st
 
 **Node.js:**
 - Barrel files: `index.ts` / `index.js` at module root
-- Alternative: `package.json` `exports` field (monorepo packages)
+- Alternative: `package.json` `exports` field — `.` entry is primary barrel; subpath exports are additional public entry points
 - Import detection: `import { X } from './auth'` (barrel) vs `import { X } from './auth/service'` (internal)
 - Re-export syntax: `export { X } from './service'`
 
 **Python:**
 - Barrel files: `__init__.py` at module root
 - Import detection: `from auth import X` (barrel) vs `from auth.service import X` (internal)
-- Re-export syntax: in `__init__.py`: `from .service import AuthService`
+- Re-export syntax: `from .service import AuthService` + `__all__` list
 - Empty `__init__.py` = no barrel (treated as missing)
 
 **.NET:**
-- No barrel file convention — uses namespace visibility
-- Public API = `public` classes/methods in root namespace
-- Internal = `internal` keyword or nested namespaces
-- Skill checks: consumers referencing `internal`-marked types or sub-namespaces not part of public surface
-- "Barrel" equivalent: recommend proper use of `internal` access modifier. The skill does NOT generate barrel files for .NET — it generates structural tests that check namespace/access-modifier boundaries instead.
-- For modules where `internal` is not used consistently, present findings and let user decide which types to mark `internal`
+- See ".NET Support (v1 — Limited)" section above
+- No barrel files. Uses `internal` keyword + namespace visibility.
+- Module = project in solution or top-level namespace folder
 
 **"Other" stacks:**
-- Prompt for barrel convention and import syntax
-- Structural tests only — generic import path matching
+
+```
+Stack not recognized. Please provide:
+  1. Language/framework?
+  2. Barrel file convention (name and location)?
+  3. Re-export syntax (how does the barrel expose symbols)?
+  4. Import syntax (how to distinguish barrel import from internal import)?
+```
+
+Structural tests only — generic import path matching. No barrel file generation for "Other" stacks.
 
 ### Sub-Framework Detection
-Same as convention-enforcer: dependency scan for specific framework, user confirmation, generic fallback for unsupported sub-frameworks.
+Same as convention-enforcer: dependency scan for specific framework, user confirmation, generic fallback.
 
 ### Mismatch Gate
 Identical triggers to convention-enforcer.
@@ -389,14 +559,17 @@ Identical triggers to convention-enforcer.
 
 ## Previous Run Detection (Step 4)
 
-1. Scan `tests/structural/` for files matching `api-contracts.test.*` with api-contract-guard markers
-2. Scan for generated barrel files with api-contract-guard header comments
+1. Scan `tests/structural/` for files matching `api-contracts-*.test.*` with api-contract-guard markers
+2. Scan for barrel files with `Generated by api-contract-guard` header comment (note: user-edited barrels still have this header)
 3. Check for `docs/api-contract-guard/violations-report.md`
 
 If artifacts exist, present 3 options:
-- **Re-analyze all:** Full run, overwrite existing artifacts for re-confirmed modules
-- **Skip already-guarded modules:** Only analyze modules without existing contract tests
-- **Start fresh:** Remove existing artifacts (with user confirmation), re-analyze everything
+
+**Option mechanics:**
+
+- **Re-analyze all:** Full run. Extract module names from existing test file names. At Step 9, overwrite test files by filename. Barrel files: if unmodified since generation, overwrite; if user-modified, re-analyze as existing barrel (State 1/3). New modules create new artifacts.
+- **Skip already-guarded:** Extract module names from test filenames. Skip those modules in Steps 5-8. Only analyze modules without existing test files. Discovery of new modules proceeds normally.
+- **Start fresh:** Show user what will be removed (test files + violations report). Barrel files are NOT removed (see Barrel Ownership). After removal, full analysis from scratch.
 
 ---
 
@@ -404,12 +577,12 @@ If artifacts exist, present 3 options:
 
 ### refactor-to-layers
 - Complementary: layers enforce vertical dependency direction, contracts enforce horizontal module encapsulation
-- If layer data exists, api-contract-guard uses it for priority ranking
-- Both write to `tests/structural/` — different prefixes (`layer-boundaries.*` vs `api-contracts.*`)
+- If layer data exists, api-contract-guard uses it for priority ranking (cross-layer modules get 2× priority)
+- Both write to `tests/structural/` — different prefixes (`layer-boundaries.*` vs `api-contracts-*.*`)
 
 ### convention-enforcer
 - Independent: convention-enforcer checks code patterns within files, contract-guard checks import paths between modules
-- Both write to `tests/structural/` — different prefixes (`convention-*.*` vs `api-contracts.*`)
+- Both write to `tests/structural/` — different prefixes (`convention-*.*` vs `api-contracts-*.*`)
 
 ### implement-plan
 - Not related. implement-plan executes file moves; contract-guard enforces boundaries.
@@ -424,14 +597,28 @@ If artifacts exist, present 3 options:
 | All modules complete with no violations | Report: "All module boundaries clean. No enforcement needed." |
 | Empty barrel file (`__init__.py` / `index.ts` with no exports) | Treat as "no barrel" — propose exports |
 | Module has no cross-module consumers | Report: "No external consumers. Skip?" |
-| Circular cross-module imports | Warn: "Circular dependency between {A} and {B}. Resolve cycle before enforcing boundaries." Flag but don't block. |
-| Wildcard re-export in barrel | Warn, resolve symbols, recommend named exports |
+| Circular cross-module imports | Warn: "Circular dependency between {A} and {B}." Build dependency graph via DFS to detect cycles. Generate barrels but add warning comment. List cycles in violations report with remediation advice. |
+| Wildcard re-export in barrel | Warn, resolve symbols (Serena: full resolution; regex: one level, warn if nested), recommend named exports |
 | Serena unavailable | Hard gate — user must explicitly choose regex fallback |
 | User skips all modules | "No modules selected. No artifacts generated." |
 | Barrel file has syntax errors | Warn, skip that module, continue with others |
-| Validation fails at Step 9a | Attempt auto-fix. If unfixable, skip artifact with warning. |
-| User rejects at Step 10 | Accept/revert/discard with same mechanics as convention-enforcer |
-| Path aliases configured (`@auth/*`) | With Serena: resolved automatically. Without: warn about potential false negatives from unresolved aliases. |
+| Validation fails at Step 9a | Auto-fix common failures (path typo, missing source). If unfixable, skip artifact with warning. |
+| User rejects at Step 10 | Accept all / Revert selected (delete test files by name, remove appended barrel exports by marker) / Discard (git checkout modified, delete new test files — barrel files kept per Barrel Ownership) |
+| Path aliases configured (`@auth/*`) | With Serena: resolved automatically. Without: warn about potential false negatives. |
+| `tests/structural/` directory missing | Create it. |
+| `docs/api-contract-guard/` directory missing | Create it. |
+| Python circular import risk from generated barrel | Warn: "Circular import risk. Review generated __init__.py before committing." |
+| `package.json` `exports` field with conditional entries | Use the `"."` entry (or `main` field) as primary barrel. Warn: "Conditional exports detected — using default condition for analysis." |
+
+---
+
+## Future / v2
+
+- **Full .NET barrel equivalent:** Generate C# source files that consolidate `public` API surface — a generated "facade" class or namespace re-export pattern
+- **Auto-fix consumer imports:** Rewrite consumer imports to go through barrel paths (currently report-only)
+- **Monorepo-wide enforcement policies:** Central config defining which modules require contracts, minimum export coverage
+- **Dynamic import tracking:** Detect `await import()` / `importlib.import_module()` patterns that bypass static analysis
+- **CI integration:** Generate CI check that runs contract tests on PR
 
 ---
 
@@ -446,8 +633,13 @@ If artifacts exist, present 3 options:
 | Missing barrels | Analyze usage, propose, user approves, generate | Skill does the work after explicit approval |
 | Incomplete barrels | User chooses: add to barrel or flag consumers | Genuinely ambiguous — only user knows intent |
 | Approach | Two-phase (discovery → batch generation) | Consistent with convention-enforcer pattern |
-| Test location | `tests/structural/` with prefix `api-contracts.*` | Unified test suite, no collision |
+| Test location | `tests/structural/` with one file per module | Unified test suite, no collision, simple dedup by file replacement |
 | Import scanning | Full scan, no sampling | Import path scanning is cheap — reads statements not contents |
 | Serena | Hard gate, explicit user choice, no silent fallback | Precision matters for binding public/internal decisions |
 | Generated barrels | Named exports only, no wildcards | Wildcards defeat explicit contracts |
-| .NET handling | Namespace visibility instead of barrel files | .NET has `internal` keyword — different mechanism, same goal |
+| .NET handling | Limited v1: analysis + structural tests, no barrel generation | Fundamentally different mechanism (internal keyword); full support deferred |
+| Monorepo scope | Full-repo scan (not CWD-only) | Cross-module analysis requires seeing all modules |
+| Execution model | Single agent, sequential steps | No natural parallel decomposition — steps are sequential dependencies |
+| Barrel ownership | User-owned after generation, never deleted by re-runs | Barrels are source files the user is invited to edit |
+| No routing checkpoint | Single enforcement mechanism (barrel + test) | Unlike convention-enforcer, no choice between enforcement types |
+| Test file per module | `api-contracts-{name}.test.{ext}` | Simpler dedup than multi-block single file; no start/end markers needed |
