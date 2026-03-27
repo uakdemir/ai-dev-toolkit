@@ -142,7 +142,7 @@ describe('{CONVENTION_DESCRIPTION}', () => {
 
 ### Python (pytest)
 
-File: `tests/structural/convention_error_handling.test.py`
+File: `tests/structural/convention-error-handling.test.py`
 
 ```python
 import ast
@@ -435,7 +435,7 @@ describe('{CONVENTION_DESCRIPTION}', () => {
 
 ### Python (pytest)
 
-File: `tests/structural/convention_di_patterns.test.py`
+File: `tests/structural/convention-di-patterns.test.py`
 
 ```python
 import ast
@@ -714,7 +714,7 @@ describe('{CONVENTION_DESCRIPTION}', () => {
 
 ### Python (pytest)
 
-File: `tests/structural/convention_api_response.test.py`
+File: `tests/structural/convention-api-response.test.py`
 
 ```python
 import ast
@@ -933,7 +933,7 @@ describe('{CONVENTION_DESCRIPTION}', () => {
 
 ### Python (pytest)
 
-File: `tests/structural/convention_file_organization.test.py`
+File: `tests/structural/convention-file-organization.test.py`
 
 ```python
 import re
@@ -1127,7 +1127,7 @@ describe(CONVENTION_DESCRIPTION, () => {
 
 ### Python (pytest)
 
-File: `tests/structural/convention_discovery_{CATEGORY_SLUG}.test.py`
+File: `tests/structural/convention-discovery-{CATEGORY_SLUG}.test.py`
 
 ```python
 import re
@@ -1162,7 +1162,7 @@ def _check_file_for_pattern(filepath: Path) -> dict:
     return {'conforms': False, 'line': None}
 
 
-def test_discovery_convention_{CATEGORY_SLUG}():
+def test_discovery_convention_{category_slug}():
     """All relevant files must follow: {CONVENTION_DESCRIPTION}."""
     files = _get_source_files()
     violations = []
@@ -1237,7 +1237,7 @@ When existing test files are detected at target paths:
 | Stack   | Alternate filename pattern |
 |---|---|
 | Node.js | `convention-{category}-generated.test.ts` |
-| Python  | `convention_{category}_generated.test.py` |
+| Python  | `convention-{category}-generated.test.py` |
 | .NET    | `Convention{Category}Tests.Generated.cs` |
 
 **Merge mode** — append after the existing marker comment in the file. The marker

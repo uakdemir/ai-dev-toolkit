@@ -231,11 +231,13 @@ covered by the core agent.
 
 - **Tech stack:** `{stack}`
 - **Analysis scope:** `{scope}`
+- **Already-enforced categories** (for reference): `{exclusions}`
 
-### What NOT to Scan
+### Core Categories (for awareness, not avoidance)
 
-The following 7 categories are handled by the core agent. Do NOT report findings
-that fall into these areas:
+The following 7 categories are the primary focus of the core agent. You may encounter
+patterns adjacent to these areas — report them if they represent a distinct convention
+not fully captured by the core categories. The orchestrator handles deduplication.
 
 1. Error Handling
 2. Naming Conventions
@@ -245,8 +247,8 @@ that fall into these areas:
 6. File Organization
 7. Logging
 
-Report EVERYTHING you find outside these categories — overlap filtering is
-handled by the orchestrator.
+Report EVERYTHING you find — overlap filtering with core categories is
+handled by the orchestrator, not by you.
 
 ### What to Look For
 

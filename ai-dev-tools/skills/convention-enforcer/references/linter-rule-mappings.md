@@ -91,7 +91,7 @@ TRY003  raise-vanilla-args (long messages outside exception class)
 ```toml
 # convention-enforcer: error-handling
 [lint]
-select = ["E722", "B904", "TRY003"]
+extend-select = ["E722", "B904", "TRY003"]
 ```
 
 **`pyproject.toml` insertion (under `[tool.ruff.lint]`):**
@@ -99,7 +99,7 @@ select = ["E722", "B904", "TRY003"]
 ```toml
 # convention-enforcer: error-handling
 [tool.ruff.lint]
-select = ["E722", "B904", "TRY003"]
+extend-select = ["E722", "B904", "TRY003"]
 ```
 
 #### Roslyn rules
@@ -174,7 +174,7 @@ N806  non-lowercase-variable-in-function
 ```toml
 # convention-enforcer: naming-conventions
 [lint]
-select = ["N801", "N802", "N803", "N804", "N805", "N806"]
+extend-select = ["N801", "N802", "N803", "N804", "N805", "N806"]
 ```
 
 **`pyproject.toml` insertion (under `[tool.ruff.lint]`):**
@@ -182,7 +182,7 @@ select = ["N801", "N802", "N803", "N804", "N805", "N806"]
 ```toml
 # convention-enforcer: naming-conventions
 [tool.ruff.lint]
-select = ["N801", "N802", "N803", "N804", "N805", "N806"]
+extend-select = ["N801", "N802", "N803", "N804", "N805", "N806"]
 ```
 
 #### Roslyn rules
@@ -269,7 +269,7 @@ I001  unsorted-imports (isort)
 ```toml
 # convention-enforcer: import-ordering
 [lint]
-select = ["I001"]
+extend-select = ["I001"]
 ```
 
 **`pyproject.toml` insertion (under `[tool.ruff.lint]`):**
@@ -277,7 +277,7 @@ select = ["I001"]
 ```toml
 # convention-enforcer: import-ordering
 [tool.ruff.lint]
-select = ["I001"]
+extend-select = ["I001"]
 ```
 
 #### Roslyn rules
@@ -335,7 +335,7 @@ T203  pprint  (pprint statement found)
 ```toml
 # convention-enforcer: logging
 [lint]
-select = ["T201", "T203"]
+extend-select = ["T201", "T203"]
 ```
 
 **`pyproject.toml` insertion (under `[tool.ruff.lint]`):**
@@ -343,7 +343,7 @@ select = ["T201", "T203"]
 ```toml
 # convention-enforcer: logging
 [tool.ruff.lint]
-select = ["T201", "T203"]
+extend-select = ["T201", "T203"]
 ```
 
 #### Roslyn rules
