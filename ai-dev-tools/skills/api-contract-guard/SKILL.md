@@ -91,6 +91,8 @@ If previous artifacts exist, present three options:
 
 **Monorepo:** Each workspace package is a module. Node.js: parse `workspaces` or tool configs. Python: directories with `pyproject.toml` or `__init__.py`. .NET: each `.csproj` in `.sln`.
 
+**Barrel locations:** Node.js: `index.ts`/`index.js` at module root, `src/index.ts`, or the `.` entry in `package.json` `exports` field (primary barrel). Subpath exports (e.g., `"./utils"`) are additional public entry points — imports through them are NOT violations. Python: `__init__.py`. .NET: N/A (uses `internal` keyword).
+
 **Single-project:** Each top-level directory under `src/` is a module (including `src/types/`, `src/config/`, `src/utils/`). Python: directories with `__init__.py` (or namespace packages). .NET: top-level namespace folders or projects.
 
 **Layer enrichment:** If a layer strategy spec exists (`docs/layer-architecture/strategy.md`), load it for priority enrichment at Step 8. Affects ordering only — not detection or generation.
@@ -180,7 +182,7 @@ Read `references/contract-test-templates.md` now.
 
 ## Step 9a: Validate Artifacts
 
-**Barrel files:** Node.js: `npx tsc --noEmit`. Python: `python -m py_compile`. .NET: N/A.
+**Barrel files:** Node.js: `npx tsc --noEmit {barrel_file}`. Python: `python -m py_compile {barrel_file}` (syntax check). .NET: N/A.
 
 **Test files:** Node.js: `npx tsc --noEmit`. Python: `python -m py_compile`. .NET: `dotnet build --no-restore`.
 
@@ -263,6 +265,32 @@ Steps 6-7 produce findings in this format, flowing into Steps 8 and 9:
 | `docs/api-contract-guard/` missing | Create it. |
 | Python circular import risk | Warn: review generated `__init__.py` before committing |
 | Conditional `package.json` exports | Use `"."` entry. Warn: "Using default condition." |
+| User rejects at Step 10 | **Accept all:** commit. **Revert selected:** delete test files by name, remove appended barrel exports by marker. **Discard:** `git checkout` modified, delete new test files — barrel files kept per Barrel Ownership. |
+
+---
+
+## .NET v1 — Limited Support
+
+.NET has no barrel file convention. It uses `internal` keyword + namespace visibility instead.
+
+**What works:** Module detection, cross-module import analysis (`using` statements), structural test generation (check namespace boundaries).
+
+**What doesn't:** Barrel file generation — the skill reports which `public` types should be marked `internal` but does not modify .NET source files.
+
+**User checkpoint for .NET modules:**
+
+```
+Module: App.Auth (project)
+Status: Public types analysis
+Public types only used internally (candidates for 'internal'):
+  - TokenHasher (App.Auth.Utils) → no external references
+  - SessionStore (App.Auth.Internal) → no external references
+Public types used externally (keep public):
+  - AuthService (App.Auth) → used by App.Api, App.Workers
+  - AuthOptions (App.Auth) → used by App.Api
+
+  > Accept analysis  |  Skip module
+```
 
 ---
 
