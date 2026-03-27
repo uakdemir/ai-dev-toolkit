@@ -10,13 +10,15 @@ layer architecture is a backend concern. Frontend UI is treated as one layer amo
 
 **Layer-to-folder mapping:**
 
-| Layer    | Canonical folder(s)              |
-|----------|----------------------------------|
-| API      | `src/routes/`, `src/handlers/`   |
-| Service  | `src/services/`                  |
-| Data     | `src/repositories/`, `src/db/`   |
-| Provider | `src/plugins/`, `src/providers/` |
-| UI       | `src/ui/` or separate package    |
+| Layer     | Canonical folder(s)                          |
+|-----------|----------------------------------------------|
+| Types     | `src/types/`                                 |
+| Config    | `src/config/`                                |
+| Data      | `src/data/`, `src/repositories/`, `src/db/`  |
+| Service   | `src/services/`                              |
+| Providers | `src/providers/`, `src/plugins/`             |
+| API       | `src/api/`, `src/routes/`, `src/handlers/`   |
+| UI        | `src/ui/` or separate package                |
 
 **DI mechanism:** `@fastify/awilix` (preferred) or `fastify.decorate()` for manual wiring.
 
@@ -42,13 +44,15 @@ run independently. Co-located frontend code goes under `src/ui/` and is treated 
 
 **Layer-to-folder mapping:**
 
-| Layer    | Canonical project/folder                       |
-|----------|------------------------------------------------|
-| API      | `Controllers/`, `*.Api` project                |
-| Service  | `*.Services` project, `Services/`              |
-| Data     | `*.Data` / `*.Infrastructure` project          |
-| Domain   | `*.Domain` project                             |
-| Provider | `IServiceCollection` extension classes         |
+| Layer     | Canonical project/folder                                |
+|-----------|---------------------------------------------------------|
+| Types     | `*.Domain` or `*.Contracts` project, `Models/`          |
+| Config    | `Configuration/` or within startup                      |
+| Data      | `*.Data` / `*.Infrastructure` project                   |
+| Service   | `*.Services` project, `Services/`                       |
+| Providers | `*.Providers` or `Providers/`, `IServiceCollection` ext |
+| API       | `Controllers/`, `Endpoints/`, `*.Api` project           |
+| UI        | `Views/`, `Pages/`, or separate Blazor project          |
 
 **DI mechanism:** `IServiceCollection` (built-in `Microsoft.Extensions.DependencyInjection`).
 
@@ -72,13 +76,15 @@ audit output.
 
 **Layer-to-folder mapping:**
 
-| Layer    | Canonical folder(s)                   |
-|----------|---------------------------------------|
-| API      | `routers/`, `api/`                    |
-| Service  | `services/`                           |
-| Data     | `repositories/`, `db/`, `models/`     |
-| Provider | `dependencies/`, `core/`              |
-| UI       | `static/` or separate package         |
+| Layer     | Canonical folder(s)                             |
+|-----------|-------------------------------------------------|
+| Types     | `src/types/`, `app/types/`                      |
+| Config    | `src/config/`, `app/config/`                    |
+| Data      | `src/data/`, `repositories/`, `db/`, `models/`  |
+| Service   | `src/services/`, `services/`                    |
+| Providers | `src/providers/`, `dependencies/`, `core/`      |
+| API       | `src/api/`, `routers/`, `api/`                  |
+| UI        | `static/` or separate package                   |
 
 **DI mechanism:** `Depends()` (FastAPI built-in) or `dependency-injector` container.
 
@@ -122,7 +128,7 @@ Walk from CWD toward the filesystem root; stop at the first matching signal.
 |---------|-----------------|
 | Node.js | `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, `lerna.json`, or `package.json` with `"workspaces"` field |
 | .NET    | `.sln` with multiple `.csproj` references, or `Directory.Build.props` |
-| Python  | `pyproject.toml` with `[tool.uv.workspace]` section |
+| Python  | `pyproject.toml` with `[tool.uv.workspace]` section, or `uv.toml` with `[workspace]` section |
 | Go      | `go.work` file |
 | Rust    | `Cargo.toml` with `[workspace]` section |
 | General | `rush.json`, `.moon/workspace.yml`, `pants.toml` |
