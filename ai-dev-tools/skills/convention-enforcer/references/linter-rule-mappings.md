@@ -164,6 +164,8 @@ Example config enforcing camelCase for functions and PascalCase for classes:
 N801  invalid-class-name
 N802  invalid-function-name
 N803  invalid-argument-name
+N804  invalid-first-argument-name-for-class-method
+N805  invalid-first-argument-name-for-method
 N806  non-lowercase-variable-in-function
 ```
 
@@ -172,7 +174,7 @@ N806  non-lowercase-variable-in-function
 ```toml
 # convention-enforcer: naming-conventions
 [lint]
-select = ["N801", "N802", "N803", "N806"]
+select = ["N801", "N802", "N803", "N804", "N805", "N806"]
 ```
 
 **`pyproject.toml` insertion (under `[tool.ruff.lint]`):**
@@ -180,7 +182,7 @@ select = ["N801", "N802", "N803", "N806"]
 ```toml
 # convention-enforcer: naming-conventions
 [tool.ruff.lint]
-select = ["N801", "N802", "N803", "N806"]
+select = ["N801", "N802", "N803", "N804", "N805", "N806"]
 ```
 
 #### Roslyn rules
