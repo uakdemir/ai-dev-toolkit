@@ -10,7 +10,8 @@ agent output:
 - `{CONVENTION_DESCRIPTION}` — human-readable convention name from the finding
 - `{EXPECTED_PATTERN}` — regex or string the conforming code matches
 - `{BASE_ERROR_CLASS}` — detected base error/exception class name
-- `{SOURCE_DIRS}` — directories to scan (from agent `files_analyzed` paths)
+- `{SOURCE_DIRS}` — directories to scan for core category templates (from agent `files_analyzed` paths)
+- `{SCOPE_DIRS}` — directories to scan for discovery templates (from finding's `scope_dirs` field, or extracted from `files_analyzed`)
 - `{SOURCE_EXTENSIONS}` — file extensions for the detected stack
 - `{ENVELOPE_FIELDS}` — expected response envelope field names
 - `{ENVELOPE_TYPE}` — type name or shape of the expected response envelope
@@ -1284,10 +1285,6 @@ overrides a linter-only category to `structural_test`, use the Discovery Finding
 generic template with the category's convention description and pattern.
 
 **"Other" stacks:** For stacks not in the supported list (Node.js, Python, .NET),
-use the Discovery Finding generic template for all categories. The orchestrator
-must adapt the template to the user-provided language: substitute `{SOURCE_EXTENSIONS}`
-from the user's answers at Step 1, use the user's test runner syntax (or plain
-assertions if unknown), and use the user's language comment syntax for marker comments.
-The Discovery templates are designed to be language-adaptable — `{SOURCE_DIRS}`,
-`{SOURCE_EXTENSIONS}`, and `{EXPECTED_PATTERN}` are the only language-dependent
-substitutions.
+no structural tests or linter rules are generated. The skill stops at analysis
+and violations reporting. The violations report provides enough detail for the
+user to write enforcement artifacts manually for their stack.

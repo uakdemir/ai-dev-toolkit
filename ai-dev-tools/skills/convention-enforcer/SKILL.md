@@ -68,7 +68,7 @@ If auto-detection fails, prompt for 4 answers:
 3. Test runner?
 4. DI/dependency injection pattern used (if any)?
 
-Proceed with user-provided info. Structural tests use language-generic templates. **Linter rule generation is skipped** — only structural tests are produced. Explain why.
+**For "Other" stacks, stop at analysis and violations reporting — no structural tests or linter rules are generated.** Explain: "Convention analysis and violations report are available for all stacks. Structural tests and linter rules are only generated for supported stacks (Node.js, Python, .NET). For your stack, use the violations report to write enforcement artifacts manually."
 
 ---
 

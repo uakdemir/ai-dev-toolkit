@@ -47,7 +47,7 @@ The result is codebases where error handling, naming, imports, response shapes, 
 3. Add generated structural tests to CI if not already covered
 4. Run structural tests — tests will fail for files listed in the violations report, confirming they correctly detect drift. Fix violations to make tests pass.
 
-**Plugin registration:** `plugin.json` description should be updated to include convention enforcement when this skill is implemented.
+**Plugin registration:** `plugin.json` description has been updated to include convention enforcement.
 
 ---
 
@@ -640,7 +640,7 @@ This turns the skill from reactive ("analyze what's here now") into adaptive ("l
 | Structural test location | `tests/structural/` (same as refactor-to-layers) | Unified structural test suite |
 | Linter config modification | Direct modification | Hardening tool — enforcement must actually happen |
 | Linter rule scope | Built-in/plugin rules only, no custom rules | Custom rule authoring is out of scope for v1 |
-| "Other" stack linter rules | Skip — structural tests only | Prevents hallucinated rules for unfamiliar linters |
+| "Other" stack artifacts | Analysis + violations report only — no tests or linter rules | Prevents hallucinated artifacts for unfamiliar stacks |
 | Convention detection | Majority (>50%), user-confirmed | Prevents locking in bad patterns; handles mid-migration codebases |
 | Violations | Report only, no auto-fix | User should understand and own the fixes |
 | Stack detection | Auto-detect with mismatch gate | Stop and ask on ambiguity, never guess |
