@@ -1,7 +1,7 @@
 # convention-enforcer — Design Spec
 
 **Date:** 2026-03-27
-**Status:** Approved (R3 revisions applied)
+**Status:** Approved (R4 revisions applied)
 **Plugin:** ai-dev-tools
 **Skill:** convention-enforcer
 
@@ -15,11 +15,11 @@ The result is codebases where error handling, naming, imports, response shapes, 
 
 ## Success Criteria
 
-- Generated linter rules are syntactically valid for their target linter (ESLint, Ruff, or Roslyn/.editorconfig)
-- Generated structural tests compile/run without syntax errors against the detected dominant pattern
-- Violations report includes file path and line number for every violation
+- Generated linter rules are syntactically valid for their target linter (ESLint, Ruff, or Roslyn/.editorconfig) — validated by a post-generation parse check (see Step 9a)
+- Generated structural tests are syntactically valid — validated by a compile-only / syntax-only check (see Step 9a)
+- Violations report includes file path for every violation, plus line number where applicable (file-level violations like naming and file organization omit line numbers)
 - Core agent detects and reports on all 7 fixed categories for the detected stack
-- Discovery agent identifies at least 1 additional convention in a project with >20 source files
+- Discovery agent runs successfully and returns findings in the correct output format. Zero findings is a valid outcome — discovery success is judged by evidence quality (any reported pattern must appear in 3+ files with a clear violation set), not by minimum count.
 - User confirmation checkpoint presents before any enforcement is generated
 - Re-running the skill on an already-hardened codebase produces no new enforcement artifacts (idempotent — see Previous Run Detection)
 
@@ -77,7 +77,7 @@ description: "Use when the user wants to enforce coding conventions, prevent AI 
 
 ### Numbered Steps
 
-1. **Tech Stack Detection** — auto-detect stack (including linter config and test framework scans), run mismatch gate if needed
+1. **Tech Stack Detection** — auto-detect stack (including linter config, test framework, and sub-framework scans), run mismatch gate if needed
 2. **Scope Detection** — walk up from CWD to find project root, determine monorepo boundaries, scope to CWD or user-specified package
 3. **Previous Run Detection** — scan for existing convention-enforcer artifacts (see section below)
 4. **Dispatch Agents** — launch Core Agent and Discovery Agent in parallel using the Agent tool (two parallel Agent invocations in a single message)
@@ -86,7 +86,8 @@ description: "Use when the user wants to enforce coding conventions, prevent AI 
 7. **Present Violations** — for confirmed categories, show ranked violations, user picks which to harden
 8. **Present Routing Plan** — show recommended enforcement mechanism per finding, user can override
 9. **Generate Artifacts** — produce structural tests, modify linter config, generate violations report
-10. **Review Checkpoint** — user reviews generated artifacts via git diff
+9a. **Validate Artifacts** — parse modified linter config to verify syntax; run compile-only / syntax-only check on generated test files (e.g. `npx tsc --noEmit`, `python -m py_compile`, `dotnet build --no-restore`). If validation fails, fix or warn before proceeding.
+10. **Review Checkpoint** — user reviews generated artifacts via git diff; user can accept all, revert selected artifacts, or discard the entire run
 
 ### Progressive Disclosure Schedule
 
@@ -157,7 +158,13 @@ User invokes convention-enforcer
    Step 9: Generate artifacts + violations report
         |
         v
+   Step 9a: Validate artifacts (parse linter config, syntax-check tests)
+        |
+        v
    Step 10: USER CHECKPOINT: Review generated artifacts (git diff)
+        |
+        v
+   Accept all / Revert selected / Discard run
 ```
 
 ---
@@ -326,7 +333,8 @@ Both agents must return findings in this structured format so that merge logic, 
     { file: string, pattern_found: string, conforms: boolean }
   ],
   violations: [
-    { file: string, line: number, expected: string, found: string }
+    { file: string, line: number | null, expected: string, found: string }
+    // line is null for file-level violations (naming, file organization)
   ],
   source: "core" | "discovery"
 }
@@ -456,7 +464,7 @@ Options:
 ### 3. Violations Report → `docs/convention-enforcer/violations-report.md`
 
 - Grouped by category
-- Each violation: file path, line number, expected vs found
+- Each violation: file path, line number (where applicable — omitted for file-level violations), expected vs found
 - Summary at top: total violations per category, severity ranking
 - Point-in-time snapshot — regenerated on each run
 - Placed in `docs/convention-enforcer/` so repeated runs can be diffed via git
@@ -473,10 +481,24 @@ Auto-detection with a mismatch gate. Uses its own `references/tech-stacks.md` (n
 
 1. Scan project root for detection files: `package.json`, `pyproject.toml`, `.csproj` / `.sln`
 2. Scan for linter config files (`.eslintrc.*`, `eslint.config.*`, `ruff.toml`, `.editorconfig`) and test frameworks (`vitest.config.*`, `jest.config.*`, `pytest.ini`, `xunit.runner.json`)
-3. **One stack match** → use that stack, confirm with user: "Detected Node.js project. Correct?"
+3. **One stack match** → proceed to sub-framework detection (see below)
 4. **Zero stack matches** → prompt user to specify (see "Other" stack below)
 5. **Multiple stack matches** → trigger mismatch gate
 6. Cross-check linter and test framework findings against detected stack — mismatch gate on inconsistencies
+
+### Sub-Framework Detection
+
+After identifying the language/platform, detect the specific framework via dependency analysis:
+
+- **Node.js:** Check `package.json` dependencies for `fastify`, `express`, `@nestjs/core`, `@hapi/hapi`, `koa`. Confirm: "Detected Node.js + Fastify. Correct?"
+- **Python:** Check `pyproject.toml` / `requirements.txt` for `fastapi`, `django`, `flask`, `starlette`. Confirm: "Detected Python + FastAPI. Correct?"
+- **.NET:** Check `.csproj` package references and `Program.cs` / `Startup.cs` patterns for MVC controllers vs Minimal APIs. Confirm: "Detected .NET MVC. Correct?"
+
+If the detected sub-framework matches a supported stack profile (Fastify, FastAPI, .NET MVC), use that profile's DI patterns and convention templates. If the sub-framework is not in the supported list (e.g., Express, Django, Flask), the skill still proceeds but with **reduced category coverage**:
+
+- Categories that are framework-agnostic (Naming, Import Ordering, File Organization, Logging, Error Handling) work normally
+- DI / Dependency Patterns: scan for generic DI indicators (constructor injection, service locator patterns) but skip framework-specific DI checks. Warn: "DI analysis is generic — no {framework}-specific DI profile available."
+- API Response Shapes: scan for response patterns but skip framework-specific envelope expectations. Warn: "API analysis is generic — no {framework}-specific response profile available."
 
 ### Supported Stacks
 
@@ -549,7 +571,7 @@ After tech stack detection, determine the analysis scope:
 
 Both skills write to `tests/structural/`. Coexistence rules:
 
-- **File naming:** refactor-to-layers uses `layer-boundaries.test.{ext}` (JS/TS/Python) or `LayerBoundaryTests.cs` (.NET). Convention-enforcer uses `convention-{category}.test.{ext}` (JS/TS/Python) or `Convention{Category}Tests.cs` (.NET). No collision — different prefixes.
+- **File naming:** refactor-to-layers uses `layer-boundaries.test.ts` (JS/TS), `test_layer_boundaries.py` (Python), or `LayerBoundaryTests.cs` (.NET). Convention-enforcer uses `convention-{category}.test.{ext}` (JS/TS/Python) or `Convention{Category}Tests.cs` (.NET). No collision — different prefixes.
 - **Marker comments:** refactor-to-layers uses `// --- Generated by refactor-to-layers ---`. Convention-enforcer uses `{comment-char} --- Generated by convention-enforcer: {category} ---` (with category as stable ID, no date). Different format but both identifiable by skill name prefix.
 - **Independence:** Convention-enforcer tests do not import or reference layer definitions. The two test sets are complementary but independent.
 - **Shared directory:** Running both skills produces a coherent, combined structural test suite in `tests/structural/`.
@@ -576,14 +598,18 @@ Convention-enforcer is not invoked by implement-plan. They serve different purpo
 | Large codebase (>50K LOC) | Sample files evenly distributed by modification date. Core agent: up to 100 files per category. Discovery agent: up to 50 files across directories. Report as approximate: "Sampled N of M files. Approximately X% follow pattern Y (sampling may affect accuracy)." |
 | Linter rule conflicts with existing rule | Warn: "Rule {rule} conflicts with existing {existing_rule}. Skip or override?" |
 | One agent fails | Use the other agent's results. Report failed agent's categories as "analysis failed." |
+| User rejects artifacts at Step 10 | **Accept all:** commit generated artifacts. **Revert selected:** delete rejected convention-enforcer test files (identified by marker), remove rejected linter rules (identified by marker/metadata key), keep accepted ones. **Discard run:** `git checkout` all modified files, delete all newly created convention-enforcer files. |
+| Validation fails at Step 9a | Show validation errors. Attempt auto-fix (e.g. syntax correction). If unfixable, skip that artifact with warning and proceed to Step 10 with remaining artifacts. |
 
 ---
 
 ## Parallel Agent Dispatch
 
-The Core Agent and Discovery Agent are dispatched using the **Agent tool with two parallel invocations in a single message**. Each agent receives the detected stack, scope, and output format requirements as context. Results are returned independently and merged in Step 5.
+**Preferred:** The Core Agent and Discovery Agent are dispatched using the **Agent tool with two parallel invocations in a single message**. Each agent receives the detected stack, scope, and output format requirements as context. Results are returned independently and merged in Step 5.
 
-If one agent fails, the other's results are still used. A failed agent's categories are reported as "analysis failed" in the findings.
+**Sequential fallback:** If the runtime does not support sub-agents or parallel tool dispatch (e.g., policy restrictions, older Claude Code versions), the skill runs both analyses sequentially within a single agent context: core categories first, then discovery scan. The output format and merge logic remain identical — the only difference is execution order, not architecture.
+
+If one agent (or sequential pass) fails, the other's results are still used. A failed agent's categories are reported as "analysis failed" in the findings.
 
 ---
 
@@ -621,3 +647,9 @@ This turns the skill from reactive ("analyze what's here now") into adaptive ("l
 | Overlap filtering | Merge logic only, not discovery agent | Single responsibility — discovery reports everything, merge deduplicates |
 | Marker comments | Category-based stable ID, no date | Enables idempotent re-runs with dedup by category |
 | Agent output format | Structured with per-file data | Enables user corrections without re-dispatching agents |
+| Sub-framework detection | Dependency scan + user confirmation | Prevents wrong DI/API profile; graceful degradation for unsupported frameworks |
+| Violation line numbers | Optional (null for file-level) | File naming and organization violations have no meaningful line number |
+| Artifact validation | Parse/syntax check after generation (Step 9a) | Success criteria require syntactic validity; git diff alone can't verify |
+| Review checkpoint outcomes | Accept all / revert selected / discard | User must be able to reject artifacts after reviewing the diff |
+| Discovery success | Quality-based, zero findings valid | Minimum count incentivizes false positives |
+| Agent dispatch | Parallel preferred, sequential fallback | Skill must work in runtimes without sub-agent support |
