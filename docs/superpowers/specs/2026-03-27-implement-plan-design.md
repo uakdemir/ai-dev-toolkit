@@ -2,13 +2,13 @@
 
 **Date:** 2026-03-27
 **Status:** Draft
-**Scope:** A reusable Claude Code skill that executes restructuring strategy specs produced by refactor-to-layers or refactor-to-monorepo — performing file moves, import rewrites, and interface extractions with verification and rollback support
+**Scope:** A reusable Claude Code skill that executes restructuring strategy specs produced by refactor-to-layers — performing file moves, import rewrites, and interface extractions with verification support. Monorepo migration-plan support is a future enhancement (requires format alignment).
 
 ---
 
 ## 1. Overview
 
-The `implement-plan` skill takes a strategy spec (produced by `/ai-dev-tools:refactor-to-layers` or `/ai-dev-tools:refactor-to-monorepo`) and executes its restructuring steps against the actual codebase. It groups steps into natural phases (create → move → rewrite → extract), validates dependency ordering within each phase, and verifies results at the user's chosen granularity. It is Serena-aware: when the Serena MCP plugin is available, it uses semantic symbol operations for higher-confidence refactoring; otherwise it falls back to regex-based operations with explicit caveats.
+The `implement-plan` skill takes a strategy spec (produced by `/ai-dev-tools:refactor-to-layers`) and executes its restructuring steps against the actual codebase. Monorepo migration-plan support is planned as a future enhancement once the monorepo skill's output format is aligned with the structured step schema. It groups steps into natural phases (create → move → rewrite → extract), validates dependency ordering within each phase, and verifies results at the user's chosen granularity. It is Serena-aware: when the Serena MCP plugin is available, it uses semantic symbol operations for higher-confidence refactoring; otherwise it falls back to regex-based operations with explicit caveats.
 
 ### 1.1 Problem Statement
 
@@ -21,10 +21,10 @@ The existing analysis skills produce comprehensive strategy specs with detailed 
 
 ### 1.2 Success Criteria
 
-- Reads and parses any strategy spec produced by refactor-to-layers or refactor-to-monorepo without modification
+- Reads and parses strategy specs produced by refactor-to-layers (structured step format with action/source/target/affected_imports/verify fields)
 - Groups steps into phases by action type and validates dependency ordering within each phase
 - Executes all four action types: `create-folder`, `move-file`, `rewrite-import`, `extract-interface`
-- In Serena mode: uses semantic symbol operations (`rename_symbol`, `find_referencing_symbols`, `get_symbols_overview`) for rewrites and extractions
+- In Serena mode: uses semantic symbol operations (`find_referencing_symbols`, `get_symbols_overview`) for rewrites and extractions
 - In fallback mode: uses regex-based import scanning with caveats flagged in the execution report
 - Verification runs at user-chosen granularity (per-step, per-phase, or end-only)
 - On failure: stops, analyzes, proposes fix. User approves or rejects.
@@ -57,9 +57,9 @@ The existing analysis skills produce comprehensive strategy specs with detailed 
 
 `implement-plan` is the execution counterpart to the analysis skills:
 
-1. `/ai-dev-tools:refactor-to-monorepo` → produces `docs/monorepo-strategy/migration-plan.md`
+1. `/ai-dev-tools:refactor-to-monorepo` → produces `docs/monorepo-strategy/migration-plan.md` (future implement-plan support)
 2. `/ai-dev-tools:refactor-to-layers` → produces `docs/layer-architecture/strategy.md`
-3. **`/ai-dev-tools:implement-plan`** → executes either spec's restructuring steps
+3. **`/ai-dev-tools:implement-plan`** → executes refactor-to-layers strategy specs (monorepo support planned)
 4. `/ai-dev-tools:document-for-ai` → updates docs for the new structure
 
 ---
@@ -102,7 +102,7 @@ description: "Use when the user wants to execute a restructuring strategy from r
 
 ### 3.1 Step 1 — Detect Serena Availability
 
-Check if Serena MCP tools are available in the current session.
+Check if Serena MCP tools are available by attempting to call `get_symbols_overview` on any source file. If the tool is not found, proceed in fallback mode.
 
 - **If available:** Report "Serena detected — using semantic refactoring." Proceed.
 - **If not available:** Warn: "Serena not detected. Without Serena, refactoring uses regex-based import rewriting which is less reliable (path aliases, barrel re-exports, and namespace conflicts may be missed). Are you sure you want to continue without Serena?" If user declines, stop and suggest configuring Serena. If user confirms, proceed in fallback mode. Flag all subsequent import rewrites in the execution report as "regex-based — verify manually."
@@ -110,17 +110,25 @@ Check if Serena MCP tools are available in the current session.
 ### 3.2 Step 2 — Locate Strategy Spec
 
 1. If the user passed an explicit path → use it
-2. Auto-detect: scan for `docs/layer-architecture/strategy.md` and `docs/monorepo-strategy/migration-plan.md`
+2. Auto-detect: scan for `docs/layer-architecture/strategy.md` at root level and `packages/*/docs/layer-architecture/strategy.md` for per-package monorepo specs
 3. If one found → use it
 4. If multiple found → ask: "Found strategy specs at [paths]. Which one to execute?"
 5. If none found → error: "No strategy spec found. Run `/ai-dev-tools:refactor-to-layers` or `/ai-dev-tools:refactor-to-monorepo` first."
 
 ### 3.3 Step 3 — Parse and Validate
 
-- Read the strategy spec's frontmatter (`scope`, `layers`, `tech_stack`, `composition_root`)
+- Read the strategy spec's frontmatter and use each field:
+  - `tech_stack`: select verification commands and Serena operation mapping
+  - `layers`: validate that move-file targets correspond to recognized layer folders
+  - `composition_root`: exempt from import rewrite validation (legitimately imports from all layers); update its DI wiring when new interfaces are extracted
+  - `scope`: used in commit messages and execution report
 - Parse the Restructuring Steps section into structured step objects
-- Validate: every step has required fields (`action`, `source`, `target`, `affected_imports`, `verify`)
-- Skip any steps already marked `[DONE]` (from a previous partial run)
+- Validate: every step has required fields (`action`, `source`, `target`, `affected_imports`, `verify`). Field semantics vary by action type:
+  - `move-file`: source = current file path, target = new file path, affected_imports = files that import from source
+  - `rewrite-import`: source = file containing the import, target = new import path, affected_imports = N/A (single file)
+  - `extract-interface`: source = concrete class file, target = new interface file path, affected_imports = consumer files to update to import interface
+  - `create-folder`: source = N/A, target = directory path, affected_imports = N/A
+- Skip any steps already marked `[DONE]` (from a previous partial run). The `[DONE]` marker is prepended to the step's action line: e.g., `[DONE] action: move-file` (before) vs `action: move-file` (after). This format is used consistently for both marking and parsing.
 - Report: "Found N restructuring steps (M already completed). Resuming from step M+1." or "Found N restructuring steps across K action types."
 
 ### 3.4 Step 4 — Check Git State
@@ -129,7 +137,11 @@ Check if Serena MCP tools are available in the current session.
 - If dirty: "Uncommitted changes detected. Commit or stash before running implement-plan." Stop.
 - If clean: proceed
 
-### 3.5 Step 5 — Ask Verification Granularity
+### 3.5 Step 5 — Pre-flight Validation
+
+Before execution, scan all source paths referenced in remaining steps to confirm they exist. Report any discrepancies upfront: "N of M source files exist. 2 files not found: [paths]. These steps will fail. Continue or stop?" This catches stale specs before execution begins, rather than failing step-by-step.
+
+### 3.6 Step 6 — Ask Verification Granularity
 
 > "How often should I verify?"
 > 1. After each step (safest, slowest)
@@ -138,7 +150,7 @@ Check if Serena MCP tools are available in the current session.
 
 Default: option 2.
 
-### 3.6 Step 6 — Execute Phases
+### 3.7 Step 7 — Execute Phases
 
 Group steps by action type into four phases, execute sequentially. See Section 4.
 
@@ -153,7 +165,7 @@ Steps are grouped by action type into phases. Within each phase, steps are depen
 - Create all target directories needed by subsequent phases
 - Dependency ordering: parent directories before children (e.g., `src/data/` before `src/data/repositories/`)
 - Verification: check directories exist
-- Commit: `refactor: create folder structure (phase 0/3)`
+- Commit: `refactor: create folder structure (prepare phase)`
 
 ### 4.2 Phase 1: Move (`move-file` actions)
 
@@ -162,16 +174,16 @@ Steps are grouped by action type into phases. Within each phase, steps are depen
 - **Serena mode:** use `find_referencing_symbols` before moving to capture the full reference graph. Move file. Phase 2 handles import rewrites using the captured graph.
 - **Fallback mode:** `git mv` the file
 - Verification: all source files gone from old locations, present in new locations
-- Commit: `refactor: move N files to target locations (phase 1/3)`
+- Commit: `refactor: move N files to target locations (move phase)`
 
 ### 4.3 Phase 2: Rewrite (`rewrite-import` actions)
 
 - Update import paths in all affected files to reflect new locations from Phase 1
 - Dependency ordering: files with the most consumers first (fix the most-imported files early so files that depend on them can resolve their imports correctly)
-- **Serena mode:** use `rename_symbol` and `find_referencing_symbols` to update all references semantically. Precise, handles aliases and re-exports correctly.
+- **Serena mode:** use `find_referencing_symbols` to locate all files that reference symbols from the moved file, then update the import paths in those files. Symbol names remain unchanged — only the module path is rewritten. Precise, handles aliases and re-exports correctly. (Note: `rename_symbol` is for renaming symbols, not import paths. Defer exact Serena operation mapping to `references/execution-patterns.md`.)
 - **Fallback mode:** regex scan for old import paths, replace with new paths. Read `tsconfig.json` paths (Node.js), namespace mappings (.NET), or package structure (Python) to resolve aliases. Flag unresolved aliases in the execution report as "regex-based — verify manually."
 - Verification: run the strategy spec's verify command (typically `tsc --noEmit`, `dotnet build`, or `python -c "import app"`)
-- Commit: `refactor: rewrite imports for new structure (phase 2/3)`
+- Commit: `refactor: rewrite imports for new structure (rewrite phase)`
 
 ### 4.4 Phase 3: Extract (`extract-interface` actions)
 
@@ -182,7 +194,7 @@ Before executing extractions, run pre-Phase 3 validation (see Section 5).
 - **Serena mode:** use `get_symbols_overview` to read the class's public API, create the interface, use `find_referencing_symbols` to update all consumers to import the interface instead of the concrete class
 - **Fallback mode:** read the source file, extract public method signatures, create interface file, regex-replace direct imports with interface imports in consumer files
 - Verification: type-check / build passes
-- Commit: `refactor: extract provider interfaces (phase 3/3)`
+- Commit: `refactor: extract provider interfaces (extract phase)`
 
 ### 4.5 Verification Flow
 
@@ -215,7 +227,13 @@ Flag any circular references: A imports B and B imports A.
 
 ### 5.2 Classification
 
-Classify each circular dependency by reading the code at both ends:
+Classify each circular dependency by reading the code at both ends. Assign a confidence level (high/medium/low) to each classification. If the pattern is ambiguous, classify as "unclassified" and present without a proposed resolution — the user must decide.
+
+**Classification heuristics:**
+- **Callback:** B receives A's function/method as a parameter, or B calls a single void method on A with no return value used
+- **Shared operation:** Both A and B call the same function/method with similar arguments
+- **Bidirectional data flow:** A reads a property/field from B, and B reads a property/field from A
+- **Misplaced responsibility:** One side has a single usage of the other that could be inlined or moved
 
 | Pattern | What's Happening | Resolution |
 |---|---|---|
@@ -238,14 +256,13 @@ Found N circular dependencies to resolve before extraction:
 | 1.3 | notifyService ↔ emailService | Misplaced responsibility | Move template logic from notifyService to emailService |
 
 Options per item:
-  (1) Extract shared interface to Providers — AI resolves
+  (1) Apply AI-suggested resolution (shown in Proposed Resolution column)
   (2) Skip — flag for manual resolution
-  (3) Use AI suggestion (shown in table)
 
-Respond in bulk: "3 for all", "2 for all", "1 for 1.1, 1.2 and 2 for the rest", etc.
+Respond in bulk: "1 for all", "2 for all", "1 for 1.1, 1.2 and 2 for the rest", etc.
 ```
 
-- Items assigned option 1 or 3: executed as part of Phase 3
+- Items assigned option 1: AI applies the pattern-specific resolution as part of Phase 3
 - Items assigned option 2: skipped, added to execution report's "Remaining Manual Steps"
 
 ### 5.4 Resolution Execution
@@ -258,12 +275,15 @@ Resolutions are applied *before* the planned `extract-interface` steps, since th
 
 ### 6.1 Partial Execution Resume
 
+**Mid-phase failure handling:** If execution fails mid-phase, commit the steps completed so far within that phase (partial phase commit) and mark them `[DONE]`. This ensures resume can skip already-completed steps even within an interrupted phase.
+
 When invoked on a strategy spec with `[DONE]` markers:
 1. Skip completed steps
-2. Report: "Found N total steps, M already completed. Resuming from step M+1."
-3. Re-validate the dependency graph for remaining steps (codebase state may have changed)
-4. Ask verification granularity fresh (don't assume previous choice)
-5. Execute remaining phases
+2. Detect filesystem state for remaining steps — if a step's source is gone but target exists, mark `[DONE]` automatically (reconcile with manual changes)
+3. Report: "Found N total steps, M already completed. Resuming from step M+1."
+4. Re-validate the dependency graph for remaining steps (codebase state may have changed)
+5. Ask verification granularity fresh (don't assume previous choice)
+6. Execute remaining phases
 
 ### 6.2 Fully Executed Spec
 
@@ -340,7 +360,7 @@ Contents:
 | Phased execution (create → move → rewrite → extract) with dependency ordering within phases | Natural restructuring workflow. Creates meaningful batch commits. Prevents cross-phase dependency issues (e.g., moving files before creating target dirs). |
 | Serena strongly recommended, not mandatory | Semantic operations are significantly more reliable than regex for import rewriting and interface extraction. But the skill should work everywhere — fallback mode with caveats is better than refusing to run. |
 | User-chosen verification granularity | Monorepo restructuring is high-risk (verify often). Layer restructuring within a small module is lower risk (batch is fine). User knows their comfort level. |
-| Stop + analyze + propose fix on failure | Auto-rollback is too aggressive (fix may be trivial). Stop without analysis wastes the AI's capability. Proposing a fix gives the user information and control. |
+| Stop + analyze + propose fix on failure | Auto-rollback is too aggressive (fix may be trivial). Stop without analysis wastes the AI's capability. Proposing a fix gives the user information and control. Per-phase commits enable manual rollback via `git revert` if needed, but the skill does not automate rollback. |
 | Commit per phase, not per step | File moves are mechanical — per-file commits flood history with noise. Phase-level commits are meaningful ("moved 12 files to layer folders") and align with the user's preference for informative small commits without noise. |
 | Strategy spec updated with `[DONE]` markers | Enables natural resume from partial execution. The spec becomes a living document that tracks progress. |
 | Circular dependency classification (4 patterns) | Mechanical interface extraction often creates new violations. Pattern-specific resolutions (callback, shared operation, data flow, misplaced responsibility) address root causes rather than symptoms. |
