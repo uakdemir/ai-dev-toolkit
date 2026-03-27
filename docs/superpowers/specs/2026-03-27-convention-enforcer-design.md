@@ -39,7 +39,7 @@ The result is codebases where error handling, naming, imports, response shapes, 
 - Modify CI/CD pipelines
 - Generate custom linter rules (only configures existing built-in/plugin rules)
 - Run the generated tests
-- Generate linter rules for "Other" stacks (structural tests only — see "Other" Stack Handling)
+- Generate linter rules or structural tests for "Other" stacks (analysis + violations report only — see "Other" Stack Handling)
 
 **Post-skill manual steps:**
 1. Install any linter plugins referenced by generated rules (if not already present)
@@ -98,12 +98,12 @@ description: "Use when the user wants to enforce coding conventions, prevent AI 
 | Step 9 (Generate Artifacts) | `references/convention-test-templates.md` |
 | Step 9 (Generate Artifacts) | `references/linter-rule-mappings.md` |
 
-### Reference Files (to be created during implementation)
+### Reference Files
 
 - `references/tech-stacks.md` — stack detection heuristics, linter config paths, test runner, DI patterns per stack. This skill's own version, not shared with other skills.
-- `references/agent-prompts.md` — full prompt instructions for Core Agent and Discovery Agent invocations, including output format requirements and category-specific scan instructions. **Deferred to implementation planning.**
-- `references/convention-test-templates.md` — structural test templates per convention category per stack (similar to refactor-to-layers' `structural-test-templates.md`). **Deferred to implementation planning.**
-- `references/linter-rule-mappings.md` — mapping from convention categories to specific built-in linter rules per stack, including format-specific insertion rules (ESLint flat vs legacy, Ruff TOML sections, .editorconfig file-glob sections). Only built-in/plugin rules, not custom rules. **Deferred to implementation planning.**
+- `references/agent-prompts.md` — full prompt instructions for Core Agent and Discovery Agent invocations, including output format requirements and category-specific scan instructions.
+- `references/convention-test-templates.md` — structural test templates per convention category per stack (similar to refactor-to-layers' `structural-test-templates.md`).
+- `references/linter-rule-mappings.md` — mapping from convention categories to specific built-in linter rules per stack, including format-specific insertion rules (ESLint flat vs legacy, Ruff TOML sections, .editorconfig file-glob sections). Only built-in/plugin rules, not custom rules.
 
 ---
 
@@ -329,6 +329,7 @@ Both agents must return findings in this structured format so that merge logic, 
   suggested_severity: "high" | "medium" | "low",  // core: from Severity Model; discovery: agent's assessment
   suggested_routing: "structural_test" | "linter_rule" | "both",  // core: from Routing table; discovery: agent's assessment
   scope_description: string | null, // what constitutes the file subset, e.g. "route handler files", "all source files"
+  scope_dirs: [string] | null,      // machine-readable directory list for the scoped subset, e.g. ["src/routes", "src/handlers"]
   files_analyzed: [                 // per-file pattern data (enables re-scan on user correction)
     { file: string, pattern_found: string, conforms: boolean }
   ],
@@ -341,6 +342,8 @@ Both agents must return findings in this structured format so that merge logic, 
 ```
 
 **Why per-file data:** When the user corrects a convention at Step 6, the orchestrator recomputes violations from `files_analyzed` using the user's stated convention as the baseline — no agent re-dispatch needed. If the user specifies a pattern not found in any scanned file, all files become violations with a note: "Convention not yet present in codebase — all files reported as violations."
+
+**Discovery test generation scope:** At Step 9, when generating structural tests for discovery findings, the test's file-scan scope is determined by: (1) `scope_dirs` if present — use those directories; (2) otherwise, extract the unique directory set from `files_analyzed` entries. The generated test scans exactly those directories, not all source files. This ensures the structural test matches the discovery agent's analysis scope.
 
 ---
 
@@ -532,7 +535,7 @@ Stack not recognized. Please provide:
   4. DI/dependency injection pattern used (if any)?
 ```
 
-The skill proceeds with user-provided info. Structural test templates fall back to language-generic patterns. **Linter rule generation is skipped for "Other" stacks** — only structural tests are produced. Explain: "Linter rules are only generated for supported stacks (Node.js/ESLint, Python/Ruff, .NET/Roslyn). For your stack, add linter rules manually based on the violations report."
+The skill proceeds with user-provided info. **For "Other" stacks, the skill stops at analysis and violations reporting — no structural tests or linter rules are generated.** Explain: "Convention analysis and violations report are available for all stacks. Structural tests and linter rules are only generated for supported stacks (Node.js, Python, .NET). For your stack, use the violations report to write enforcement artifacts manually."
 
 ### Mismatch Gate
 
