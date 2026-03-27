@@ -216,7 +216,7 @@ Same preset list as the other skills; follow-up questions differ per skill:
 
 **.NET backend pattern follow-up:** After selecting option 3 or 4, ask: "What's your backend pattern? (MVC Controllers / Minimal APIs / Other)". Section 3.4 provides detailed mapping for MVC Controllers. For Minimal APIs, the API layer detection adapts to scan for `app.MapGet`/`app.MapPost` patterns instead of Controller classes (same layer rules apply).
 
-**Python backend framework follow-up:** After selecting option 5, ask: "What's your backend framework? (FastAPI / Django / Flask / Other)". Section 3.4 provides detailed mapping for FastAPI. For Django, the skill maps `views.py` → API, `models.py` → Data, and uses Django's middleware for Provider patterns. For Flask, similar to FastAPI but uses Flask blueprints for API layer detection.
+**Python backend framework follow-up:** After selecting option 5, ask: "What's your backend framework? (FastAPI / Django / Flask / Other)". Section 3.4 provides detailed layer mapping and provider scaffolding for FastAPI. For Django and Flask, the skill applies the same layer model using framework-specific discovery heuristics (Django: `views.py` → API, `models.py` → Data; Flask: blueprints → API), but provider interface templates are generated as generic Python Protocol classes with a `# TODO: wire into [Django middleware / Flask extension]` comment — full DI scaffolding for Django/Flask is deferred to `references/provider-patterns.md` per-stack sections.
 
 **Validation:** After selection, scan for expected config files as defined in `references/tech-stacks.md` for the selected stack. If not found, warn: "Expected [file] not found for [stack]. Is this the right tech stack?"
 
@@ -371,7 +371,7 @@ composition_root: [path to composition root file(s)]
 [Each provider: name, responsibility, methods, which layers consume it]
 
 ## Restructuring Steps
-[Ordered by dependency depth: fix Types first, then Config, etc.
+[Ordered by dependency depth of the approved layer sequence (lowest-dependency layers first).
  Each step includes:
  - action: move-file | extract-interface | rewrite-import | create-folder
  - source: current file path
@@ -381,6 +381,11 @@ composition_root: [path to composition root file(s)]
 
 ## Structural Test Inventory
 [Which tests were generated, what each enforces]
+
+## Limitations
+[Skipped dynamic imports, unresolved path aliases, below-threshold provider
+ concerns, non-standard layouts, partial-analysis failures, and any other
+ items that could not be fully analyzed]
 ```
 
 This is the spec a future `implement-plan` skill would consume.
@@ -389,7 +394,7 @@ This is the spec a future `implement-plan` skill would consume.
 
 **Tier 1 — Import-scanning tests** (zero dependencies, works immediately):
 - Written to `tests/structural/layer-boundaries.test.ts` (Node.js), `Tests/Structural/LayerBoundaryTests.cs` (.NET), or `tests/structural/test_layer_boundaries.py` (Python)
-- One test per layer rule, derived from the allowed dependencies table (Section 3.2). For each layer, assert that its files only import from allowed layers.
+- One test per layer rule, derived from the approved allowed-dependency rules (Section 3.2 defaults, or the user's approved overrides from Phase 2). For each layer, assert that its files only import from allowed layers.
 - Runs with the project's existing test runner (Jest/Vitest for Node.js, xUnit/NUnit for .NET, pytest for Python)
 
 **Import resolution strategy per stack:**
@@ -476,7 +481,7 @@ If changes requested: update the machine spec, regenerate affected tests/interfa
 
 ## 6. SCAFFOLD Mode — Empty Projects
 
-**Detection:** No source files found (or only config/infrastructure files). Source files are files matching the tech stack's scan patterns: `.ts`/`.js`/`.tsx`/`.jsx` for Node.js, `.cs` for .NET, `.py` for Python. All other files (`package.json`, `tsconfig.json`, `*.csproj`, `Dockerfile`, `*.md`, `*.json`, `*.yaml`) are config/infrastructure. SCAFFOLD triggers when zero source files are found.
+**Detection:** No source files found (or only config/infrastructure files). Source files are files matching the tech stack's scan patterns: `.ts`/`.js`/`.tsx`/`.jsx`/`.vue` for Node.js, `.cs`/`.razor` for .NET, `.py` for Python. All other files (`package.json`, `tsconfig.json`, `*.csproj`, `Dockerfile`, `*.md`, `*.json`, `*.yaml`) are config/infrastructure. SCAFFOLD triggers when zero source files are found. For stacks not covered by presets, the source file extensions are determined from the "Other" follow-up answers.
 
 **Behavior:**
 
@@ -541,7 +546,7 @@ Same artifacts as ANALYZE, minus violations and human summary. Folder structure 
 | Standalone skill, not extension of refactor-to-monorepo | Different concerns (inter-module boundaries vs intra-module layers). Keeps both skills within ~250-300 line SKILL.md. Works independently on any project shape. |
 | Hybrid layer discovery (prescriptive + validated) | Prescriptive starting point prevents AI hallucinating layers from messy code. Validation against reality prevents recommending layers that don't match the project. |
 | Providers as lateral injection, not a sequential layer | Cross-cutting concerns are consumed by multiple layers. Forcing them into the sequence would create awkward dependency chains. |
-| 2 user checkpoints (not 4) | Only pause when there's a real decision: layer map approval and final review. Data gathering doesn't benefit from intermediate approval. |
+| 2 primary user checkpoints (Phase 2 and Phase 4), plus conditional confirmations | Only pause for real decisions: layer map approval and final review. Conditional confirmations (e.g., composition root ambiguity, unclassified file assignment) happen within the checkpoints, not as separate phases. |
 | 3-tier structural tests | Tier 1 (import-scanning) works everywhere with zero dependencies. Tier 2 (ESLint/ArchUnitNET) provides stronger enforcement. Tier 3 (CI recommendation) defers infrastructure decisions to the team. |
 | Machine spec + throwaway human summary | AI-optimized spec is the source of truth for execution. Human summary is for one-time review — no sync burden. Mirrors document-for-ai's HUMANIZE pattern. |
 | SCAFFOLD mode for empty projects | Layer enforcement is most valuable when set up before code exists (OpenAI's "early prerequisite" insight). Prevents violations from ever forming. |
