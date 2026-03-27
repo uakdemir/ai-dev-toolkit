@@ -25,10 +25,10 @@ AI agents waste context and make architectural mistakes when dependency directio
 - Discovery phase assigns a layer classification (not "unclassified") to >50% of source files (remaining files flagged for user review)
 - Every dependency direction violation is detected and reported with source file, target file, and direction
 - Generated import-scanning tests pass on a clean architecture and fail on any backward dependency
-- Generated ESLint configs (Node.js) and ArchUnitNET tests (.NET) are valid and runnable without modification
-- Provider interface templates compile/type-check without errors
+- Generated ESLint configs (Node.js), ArchUnitNET tests (.NET), and import-linter contracts (Python) are syntactically valid and structurally correct for their target format
+- Provider interface templates are syntactically valid in the target language
 - Machine-actionable spec contains enough detail for a future `implement-plan` skill to execute restructuring without re-analysis
-- SCAFFOLD mode on an empty project produces a complete, buildable folder structure with passing structural tests
+- SCAFFOLD mode on an empty project produces a complete folder structure with syntactically valid structural tests
 
 ### 1.3 Scope Boundaries
 
@@ -46,11 +46,14 @@ AI agents waste context and make architectural mistakes when dependency directio
 - Replace existing architectural test setups — it detects and works alongside them
 
 **Post-skill human steps** (what remains manual after the skill runs):
-1. Write provider implementations behind the generated interface skeletons
-2. Update existing code to receive providers via DI instead of direct imports
-3. Move files to match the proposed layer folder structure (guided by the restructuring steps in the strategy spec)
-4. Wire the composition root to register provider implementations (e.g., `Program.cs`, root Fastify plugin)
-5. Run the generated structural tests and fix violations iteratively
+1. Install required dependencies for structural test enforcement: Node.js — `eslint-plugin-import-x` (Tier 2); .NET — `ArchUnitNET` NuGet package (Tier 2); Python — `import-linter` pip package (Tier 2). Tier 1 import-scanning tests use only the project's existing test runner — no extra dependencies.
+2. Write provider implementations behind the generated interface skeletons
+3. Update existing code to receive providers via DI instead of direct imports
+4. Move files to match the proposed layer folder structure (guided by the restructuring steps in the strategy spec)
+5. Wire the composition root to register provider implementations (e.g., `Program.cs`, root Fastify plugin)
+6. Run the generated structural tests and fix violations iteratively
+
+The strategy spec's "Structural Test Inventory" section lists exact package names and versions recommended for each tier.
 
 ### 1.4 Relationship to Other Skills
 
@@ -312,10 +315,23 @@ Synthesizes discovery data into a concrete proposal.
 - Custom layers the codebase might need (recommend adding)
 - e.g., "This project has a distinct `validation/` concern across Service and API — consider a Validation layer or fold into Providers"
 
-**User checkpoint prompt:**
-> "Here's the proposed layer architecture for [module/project]. Review the layer map, violations, and provider candidates above. Any layers to add/remove/rename? Any violations that are intentional and should be allowed? Any provider candidates that should stay as direct imports?"
+**5. Unclassified Files:**
+- List all files that could not be automatically classified in Phase 1
+- For each, ask the user to assign a layer or mark as "excluded" (e.g., scripts, config files, test utilities that don't participate in the layer model)
+- **All source files must be classified or explicitly excluded before proceeding to Phase 3.** The strategy spec, structural tests, and provider interfaces all depend on complete layer assignment. The >50% auto-classification target in Section 1.2 measures discovery quality; it does not mean unclassified files can be left unresolved.
 
-Changes feed back into the layer map. Once approved, proceed to Phase 3.
+**User checkpoint prompt:**
+> "Here's the proposed layer architecture for [module/project]. Review the layer map, violations, and provider candidates above. Any layers to add/remove/rename? Any violations that are intentional and should be allowed? Any provider candidates that should stay as direct imports? Please also assign a layer to the unclassified files listed above (or mark them as excluded)."
+
+Changes feed back into the layer map. Once approved, the **approved layer map becomes the source of truth** for all Phase 3 artifacts:
+
+**Propagation rules for user-approved adjustments:**
+- **Added layers:** Insert into the layer sequence at the user-specified position. Define allowed dependencies for the new layer (user confirms). Generate structural tests and folder paths for it. Add to strategy spec `layers` frontmatter.
+- **Removed layers:** Drop from the layer sequence. Files previously mapped to the removed layer are reassigned (user confirms target layer). Structural tests for the removed layer are not generated. Allowed dependencies referencing the removed layer are updated.
+- **Renamed layers:** Update all references: folder paths, structural test assertions, strategy spec, and provider interfaces. The dependency rules follow the layer, not the name.
+- **Modified dependency rules:** If the user says "API should be allowed to import from Data directly," update the allowed dependencies for API. Structural tests reflect the approved rules, not the Section 3.2 defaults.
+
+Section 3.2 defines the **default** layer template. After Phase 2 approval, the approved layer map supersedes it for all downstream generation. Proceed to Phase 3.
 
 ### 5.3 Phase 3: Scaffolding
 
@@ -328,13 +344,14 @@ Written to `docs/layer-architecture/strategy.md` for single repos. In monorepo m
 ```markdown
 ---
 scope: [module name or "project"]
-layers: [Types, Config, Data, Service, Providers, API, UI]
-tech_stack: nodejs-fastify | dotnet-mvc | ...
+layers: [approved layer list from Phase 2 — may differ from default]
+tech_stack: nodejs-fastify | dotnet-mvc | python-fastapi | ...
 generated: 2026-03-26
+composition_root: [path to composition root file(s)]
 ---
 
 ## Layer Definitions
-[Each layer: name, responsibility, allowed dependencies, folder path]
+[Each layer from the approved map: name, responsibility, allowed dependencies (as approved), folder path]
 
 ## File Mapping
 [Every source file → assigned layer, with confidence: high/medium/low]
@@ -405,6 +422,13 @@ For each identified provider candidate:
 
 Written to the project source (e.g., `src/providers/` or `Providers/`). These are skeleton files — interface definitions with method signatures, not implementations. The implementations stay where the cross-cutting concern currently lives, but now behind the interface.
 
+**Interface synthesis rules:**
+1. **Group by concern:** All call sites for the same cross-cutting concern (identified in Phase 1 Step 1.3) are grouped together.
+2. **Extract minimal operations:** From the grouped call sites, identify the distinct operations performed (e.g., auth concern → `authenticate()`, `authorize()`, `getCurrentUser()`). Each distinct operation signature becomes a method on the interface.
+3. **Reuse existing types:** If the codebase already defines types used at call sites (e.g., `User`, `AuthToken`), reference them in method signatures rather than inventing new types.
+4. **Low-confidence fallback:** When call sites are too inconsistent to infer a stable contract (e.g., 5 different auth patterns with incompatible signatures), generate the interface with clearly marked placeholder methods: `// TODO: consolidate — found N distinct patterns for [concern]. See strategy spec for details.` List the distinct patterns in the strategy spec's Provider Interfaces section so the human can decide.
+5. **Naming convention:** `I{ConcernName}Provider` (.NET), `{ConcernName}Provider` (TypeScript interface), `{ConcernName}Provider` (Python Protocol).
+
 ### 5.4 Phase 4: Review (User Checkpoint)
 
 **4.1 — Human-Readable Summary:**
@@ -461,7 +485,7 @@ This implements the OpenAI insight that layer enforcement is "an early prerequis
 | Very large module (>50K LOC) | Process one layer at a time during discovery. Report progress. |
 | Very small module (<5 source files) | Report that the module has insufficient code for meaningful layer separation. Suggest running after the module grows. |
 | No cross-cutting concerns found | Skip provider generation. Note in strategy doc that no Provider candidates were identified. |
-| Existing structural tests conflict with generated ones | Detect existing architecture tests, report them, ask: "Merge with existing tests or generate separately?" Never overwrite existing test files. |
+| Existing structural tests conflict with generated ones | Detect existing architecture tests, report them, ask: "Merge with existing tests or generate separately?" Never overwrite existing test files. **If "generate separately":** use alternate filenames — `layer-boundaries-generated.test.ts` (Node.js), `LayerBoundaryTests.Generated.cs` (.NET), `test_layer_boundaries_generated.py` (Python), `eslint-layers-generated.config.js` (ESLint). **If "merge":** for test files, append new test cases to the existing file after a `// --- Generated by refactor-to-layers ---` marker. For `pyproject.toml` sections, append under a new `[tool.importlinter.contracts.layers]` subsection. Record which path was chosen in the strategy spec under a `conflict_resolution` field. |
 | Fastify plugin bundles routes + logic in one file | Flag as a soft violation with explanation. Note as an intentional Fastify trade-off if user approves. |
 | .NET project uses minimal APIs instead of controllers | Adapt API layer detection to scan for `app.MapGet`/`app.MapPost` patterns instead of Controller classes. Same layer rules apply. |
 | Monorepo shared package doesn't fit standard layers | Recognize that shared packages often only contain Types + Config + Data. Don't flag missing Service/API/UI as gaps. |
