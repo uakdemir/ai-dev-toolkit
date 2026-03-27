@@ -21,7 +21,7 @@ The existing analysis skills produce comprehensive strategy specs with detailed 
 
 ### 1.2 Success Criteria
 
-- Reads and parses strategy specs produced by refactor-to-layers (structured step format with action/source/target/affected_imports/verify fields)
+- Reads and parses strategy specs produced by refactor-to-layers (structured step format with action/source/target/affected_imports/verify fields). **Prerequisite:** refactor-to-layers must be updated to emit the structured step schema and frontmatter fields (`scope`, `layers`, `tech_stack`, `composition_root`) that implement-plan consumes. This update is part of the implementation plan for this skill.
 - Groups steps into phases by action type and validates dependency ordering within each phase
 - Executes all four action types: `create-folder`, `move-file`, `rewrite-import`, `extract-interface`
 - In Serena mode: uses semantic symbol operations (`find_referencing_symbols`, `get_symbols_overview`) for rewrites and extractions
@@ -29,14 +29,14 @@ The existing analysis skills produce comprehensive strategy specs with detailed 
 - Verification runs at user-chosen granularity (per-step, per-phase, or end-only)
 - On failure: stops, analyzes, proposes fix. User approves or rejects.
 - Updates the strategy spec in place with `[DONE]` markers, enabling resume from partial execution
-- Produces a throwaway execution report at `docs/tmp/execution-report.md`
+- Produces a throwaway execution report at `tmp/execution-report.md`
 
 ### 1.3 Scope Boundaries
 
 **What this skill DOES:**
 - Execute restructuring steps from strategy specs (file moves, import rewrites, interface extractions)
 - Validate step ordering via dependency graph analysis
-- Detect and classify circular dependencies with pattern-specific resolutions
+- Detect and classify circular dependencies, present pattern-specific resolution recommendations (advisory — resolutions are manual, not auto-executed)
 - Commit per phase (batch commits, not per-file)
 - Update the strategy spec to reflect execution progress
 - Resume from partially-executed strategy specs
@@ -79,7 +79,7 @@ ai-dev-tools/skills/implement-plan/
 ```yaml
 ---
 name: implement-plan
-description: "Use when the user wants to execute a restructuring strategy from refactor-to-layers or refactor-to-monorepo, apply file moves and import rewrites from a strategy spec, restructure a codebase according to an approved layer or module plan, or turn a migration plan into actual code changes — even if they don't use the exact skill name."
+description: "Use when the user wants to execute a restructuring strategy from refactor-to-layers, apply file moves and import rewrites from a layer strategy spec, or restructure a codebase according to an approved layer plan — even if they don't use the exact skill name."
 ---
 ```
 
@@ -102,7 +102,7 @@ description: "Use when the user wants to execute a restructuring strategy from r
 
 ### 3.1 Step 1 — Detect Serena Availability
 
-Check if Serena MCP tools are available by attempting to call `get_symbols_overview` on any source file. If the tool is not found, proceed in fallback mode.
+Check if Serena MCP tools are available. First check whether the `get_symbols_overview` tool exists in the current session's tool list. If it exists, confirm by probing a source file within the strategy spec's scope (after Step 2 identifies the target). If the tool is not found, proceed in fallback mode.
 
 - **If available:** Report "Serena detected — using semantic refactoring." Proceed.
 - **If not available:** Warn: "Serena not detected. Without Serena, refactoring uses regex-based import rewriting which is less reliable (path aliases, barrel re-exports, and namespace conflicts may be missed). Are you sure you want to continue without Serena?" If user declines, stop and suggest configuring Serena. If user confirms, proceed in fallback mode. Flag all subsequent import rewrites in the execution report as "regex-based — verify manually."
@@ -110,7 +110,7 @@ Check if Serena MCP tools are available by attempting to call `get_symbols_overv
 ### 3.2 Step 2 — Locate Strategy Spec
 
 1. If the user passed an explicit path → use it
-2. Auto-detect: scan for `docs/layer-architecture/strategy.md` at root level and `packages/*/docs/layer-architecture/strategy.md` for per-package monorepo specs
+2. Auto-detect: scan for `docs/layer-architecture/strategy.md` at root level. In monorepo projects, recursively search for `*/docs/layer-architecture/strategy.md` within detected workspace package directories (using the same workspace detection heuristics from refactor-to-layers' tech-stacks.md — not hardcoded to `packages/*`)
 3. If one found → use it
 4. If multiple found → ask: "Found strategy specs at [paths]. Which one to execute?"
 5. If none found → error: "No strategy spec found. Run `/ai-dev-tools:refactor-to-layers` or `/ai-dev-tools:refactor-to-monorepo` first."
@@ -139,7 +139,14 @@ Check if Serena MCP tools are available by attempting to call `get_symbols_overv
 
 ### 3.5 Step 5 — Pre-flight Validation
 
-Before execution, scan all source paths referenced in remaining steps to confirm they exist. Report any discrepancies upfront: "N of M source files exist. 2 files not found: [paths]. These steps will fail. Continue or stop?" This catches stale specs before execution begins, rather than failing step-by-step.
+Before execution, validate all paths referenced in remaining steps:
+
+1. **Source existence:** confirm all source paths exist. Report missing: "N of M source files exist. 2 files not found: [paths]."
+2. **Target collisions:** confirm no target paths already exist. For each collision:
+   - `move-file` target exists → warn: "Target [path] already exists. Overwrite, skip, or stop?"
+   - `extract-interface` target exists → warn: "Interface file [path] already exists. Overwrite, skip, or stop?"
+   - `create-folder` target exists → skip silently (idempotent)
+3. Report all discrepancies upfront. User decides: continue, fix, or stop.
 
 ### 3.6 Step 6 — Ask Verification Granularity
 
@@ -255,19 +262,28 @@ Found N circular dependencies to resolve before extraction:
 | 1.2 | orderRepo ↔ billingService | Shared operation | Extract calculateTotal() to shared utils in Data layer |
 | 1.3 | notifyService ↔ emailService | Misplaced responsibility | Move template logic from notifyService to emailService |
 
+All circular dependency resolutions are **advisory** — they are recorded in the execution report
+as recommended manual steps, not auto-executed. The resolution patterns (callback, shared operation,
+bidirectional data flow, misplaced responsibility) involve code edits outside the declared action
+model (create/move/rewrite/extract) and cannot be safely automated.
+
 Options per item:
-  (1) Apply AI-suggested resolution (shown in Proposed Resolution column)
-  (2) Skip — flag for manual resolution
+  (1) Acknowledge — record the suggested resolution in the execution report's "Recommended Manual Steps" section
+  (2) Dismiss — ignore this circular dependency (proceed with extract-interface and accept potential issues)
 
 Respond in bulk: "1 for all", "2 for all", "1 for 1.1, 1.2 and 2 for the rest", etc.
 ```
 
-- Items assigned option 1: AI applies the pattern-specific resolution as part of Phase 3
-- Items assigned option 2: skipped, added to execution report's "Remaining Manual Steps"
+- Items assigned option 1: recorded in execution report's "Recommended Manual Steps" with the classified pattern and proposed resolution. The user applies these resolutions manually before or after Phase 3.
+- Items assigned option 2: dismissed, not recorded. Phase 3 proceeds with extract-interface steps as planned — any resulting issues surface during verification.
 
-### 5.4 Resolution Execution
+### 5.4 Post-Classification Flow
 
-Resolutions are applied *before* the planned `extract-interface` steps, since they may change the dependency graph. After all resolutions are applied, re-validate that no new circular dependencies exist. If a resolution unexpectedly creates a new violation, stop and report as unresolvable: "Resolution for [cycle] introduced [violation]. This may require manual architectural redesign."
+Circular dependency resolutions are advisory — they are **not auto-executed**. After classification and user acknowledgment:
+
+1. Acknowledged resolutions are recorded in the execution report's "Recommended Manual Steps" section with the classified pattern, affected files, and proposed fix.
+2. Phase 3 proceeds with the planned `extract-interface` steps regardless of unresolved circular dependencies.
+3. If an `extract-interface` step fails verification due to an unresolved circular dependency, the failure analysis references the pre-Phase 3 classification: "This failure may be caused by the circular dependency between [A] and [B] identified earlier. Consider applying the recommended resolution ([pattern]: [fix]) before retrying."
 
 ---
 
@@ -315,7 +331,7 @@ This enables resume: re-running `implement-plan` skips `[DONE]` steps.
 
 ### 7.2 Execution Report
 
-Written to `docs/tmp/execution-report.md`. Throwaway review document.
+Written to `tmp/execution-report.md`. Throwaway review document.
 
 Header: "Generated from implement-plan execution on [date] — this is a one-time report, not a source of truth"
 
@@ -343,8 +359,8 @@ Contents:
 | Target directory missing during move | Create it automatically (defensive fallback). |
 | Regex matches multiple import candidates (fallback mode) | List candidates, ask user to confirm which to rewrite. |
 | Build/type-check fails after Phase 2 | Analyze error output. If missed import, propose fix. If deeper issue, report and let user decide. |
-| Circular dependencies in pre-Phase 3 | Classify pattern, propose resolution, present batch table. User decides per-item. |
-| Resolution creates unexpected new violation | Stop, report as unresolvable. Flag for manual architectural redesign. |
+| Circular dependencies in pre-Phase 3 | Classify pattern, propose resolution (advisory only — not auto-executed). User acknowledges or dismisses per-item. Acknowledged resolutions recorded in execution report's "Recommended Manual Steps." |
+| Extract-interface fails due to circular dep | Reference the pre-Phase 3 classification in failure analysis. Suggest applying the recommended manual resolution before retrying. |
 | Serena connection drops mid-execution | Pause, attempt reconnect. If fails: "Continue in fallback mode or stop?" |
 | Git working tree dirty before start | "Uncommitted changes detected. Commit or stash first." Stop. |
 | Tech stack mismatch between spec and project | Warn: "Spec says [stack] but project appears to be [other]. Continue?" |
@@ -363,7 +379,7 @@ Contents:
 | Stop + analyze + propose fix on failure | Auto-rollback is too aggressive (fix may be trivial). Stop without analysis wastes the AI's capability. Proposing a fix gives the user information and control. Per-phase commits enable manual rollback via `git revert` if needed, but the skill does not automate rollback. |
 | Commit per phase, not per step | File moves are mechanical — per-file commits flood history with noise. Phase-level commits are meaningful ("moved 12 files to layer folders") and align with the user's preference for informative small commits without noise. |
 | Strategy spec updated with `[DONE]` markers | Enables natural resume from partial execution. The spec becomes a living document that tracks progress. |
-| Circular dependency classification (4 patterns) | Mechanical interface extraction often creates new violations. Pattern-specific resolutions (callback, shared operation, data flow, misplaced responsibility) address root causes rather than symptoms. |
+| Circular dependency classification (4 patterns, advisory-only) | Mechanical interface extraction often creates new violations. Pattern-specific resolutions (callback, shared operation, data flow, misplaced responsibility) address root causes rather than symptoms. Resolutions are advisory because they involve code edits outside the declared action model (create/move/rewrite/extract) and cannot be safely automated. |
 | Batch decision for circular deps | Per-file back-and-forth is tedious. Presenting all conflicts in one table with bulk response syntax respects the user's time. |
 | No dry-run mode | The user already reviewed and approved the strategy spec. Another preview pass is redundant ceremony. Verification-after-phase provides natural pause points. |
 | Auto-detect strategy spec with override | Frictionless for the common case (one spec exists). Explicit path handles edge cases. |
