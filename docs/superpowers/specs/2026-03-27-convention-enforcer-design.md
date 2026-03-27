@@ -1,7 +1,7 @@
 # convention-enforcer — Design Spec
 
 **Date:** 2026-03-27
-**Status:** Approved (R1 revisions applied)
+**Status:** Approved (R2 revisions applied)
 **Plugin:** ai-dev-tools
 **Skill:** convention-enforcer
 
@@ -18,15 +18,15 @@ The result is codebases where error handling, naming, imports, response shapes, 
 - Generated linter rules are syntactically valid for their target linter (ESLint, Ruff, or Roslyn/.editorconfig)
 - Generated structural tests compile/run without syntax errors against the detected dominant pattern
 - Violations report includes file path and line number for every violation
-- Core agent detects and reports on all 6 fixed categories for the detected stack
+- Core agent detects and reports on all 7 fixed categories for the detected stack
 - Discovery agent identifies at least 1 additional convention in a project with >20 source files
 - User confirmation checkpoint presents before any enforcement is generated
-- Re-running the skill on an already-hardened codebase produces no new enforcement artifacts (idempotent)
+- Re-running the skill on an already-hardened codebase produces no new enforcement artifacts (idempotent — see Previous Run Detection)
 
 ## Scope Boundaries
 
 **What this skill DOES:**
-- Scan codebase for convention patterns across 6 fixed categories + open-ended discovery
+- Scan codebase for convention patterns across 7 fixed categories + open-ended discovery
 - Present detected conventions for user confirmation
 - Generate structural tests into `tests/structural/`
 - Modify existing linter config files with new rules
@@ -38,12 +38,15 @@ The result is codebases where error handling, naming, imports, response shapes, 
 - Modify CI/CD pipelines
 - Generate custom linter rules (only configures existing built-in/plugin rules)
 - Run the generated tests
+- Generate linter rules for "Other" stacks (structural tests only — see "Other" Stack Handling)
 
 **Post-skill manual steps:**
 1. Install any linter plugins referenced by generated rules (if not already present)
 2. Fix reported violations (manually or with linter auto-fix)
 3. Add generated structural tests to CI if not already covered
-4. Run structural tests to verify they pass against the current codebase
+4. Run structural tests — tests will fail for files listed in the violations report, confirming they correctly detect drift. Fix violations to make tests pass.
+
+**Plugin registration:** `plugin.json` description should be updated to include convention enforcement when this skill is implemented.
 
 ---
 
@@ -73,29 +76,32 @@ description: "Use when the user wants to enforce coding conventions, prevent AI 
 
 ### Numbered Steps
 
-1. **Tech Stack Detection** — auto-detect stack, run mismatch gate if needed
-2. **Scope Detection** — determine monorepo boundaries, scope to CWD or user-specified package
-3. **Dispatch Agents** — launch Core Agent and Discovery Agent in parallel using the Agent tool (two parallel Agent invocations in a single message)
-4. **Merge Findings** — combine results, deduplicate (core takes priority)
-5. **Present Detected Conventions** — show dominant pattern per category, user confirms/corrects/skips each
-6. **Present Violations** — for confirmed categories, show ranked violations, user picks which to harden
-7. **Route to Enforcement** — map selected findings to structural tests and/or linter rules
-8. **Generate Artifacts** — produce structural tests, modify linter config, generate violations report
-9. **Review Checkpoint** — user reviews generated artifacts via git diff
+1. **Tech Stack Detection** — auto-detect stack (including linter config and test framework scans), run mismatch gate if needed
+2. **Scope Detection** — walk up from CWD to find project root, determine monorepo boundaries, scope to CWD or user-specified package
+3. **Previous Run Detection** — scan for existing convention-enforcer artifacts (see section below)
+4. **Dispatch Agents** — launch Core Agent and Discovery Agent in parallel using the Agent tool (two parallel Agent invocations in a single message)
+5. **Merge Findings** — combine results, deduplicate (core takes priority, all overlap filtering here)
+6. **Present Detected Conventions** — show dominant pattern per category, user confirms/corrects/skips each
+7. **Present Violations** — for confirmed categories, show ranked violations, user picks which to harden
+8. **Present Routing Plan** — show recommended enforcement mechanism per finding, user can override
+9. **Generate Artifacts** — produce structural tests, modify linter config, generate violations report
+10. **Review Checkpoint** — user reviews generated artifacts via git diff
 
 ### Progressive Disclosure Schedule
 
 | Step | Reference file loaded |
 |---|---|
 | Step 1 (Tech Stack Detection) | `references/tech-stacks.md` |
-| Step 8 (Generate Artifacts) | `references/convention-test-templates.md` |
-| Step 8 (Generate Artifacts) | `references/linter-rule-mappings.md` |
+| Step 4 (Dispatch Agents) | `references/agent-prompts.md` |
+| Step 9 (Generate Artifacts) | `references/convention-test-templates.md` |
+| Step 9 (Generate Artifacts) | `references/linter-rule-mappings.md` |
 
 ### Reference Files (to be created during implementation)
 
 - `references/tech-stacks.md` — stack detection heuristics, linter config paths, test runner, DI patterns per stack. This skill's own version, not shared with other skills.
+- `references/agent-prompts.md` — full prompt instructions for Core Agent and Discovery Agent invocations, including output format requirements and category-specific scan instructions. **Deferred to implementation planning.**
 - `references/convention-test-templates.md` — structural test templates per convention category per stack (similar to refactor-to-layers' `structural-test-templates.md`). **Deferred to implementation planning.**
-- `references/linter-rule-mappings.md` — mapping from convention categories to specific built-in linter rules per stack (e.g., Naming → Ruff N8xx, Logging → ESLint no-console). Only built-in/plugin rules, not custom rules. **Deferred to implementation planning.**
+- `references/linter-rule-mappings.md` — mapping from convention categories to specific built-in linter rules per stack, including format-specific insertion rules (ESLint flat vs legacy, Ruff TOML sections, .editorconfig file-glob sections). Only built-in/plugin rules, not custom rules. **Deferred to implementation planning.**
 
 ---
 
@@ -106,30 +112,33 @@ description: "Use when the user wants to enforce coding conventions, prevent AI 
 ```
 User invokes convention-enforcer
         |
-        |--- Step 1: Tech stack auto-detection
+        |--- Step 1: Tech stack auto-detection (incl. linter config + test framework scan)
         |       |
         |       v
         |    Mismatch gate (see Section: Tech Stack Support)
         |       |
         |       v
-        |--- Step 2: Scope detection (monorepo check)
+        |--- Step 2: Scope detection (walk up to project root, monorepo check)
         |       |
         |       v
-        +---> Step 3a: Core Agent (6 fixed categories, receives detected stack)
+        |--- Step 3: Previous run detection (scan for existing artifacts)
+        |       |
+        |       v
+        +---> Step 4a: Core Agent (7 fixed categories, receives detected stack)
         |                                              parallel
-        +---> Step 3b: Discovery Agent (open-ended scan, receives detected stack)
+        +---> Step 4b: Discovery Agent (open-ended scan, receives detected stack)
         |
         v
-   Step 4: Merge findings (core priority, deduplicate)
+   Step 5: Merge findings (core priority, all overlap filtering here)
         |
         v
-   Step 5: Present detected dominant patterns per category
+   Step 6: Present detected dominant patterns per category
         |
         v
    USER CHECKPOINT: Confirm/correct/skip each convention
         |
         v
-   Step 6: Present violations for confirmed categories, ranked
+   Step 7: Present violations for confirmed categories, ranked
         |
         v
    USER CHECKPOINT: Pick which findings to harden
@@ -138,63 +147,80 @@ User invokes convention-enforcer
 ### Phase 2 — Generation
 
 ```
-   Step 7: For each selected finding:
-        |
-        +-- Route to enforcement mechanism (see Section: Routing)
-        |       |
-        |       +-- Structural test --> tests/structural/
-        |       |
-        |       +-- Linter rule --> modify existing config in place
-        |
-   Step 8: Generate artifacts + violations report
+   Step 8: Present routing plan per finding
         |
         v
-   Step 9: USER CHECKPOINT: Review generated artifacts (git diff)
+   USER CHECKPOINT: Review/override enforcement mechanism per finding
+        |
+        v
+   Step 9: Generate artifacts + violations report
+        |
+        v
+   Step 10: USER CHECKPOINT: Review generated artifacts (git diff)
 ```
 
 ---
 
-## Core Agent — 6 Fixed Categories
+## Core Agent — 7 Fixed Categories
 
-The core agent checks these categories in every run. For each, it detects the **dominant pattern** (majority wins) and presents it for user confirmation before treating it as the convention.
+The core agent checks these categories in every run. For each, it detects the **dominant pattern** (>50% of scanned files — see Dominant Pattern Rules) and presents it for user confirmation before treating it as the convention.
 
 ### 1. Error Handling
 
 - **Scans for:** error/exception class hierarchy, try/catch patterns, error propagation style, custom error types vs raw throws
 - **Dominant pattern:** most-used error base class + most common handling idiom
 - **Violations:** raw `throw new Error()` / bare `except:` / untyped `catch` when project has a custom error base class, swallowed catches, inconsistent error shapes
+- **Default routing:** Hybrid (structural test for class hierarchy, linter rule for catch patterns)
 
 ### 2. Naming Conventions
 
 - **Scans for:** function/method names, class names, file names, variable names, constants
 - **Detects per-scope:** files use kebab-case? classes use PascalCase? functions use camelCase / snake_case?
 - **Violations:** anything breaking the majority pattern within its scope
+- **Default routing:** Linter rule
 
-### 3. Import/Dependency Patterns (incl. DI)
+### 3. Import Ordering
 
-- **Scans for:** import grouping/ordering, relative vs absolute imports, DI registration patterns, constructor injection vs service locator
-- **Dominant pattern:** most common import style + DI approach
-- **Violations:** hardcoded dependencies, reaching into internal paths, inconsistent import ordering
+- **Scans for:** import grouping/ordering, relative vs absolute imports, import statement structure
+- **Dominant pattern:** most common import grouping and ordering style
+- **Violations:** inconsistent import ordering, mixed relative/absolute where one dominates
+- **Default routing:** Linter rule
+- **Default severity:** Medium
 
-### 4. API Response Shapes
+### 4. DI / Dependency Patterns
+
+- **Scans for:** DI registration patterns, constructor injection vs service locator, hardcoded dependencies
+- **Dominant pattern:** most common DI approach
+- **Violations:** hardcoded dependencies, reaching into internal paths, inconsistent DI registration
+- **Default routing:** Structural test
+- **Default severity:** High
+
+### 5. API Response Shapes
 
 - **Scans for:** response envelope structure (e.g. `{ data, error, status }` vs raw returns), consistent status code usage, error response format
 - **Dominant pattern:** most common envelope shape across endpoints
 - **Violations:** endpoints returning a different shape
+- **Default routing:** Structural test
 
-### 5. File Organization
+### 6. File Organization
 
 - **Scans for:** where files of each type live (controllers in `/api`, services in `/services`, etc.), co-location patterns, index barrel files
 - **Dominant pattern:** directory-to-purpose mapping
 - **Violations:** files placed outside their expected directory
+- **Default routing:** Structural test
 
-### 6. Logging
+### 7. Logging
 
 - **Scans for:** logger instantiation (project logger vs raw console.log / print() / Console.WriteLine), log level usage, structured vs unstructured, context inclusion
 - **Dominant pattern:** most common logger + call style
 - **Violations:** raw console/print calls, missing log levels, unstructured strings
+- **Default routing:** Linter rule
 
-### User Confirmation Checkpoint (Step 5)
+### Dominant Pattern Rules
+
+A pattern is **dominant** if it appears in >50% of scanned files for that category. If no pattern exceeds 50%, the category enters the **tie scenario**: present the top two patterns to the user and ask which to enforce. If the user skips, mark the category as "no convention detected."
+
+### User Confirmation Checkpoint (Step 6)
 
 After scanning, the core agent presents each detected convention:
 
@@ -208,7 +234,7 @@ Detected convention: All errors extend AppError, caught at middleware level (87%
 
 This prevents locking in a bad pattern. Also handles mid-migration codebases where the old pattern still outnumbers the new one — the user can say "the convention should be Y" even if Y is currently the minority.
 
-### Violation Selection Checkpoint (Step 6)
+### Violation Selection Checkpoint (Step 7)
 
 After conventions are confirmed, present violations grouped by category:
 
@@ -230,11 +256,27 @@ Confirmed conventions with violations:
 
 Selection is per-category, not per-individual-violation. The user picks which categories to generate enforcement for.
 
+### Routing Override Checkpoint (Step 8)
+
+After the user picks which findings to harden, present the recommended enforcement mechanism for each:
+
+```
+Routing plan:
+
+1. Error Handling → structural test + linter rule (hybrid)
+2. Naming Conventions → linter rule
+3. [Discovery] Config access → structural test
+
+Override any? (Enter number to change, or confirm to proceed)
+```
+
+The user can override per-finding before generation begins.
+
 ---
 
 ## Discovery Agent
 
-Runs in parallel with the core agent. Scans for project-specific conventions outside the 6 fixed categories using **LLM-powered pattern recognition**.
+Runs in parallel with the core agent. Scans for project-specific conventions outside the 7 fixed categories using **LLM-powered pattern recognition**.
 
 ### What It Looks For
 
@@ -251,25 +293,59 @@ Runs in parallel with the core agent. Scans for project-specific conventions out
 The discovery agent uses the AI's own pattern recognition on source code — no external similarity tool is required. The scanning strategy:
 
 1. Read directory structure to understand project layout
-2. Sample files across different directories (at least 3 per directory with source files)
+2. Sample files across different directories — at least 3 per directory with source files, selected evenly distributed by modification date (oldest, median, newest) to capture both legacy and recent patterns. When a directory has fewer than 3 source files, include all of them.
 3. Identify recurring structures through language understanding — a "pattern" is any code shape (decorator, function signature, return type, comment format, etc.) that appears consistently across 3+ files
-4. Filter out anything that falls within a core category's scan scope (see Merge Logic)
-5. For each discovered pattern, count frequency and list violating files
+4. For each discovered pattern, count frequency and list violating files
+
+**Note:** Overlap filtering with core categories is handled entirely in the Merge Logic step, not by the discovery agent itself. The discovery agent reports everything it finds.
 
 ### Output
 
-Same format as core agent — each discovered pattern presented with detected convention, frequency, and violation count. Goes through the same user confirmation checkpoint.
+Same format as core agent (see Agent Output Format) — each discovered pattern presented with detected convention, frequency, and violation count. Goes through the same user confirmation checkpoint.
 
 ---
 
-## Merge Logic (Step 4)
+## Agent Output Format
+
+Both agents must return findings in this structured format so that merge logic, severity ranking, and checkpoints can operate on consistent data:
+
+```
+{
+  category: string,              // e.g. "Error Handling", "Config access via raw env vars"
+  convention_description: string, // human-readable description of the detected convention
+  dominant_pattern: string,       // code-level description of what conforming code looks like
+  frequency_percent: number,      // % of scanned files following this pattern
+  files_analyzed: [               // per-file pattern data (enables re-scan on user correction)
+    { file: string, pattern_found: string, conforms: boolean }
+  ],
+  violations: [
+    { file: string, line: number, expected: string, found: string }
+  ],
+  source: "core" | "discovery"
+}
+```
+
+**Why per-file data:** When the user corrects a convention at Step 6, the orchestrator recomputes violations from `files_analyzed` using the user's stated convention as the baseline — no agent re-dispatch needed. If the user specifies a pattern not found in any scanned file, all files become violations with a note: "Convention not yet present in codebase — all files reported as violations."
+
+---
+
+## Merge Logic (Step 5)
 
 When combining core agent and discovery agent findings:
 
 1. **Core findings take priority** — core agent results are included as-is
-2. **Overlap check** — a discovery finding overlaps with a core category if it scans the same code dimension (e.g., a discovery finding about "import ordering" overlaps with core category 3: Import/Dependency Patterns). The overlap check is based on whether the finding's target files and code patterns fall within a core category's stated scan scope.
-3. **Discard overlapping discovery findings** — if overlap is detected, the discovery finding is dropped
+2. **Overlap check** — a discovery finding overlaps with a core category if its category description matches any core category's "Scans for" keywords. Overlap keywords per core category:
+   - Error Handling: error, exception, throw, catch, try, fault, failure
+   - Naming: name, case, camelCase, snake_case, PascalCase, kebab
+   - Import Ordering: import, require, from, ordering, grouping
+   - DI / Dependency: inject, dependency, provider, service locator, DI, IoC
+   - API Response: response, envelope, status code, HTTP, endpoint return
+   - File Organization: directory, folder, location, placement, co-location
+   - Logging: log, logger, console, print, structured logging
+3. **Discard overlapping discovery findings** — if keyword overlap is detected, the discovery finding is dropped
 4. **Append remaining** — non-overlapping discovery findings are appended after core findings, labeled as `[Discovery]`
+
+**User corrections at Step 6 do not re-trigger merge logic.** They only affect the violation list for the corrected category. Discovery findings that passed the overlap filter remain.
 
 ---
 
@@ -277,11 +353,11 @@ When combining core agent and discovery agent findings:
 
 Each convention category is assigned a severity level based on the impact of drift:
 
-| Severity | Level | Criteria |
-|---|---|---|
-| High | 3 | Causes runtime errors, security issues, or breaks consumers (error handling, API response shapes, DI patterns) |
-| Medium | 2 | Causes confusion, inconsistency, or slows development (naming, file organization, logging) |
-| Low | 1 | Cosmetic or stylistic (comment format, import ordering within groups) |
+| Severity | Level | Criteria | Core categories |
+|---|---|---|---|
+| High | 3 | Causes runtime errors, security issues, or breaks consumers | Error Handling, DI / Dependency Patterns, API Response Shapes |
+| Medium | 2 | Causes confusion, inconsistency, or slows development | Naming, Import Ordering, File Organization, Logging |
+| Low | 1 | Cosmetic or stylistic | (Discovery agent findings only, when appropriate) |
 
 **Ranking formula:** `score = severity_level x violation_count`
 
@@ -291,18 +367,47 @@ Findings are presented in descending score order. Discovery agent findings defau
 
 ## Enforcement Routing
 
-After user confirms conventions and picks findings to harden, the skill routes each to the appropriate mechanism:
+After user confirms conventions and picks findings to harden, Step 8 presents the recommended enforcement mechanism per finding:
 
-| Convention type | Primary enforcement | Rationale |
+| Core category | Default enforcement | Rationale |
 |---|---|---|
-| Cross-file architectural rules (import boundaries, DI patterns, file organization) | Structural test | Linters can't express cross-module constraints |
-| Single-file code patterns (naming, logging calls, error class usage) | Linter rule | Linters are built for this — fast, per-save, auto-fixable |
-| Shape/schema enforcement (API response envelopes, error response format) | Structural test | Needs AST analysis of return types across endpoints |
-| Hybrid cases (e.g. error handling = class hierarchy + catch patterns) | Both | Structural test for hierarchy, linter rule for catch patterns |
+| Error Handling | Both (hybrid) | Structural test for class hierarchy, linter rule for catch patterns |
+| Naming Conventions | Linter rule | Linters have built-in naming rules |
+| Import Ordering | Linter rule | Linters have built-in import sorting |
+| DI / Dependency Patterns | Structural test | Cross-file, linters can't express |
+| API Response Shapes | Structural test | Needs cross-endpoint analysis |
+| File Organization | Structural test | Cross-file directory checking |
+| Logging | Linter rule | Single-file pattern (no-console, etc.) |
 
-The routing is presented as a recommendation. The user can override per-finding (e.g. "add a structural test for naming too" or "skip the linter rule").
+For discovery findings, the skill recommends based on the convention type (cross-file → structural test, single-file → linter rule).
 
 **Hybrid case mechanics:** For hybrid cases, the skill generates both artifacts and presents them together in the review checkpoint. The user can accept both, accept one and skip the other, or skip entirely.
+
+The user can override any routing at Step 8 before generation begins.
+
+---
+
+## Previous Run Detection (Step 3)
+
+Before dispatching agents, check for existing convention-enforcer artifacts:
+
+1. Scan `tests/structural/` for files matching `convention-*.test.*` with convention-enforcer marker comments
+2. Scan linter config for comments containing `convention-enforcer:`
+3. Check for existing `docs/convention-enforcer/violations-report.md`
+
+If previous artifacts exist, present options:
+
+```
+Found existing convention-enforcer artifacts:
+  - tests/structural/convention-error-handling.test.ts (enforcing: error-handling)
+  - tests/structural/convention-naming.test.ts (enforcing: naming)
+  - .eslintrc.json: 3 convention-enforcer rules
+
+Options:
+  > Re-analyze and update (replace existing artifacts for changed conventions)
+  > Skip already-enforced categories (only scan for new conventions)
+  > Start fresh (remove existing artifacts and re-analyze everything)
+```
 
 ---
 
@@ -310,25 +415,36 @@ The routing is presented as a recommendation. The user can override per-finding 
 
 ### 1. Structural Tests → `tests/structural/`
 
-- Added to existing structural test files when the test file's topic matches the finding's category (e.g. import boundary finding → add to `layer-boundaries.test.ts` if it exists)
-- New test file when no topically matching file exists, using naming pattern: `convention-{category}.test.{ext}` (e.g. `convention-error-handling.test.ts`, `convention-naming.test.py`)
+- Append to an existing `tests/structural/convention-{category}.test.*` file if one exists with a convention-enforcer marker comment. Otherwise create a new file.
+- Never append to test files not generated by convention-enforcer.
+- Naming pattern: `convention-{category}.test.{ext}` (e.g. `convention-error-handling.test.ts`, `convention-naming.test.py`)
 - Each test has a descriptive name: `"all errors must extend AppError"`, `"API responses use standard envelope shape"`
-- Each generated test block is preceded by a marker comment: `// --- Generated by convention-enforcer [date] ---`
+- Each generated test block is preceded by a stable marker comment using the target language's comment syntax:
+  - JS/TS/C#: `// --- Generated by convention-enforcer: {category} ---`
+  - Python: `# --- Generated by convention-enforcer: {category} ---`
+- The category name (not date) is the dedup key, enabling idempotent re-runs.
 
 ### 2. Linter Config → Modified In Place
 
 - Rules appended to the project's existing linter config file
-- Each added rule gets a comment explaining which convention it enforces and when it was added
+- Each added rule gets a comment: `convention-enforcer: {category}` for dedup on re-runs
 - Only built-in or well-known plugin rules — no custom rule authoring
-- Stack-specific syntax: ESLint for Node.js, Ruff for Python, Roslyn/.editorconfig for .NET
+- Stack-specific insertion:
+  - **ESLint:** detect flat config vs legacy format; add to the appropriate `rules` object
+  - **Ruff:** add to `[tool.ruff.lint.extend-select]` in TOML
+  - **.editorconfig:** place rules under the appropriate file-glob section (e.g. `[*.cs]`); create section if needed
+- Before writing, check for existing rules that conflict — warn user if detected
+- Full format-specific insertion details in `references/linter-rule-mappings.md`
 
 ### 3. Violations Report → `docs/convention-enforcer/violations-report.md`
 
 - Grouped by category
 - Each violation: file path, line number, expected vs found
 - Summary at top: total violations per category, severity ranking
-- Point-in-time snapshot — regenerated on each run, not a living document
-- Placed in `docs/convention-enforcer/` rather than `docs/tmp/` so repeated runs can be diffed against each other
+- Point-in-time snapshot — regenerated on each run
+- Placed in `docs/convention-enforcer/` so repeated runs can be diffed via git
+- Header note: "Generated snapshot. Regenerate by running convention-enforcer."
+- Should be committed to version control for diff tracking
 
 ---
 
@@ -339,9 +455,11 @@ Auto-detection with a mismatch gate. Uses its own `references/tech-stacks.md` (n
 ### Auto-Detection Algorithm
 
 1. Scan project root for detection files: `package.json`, `pyproject.toml`, `.csproj` / `.sln`
-2. **One match** → use that stack, confirm with user: "Detected Node.js project. Correct?"
-3. **Zero matches** → prompt user to specify stack, linter, test runner, and config file paths (see "Other" stack below)
-4. **Multiple matches** → trigger mismatch gate
+2. Scan for linter config files (`.eslintrc.*`, `eslint.config.*`, `ruff.toml`, `.editorconfig`) and test frameworks (`vitest.config.*`, `jest.config.*`, `pytest.ini`, `xunit.runner.json`)
+3. **One stack match** → use that stack, confirm with user: "Detected Node.js project. Correct?"
+4. **Zero stack matches** → prompt user to specify (see "Other" stack below)
+5. **Multiple stack matches** → trigger mismatch gate
+6. Cross-check linter and test framework findings against detected stack — mismatch gate on inconsistencies
 
 ### Supported Stacks
 
@@ -375,11 +493,11 @@ Stack not recognized. Please provide:
   4. Config file locations?
 ```
 
-The skill proceeds with user-provided info. Structural test templates fall back to language-generic patterns. Linter rule generation is best-effort using the specified tool's documentation.
+The skill proceeds with user-provided info. Structural test templates fall back to language-generic patterns. **Linter rule generation is skipped for "Other" stacks** — only structural tests are produced. Explain: "Linter rules are only generated for supported stacks (Node.js/ESLint, Python/Ruff, .NET/Roslyn). For your stack, add linter rules manually based on the violations report."
 
 ### Mismatch Gate
 
-After auto-detection, cross-check for inconsistencies:
+After auto-detection (including linter config and test framework scans), cross-check for inconsistencies:
 
 - Multiple stacks detected in same root
 - Linter config doesn't match detected stack
@@ -402,8 +520,8 @@ Warning — Stack mismatch detected:
 
 After tech stack detection, determine the analysis scope:
 
-- **Single-project repo:** Scan entire project from root
-- **Monorepo detected** (multiple `package.json` / `pyproject.toml` / `.csproj` files in subdirectories): v1 scopes to the current working directory only. Present to user: "Monorepo detected. Scanning from CWD: `[path]`. Convention analysis scopes to this package only."
+- **Single-project repo:** Walk up from CWD to find the project root (directory containing the detected stack marker file, e.g. `package.json`). Scan from that root.
+- **Monorepo detected** (workspace config files found: `pnpm-workspace.yaml`, `lerna.json`, `workspaces` field in root `package.json`, `.moon/workspace.yml`, `pants.toml`, or equivalent per stack): v1 scopes to the current working directory only. Present to user: "Monorepo detected. Scanning from CWD: `[path]`. Convention analysis scopes to this package only."
 - Monorepo-wide convention analysis (cross-package consistency) is deferred to a future version.
 
 ---
@@ -415,7 +533,7 @@ After tech stack detection, determine the analysis scope:
 Both skills write to `tests/structural/`. Coexistence rules:
 
 - **File naming:** refactor-to-layers uses `layer-boundaries.test.{ext}`. Convention-enforcer uses `convention-{category}.test.{ext}`. No collision.
-- **Marker comments:** Each skill marks its generated tests with `// --- Generated by {skill-name} ---`. This distinguishes origins and allows selective regeneration.
+- **Marker comments:** refactor-to-layers uses `// --- Generated by refactor-to-layers ---`. Convention-enforcer uses `{comment-char} --- Generated by convention-enforcer: {category} ---` (with category as stable ID, no date). Different format but both identifiable by skill name prefix.
 - **Independence:** Convention-enforcer tests do not import or reference layer definitions. The two test sets are complementary but independent.
 - **Shared directory:** Running both skills produces a coherent, combined structural test suite in `tests/structural/`.
 
@@ -430,20 +548,23 @@ Convention-enforcer is not invoked by implement-plan. They serve different purpo
 | Scenario | Behavior |
 |---|---|
 | No source files found | Stop with message: "No source files found for {stack}. Check your CWD and stack detection." |
-| No dominant pattern detected (50/50 tie) | Present both patterns to user, ask which to enforce. If user skips, mark category as "no convention detected." |
+| No dominant pattern detected (no pattern >50%) | Present the top two patterns to user, ask which to enforce. If user skips, mark category as "no convention detected." |
 | Linter config file missing | Warn: "No {linter} config found. Skipping linter rule generation. Only structural tests will be produced." |
 | Linter config malformed / unrecognized format | Warn: "Could not parse {config_file}. Skipping linter rule generation for this config." |
 | Structural test directory `tests/structural/` missing | Create it. This is safe — it's a new directory with new files. |
-| User corrects convention to minority pattern | Re-scan violations using the user's stated convention as the baseline, not the detected majority. |
+| User corrects convention to minority pattern | Recompute violations from per-file data in agent output using user's stated convention as baseline. No agent re-dispatch needed. |
+| User states convention not present in codebase | All files become violations. Note: "Convention not yet present in codebase — all files reported as violations." |
 | Zero violations found for a confirmed convention | Report: "Convention '{name}' is consistently followed. No enforcement needed." Skip artifact generation. |
-| Discovery agent finds zero additional patterns | Report: "No additional project-specific conventions found beyond the 6 core categories." |
-| Large codebase (>50K LOC) | Sample files rather than exhaustive scan. Core agent samples up to 100 files per category. Discovery agent samples up to 50 files across directories. Report sampling was used. |
+| Discovery agent finds zero additional patterns | Report: "No additional project-specific conventions found beyond the 7 core categories." |
+| Large codebase (>50K LOC) | Sample files evenly distributed by modification date. Core agent: up to 100 files per category. Discovery agent: up to 50 files across directories. Report as approximate: "Sampled N of M files. Approximately X% follow pattern Y (sampling may affect accuracy)." |
+| Linter rule conflicts with existing rule | Warn: "Rule {rule} conflicts with existing {existing_rule}. Skip or override?" |
+| One agent fails | Use the other agent's results. Report failed agent's categories as "analysis failed." |
 
 ---
 
 ## Parallel Agent Dispatch
 
-The Core Agent and Discovery Agent are dispatched using the **Agent tool with two parallel invocations in a single message**. This is a standard Claude Code capability — no custom infrastructure needed. Each agent receives the detected stack and scope as context. Results are returned independently and merged in Step 4.
+The Core Agent and Discovery Agent are dispatched using the **Agent tool with two parallel invocations in a single message**. Each agent receives the detected stack, scope, and output format requirements as context. Results are returned independently and merged in Step 5.
 
 If one agent fails, the other's results are still used. A failed agent's categories are reported as "analysis failed" in the findings.
 
@@ -469,11 +590,17 @@ This turns the skill from reactive ("analyze what's here now") into adaptive ("l
 | Output types | Structural tests + linter rules | Different enforcement mechanisms for different convention types |
 | Analysis approach | Hybrid (auto-scan + user picks) | Skill finds drift, user decides what to enforce |
 | Agent execution | Parallel (core + discovery) via Agent tool | Independent scans, standard Claude Code parallel dispatch |
+| Core categories | 7 (split Import Ordering from DI Patterns) | Different severity levels and enforcement mechanisms |
 | Structural test location | `tests/structural/` (same as refactor-to-layers) | Unified structural test suite |
 | Linter config modification | Direct modification | Hardening tool — enforcement must actually happen |
 | Linter rule scope | Built-in/plugin rules only, no custom rules | Custom rule authoring is out of scope for v1 |
-| Convention detection | Majority pattern, user-confirmed | Prevents locking in bad patterns; handles mid-migration codebases |
+| "Other" stack linter rules | Skip — structural tests only | Prevents hallucinated rules for unfamiliar linters |
+| Convention detection | Majority (>50%), user-confirmed | Prevents locking in bad patterns; handles mid-migration codebases |
 | Violations | Report only, no auto-fix | User should understand and own the fixes |
 | Stack detection | Auto-detect with mismatch gate | Stop and ask on ambiguity, never guess |
 | Monorepo scope | CWD only in v1 | Cross-package analysis deferred to future version |
+| Monorepo detection | Workspace config files, not just detection file counts | Prevents false positives from non-monorepo projects with multiple package.json |
 | Discovery agent method | LLM-powered pattern recognition | No external similarity tool needed; leverages AI's language understanding |
+| Overlap filtering | Merge logic only, not discovery agent | Single responsibility — discovery reports everything, merge deduplicates |
+| Marker comments | Category-based stable ID, no date | Enables idempotent re-runs with dedup by category |
+| Agent output format | Structured with per-file data | Enables user corrections without re-dispatching agents |
