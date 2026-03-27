@@ -49,7 +49,7 @@ The existing analysis skills produce comprehensive strategy specs with detailed 
 
 **Post-skill human steps:**
 1. Review the execution report for any regex-based rewrites flagged for manual verification (fallback mode only)
-2. Resolve any circular dependencies that were skipped (marked in execution report's "Remaining Manual Steps")
+2. Apply any circular dependency resolutions recorded in the execution report's "Recommended Manual Steps"
 3. Run the full test suite to confirm end-to-end correctness beyond structural verification
 4. Run `/ai-dev-tools:document-for-ai` to update documentation for the new structure
 
@@ -113,7 +113,7 @@ Check if Serena MCP tools are available. First check whether the `get_symbols_ov
 2. Auto-detect: scan for `docs/layer-architecture/strategy.md` at root level. In monorepo projects, recursively search for `*/docs/layer-architecture/strategy.md` within detected workspace package directories (using the same workspace detection heuristics from refactor-to-layers' tech-stacks.md — not hardcoded to `packages/*`)
 3. If one found → use it
 4. If multiple found → ask: "Found strategy specs at [paths]. Which one to execute?"
-5. If none found → error: "No strategy spec found. Run `/ai-dev-tools:refactor-to-layers` or `/ai-dev-tools:refactor-to-monorepo` first."
+5. If none found → error: "No strategy spec found. Run `/ai-dev-tools:refactor-to-layers` first to generate one."
 
 ### 3.3 Step 3 — Parse and Validate
 
@@ -143,10 +143,11 @@ Before execution, validate all paths referenced in remaining steps:
 
 1. **Source existence:** confirm all source paths exist. Report missing: "N of M source files exist. 2 files not found: [paths]."
 2. **Target collisions:** confirm no target paths already exist. For each collision:
-   - `move-file` target exists → warn: "Target [path] already exists. Overwrite, skip, or stop?"
-   - `extract-interface` target exists → warn: "Interface file [path] already exists. Overwrite, skip, or stop?"
-   - `create-folder` target exists → skip silently (idempotent)
-3. Report all discrepancies upfront. User decides: continue, fix, or stop.
+   - `move-file` target exists → warn: "Target [path] already exists. Overwrite or stop?"
+   - `extract-interface` target exists → warn: "Interface file [path] already exists. Overwrite or stop?"
+   - `create-folder` target exists → proceed silently (idempotent)
+   - Note: "skip" is not offered because skipping a move-file invalidates downstream rewrite-import steps that depend on the moved file's new location.
+3. Report all discrepancies upfront. User decides: overwrite all, overwrite specific items, or stop.
 
 ### 3.6 Step 6 — Ask Verification Granularity
 
@@ -324,8 +325,8 @@ The original strategy spec is updated:
 | Restructuring Steps | Completed steps marked `[DONE]` |
 | File Mapping | Updated to reflect new file paths |
 | Violations | Resolved violations removed |
-| Limitations | New limitations appended (regex caveats, skipped circular deps) |
-| Frontmatter `generated` | Updated to execution date |
+| Limitations | New limitations appended (regex caveats, unresolved circular deps noted) |
+| Frontmatter `generated` | Updated to execution date (created if absent — this field is produced by refactor-to-layers but implement-plan ensures it exists) |
 
 This enables resume: re-running `implement-plan` skips `[DONE]` steps.
 
@@ -339,12 +340,12 @@ Contents:
 - Execution mode (Serena or fallback)
 - Verification granularity chosen
 - Per-phase summary: steps attempted, completed, failed
-- Circular dependency resolutions applied (pattern, resolution, outcome)
+- Circular dependencies classified (pattern, confidence, recommended resolution)
 - Files moved (old path → new path table)
 - Imports rewritten (count per file, Serena vs regex)
 - Interfaces extracted (name, source class, consumers updated)
 - Failures and how they were resolved
-- Remaining manual steps (skipped circular deps, unverified regex rewrites)
+- Recommended manual steps (acknowledged circular dep resolutions, unverified regex rewrites)
 
 ---
 
