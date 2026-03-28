@@ -24,7 +24,7 @@ Fixed behavior:
    - Required: `[COMMIT_COUNT]`, `[ANALYSIS_DOC]`
 2. Read context:
    - `CLAUDE.md` (hard constraints)
-   - `docs/architecture/adrs.md` (accepted architecture decisions)
+   - ADRs via scope-based filtering (see ADR Discovery below)
    - `[ANALYSIS_DOC]` (spec contract for the milestone)
 3. If `./tmp/response_code.md` exists:
    - Read it first.
@@ -75,3 +75,43 @@ Fixed behavior:
 | High     | Y |
 | Medium   | Z |
 | Low      | W |
+
+---
+
+## ADR Discovery
+
+This procedure expands Step 2's ADR context loading. It runs before Step 4 (commit collection) — the diff enumeration in step 1 below is a lightweight pre-scan, not the full commit analysis.
+
+If `docs/architecture/adrs/` directory does not exist, skip ADR loading silently.
+
+### Filtering Algorithm
+
+1. **Enumerate diff file paths.** Run `git diff --name-only HEAD~{COMMIT_COUNT}..HEAD` to collect changed file paths. This is lightweight and precedes ADR loading.
+
+2. **Discover ADR files.** Build the candidate list by unioning two sources:
+   - Read `docs/architecture/adrs.md` index to get linked ADR paths.
+   - Enumerate `docs/architecture/adrs/*.md` directly (excluding `archive/`).
+
+   Union both sets by file path. This ensures ADRs are found even when the index is stale, missing, or out of sync.
+
+3. **Read frontmatter only.** For each discovered ADR, read only the YAML frontmatter (up to closing `---`). Extract `code_paths` and `status`.
+
+4. **Status filter.** Skip any ADR where `status` is not `Accepted`. Frontmatter `status` is the single source of truth.
+
+5. **Scope match.** Match each `code_paths` entry against the diff file paths from step 1:
+   - **Directory entries** (ending in `/`): prefix match. `src/auth/` matches `src/auth/middleware.ts`.
+   - **File entries** (no trailing `/`): exact match only. `src/auth.ts` matches only `src/auth.ts`.
+
+   If any entry matches, load the full ADR file.
+
+6. **Use as constraints.** Only loaded ADRs are used during the review (Step 5, Architecture category).
+
+### Context Scaling
+
+ADR context stays proportional to the review scope, not total ADR count:
+
+| Total ADRs | Files in diff | ADRs loaded |
+|------------|---------------|-------------|
+| 10 | 5 files in src/auth/ | 2-3 (auth-scoped) |
+| 30 | 5 files in src/auth/ | 2-3 (auth-scoped) |
+| 60 | 5 files in src/auth/ | 2-3 (auth-scoped) |
