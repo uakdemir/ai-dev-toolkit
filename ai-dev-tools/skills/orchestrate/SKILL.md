@@ -59,26 +59,33 @@ Execute these steps in order. State detection (see below) determines which step 
 - Check `tmp/current-roadmap.md` for the next unimplemented item (if file exists).
 - If no roadmap: ask "What feature would you like to work on?"
 - Present: "Based on the roadmap, next up is `{skill_name}`. Start brainstorming? Or tell me what you'd like to work on."
-- On confirm: invoke `superpowers:brainstorming`
+- On confirm: invoke `superpowers:brainstorming` (requires the superpowers plugin to be installed). If the skill is not available, instruct the user: "The superpowers plugin is required for brainstorming. Install it or create the spec manually at `docs/superpowers/specs/`."
 - On override: user provides their own feature description, pass to brainstorming.
 - The brainstorming skill produces a spec file in `docs/superpowers/specs/`. On the next `/orchestrate` invocation, state detection will find this spec and route to Step 2.
 
+**Prerequisites:** Steps 1, 4, and 5 depend on the `superpowers` plugin (`superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:subagent-driven-development`). If these are not installed, orchestrate warns and offers alternatives: create specs/plans manually, or use inline execution for implementation.
+
 ### Step 2: SPEC REVIEW
 
-**Trigger:** Spec file exists in `docs/superpowers/specs/`, `**Status:**` header (line 4, bold `**Status:**` format) does not contain "Approved". This check matches both "Approved" and "Approved with suggestions" as passing — either means zero criticals.
+**Trigger:** Spec file exists in `docs/superpowers/specs/`, AND either:
+- The spec's `**Status:**` header (line 4, bold format) does not contain "Approved", OR
+- `tmp/review_analysis.md` does not exist or its `- Document:` field does not match the current spec path (review not yet run for this spec).
+
+This check matches both "Approved" and "Approved with suggestions" as passing — either means zero criticals.
 
 **Behavior:**
 - Present: "Spec written at `{path}`. Ready to review? I'll dispatch 3 parallel review agents."
 - On confirm: invoke `/review-doc {spec_path}`
-- The review skill produces `tmp/review_analysis.md`. On the next `/orchestrate` invocation, state detection routes to Step 3 if criticals are found.
+- The review skill produces `tmp/review_analysis.md` with `- Status:` field.
+- **Clean review path:** If the review returns "Approved" or "Approved with suggestions" (zero criticals), update the spec's `**Status:**` header to "Approved" immediately, so the next `/orchestrate` invocation advances to Step 4. Do not wait for Step 3 to update it.
 
 ### Step 3: RESPOND TO REVIEW
 
-**Trigger:** `tmp/review_analysis.md` exists AND its `**Reviewed:**` field matches the current spec path AND Critical count > 0. If `**Reviewed:**` does not match current spec, treat as stale and ignore. If zero criticals but Important > 0, present as informational: "Review found {M} suggestions. Fix these or proceed to planning?"
+**Trigger:** `tmp/review_analysis.md` exists AND its `- Document:` field matches the current spec path AND Critical count > 0. If `- Document:` does not match current spec, treat as stale and ignore. If zero criticals but Important > 0, present as informational: "Review found {M} suggestions. Fix these or proceed to planning?"
 
 **Behavior:**
 - Present: "Review found {N} critical, {M} important findings. Ready to apply fixes?"
-- On confirm: invoke `/respond-to-review {round_number} {spec_path}` where round_number = count existing `## Round N` sections in `tmp/response_analysis.md` + 1. No arch file argument for spec reviews.
+- On confirm: invoke `/respond-to-review {round_number} {spec_path}` where round_number = count `## Round N` sections in `tmp/response_analysis.md` that belong to the current spec (match by spec name in section content) + 1. If no matching sections exist, round = 1. No arch file argument for spec reviews.
 - **Loop:** After responding, re-invoke `/review-doc` if critical findings existed. Repeat Steps 2-3 until spec status is "Approved" or "Approved with suggestions" (either = zero criticals, loop exits).
 - **Status update:** After re-review confirms zero criticals, update the spec's `**Status:**` header to `Approved (R{N} revisions applied)` so state detection recognizes the approval on subsequent `/orchestrate` invocations.
 
@@ -108,7 +115,8 @@ Execute these steps in order. State detection (see below) determines which step 
 **Behavior:**
 - Count implementation commits since plan was written.
 - Present: "Implementation has {N} commits. Ready for code review against the spec?"
-- On confirm: invoke `/review-code {N} {spec_path}` where N = total commits from plan_hash..HEAD (full distance, not feature-scoped — review-code uses "last N from HEAD"). The spec_path is passed so review-code can detect spec drift.
+- Check for interleaved non-feature commits: compare total `plan_hash..HEAD` count vs `--grep='{feature_name}'` count. If they differ significantly (>50% non-feature commits interleaved), warn: "Other features' commits are interleaved. Code review may include unrelated changes. Proceed or review manually?"
+- On confirm: invoke `/review-code {N} {spec_path}` where N = total commits from plan_hash..HEAD (full distance — review-code uses "last N from HEAD"). The spec_path is passed so review-code can detect spec drift.
 
 ### Step 7: FIX REVIEW FINDINGS
 
@@ -146,7 +154,7 @@ Evaluate the state table top-to-bottom. The first matching trigger determines wh
 | Feature identified | `tmp/current-roadmap.md` | Next unimplemented item (if file exists) |
 | Spec exists | `docs/superpowers/specs/*-design.md` | File exists for current feature |
 | Spec reviewed | Spec file `**Status:**` header (line 4, bold format) | Contains "Approved" (matches both "Approved" and "Approved with suggestions") |
-| Spec review has findings | `tmp/review_analysis.md` `**Reviewed:**` field | Matches current spec path AND status is "Issues Found" |
+| Spec review has findings | `tmp/review_analysis.md` `- Document:` field | Matches current spec path AND status is "Issues Found" |
 | Spec review applied | `tmp/response_analysis.md` | Has entries for current round AND spec status still not "Approved" |
 | Plan exists | `docs/superpowers/plans/*-plan.md` | File exists matching spec's feature name |
 | Implementation in progress | Plan file checkboxes | Some `- [x]`, some `- [ ]` |
@@ -192,8 +200,9 @@ To determine if implementation has started or completed:
 
 `tmp/review_code.md` and `tmp/review_analysis.md` are global singletons (no feature prefix). They contain results from whatever feature was last reviewed, which may not be the current feature. To avoid attributing a stale review to the wrong feature:
 
-- **review_code.md:** Parse commit hashes from findings (each finding includes a `**Commit:**` hash). Verify those commits appear in `git log --grep='{feature_name}'` output (feature-scoped, avoids boundary ambiguity). If commits do not match: treat as stale, ignore the review file.
-- **review_analysis.md:** Verify its `**Reviewed:**` field matches the current spec path. If it references a different spec: treat as stale, ignore.
+- **review_code.md with findings:** Parse commit hashes from findings (each finding includes a `**Commit:**` hash). Verify those commits appear in `git log --grep='{feature_name}'` output. If commits do not match: treat as stale, ignore.
+- **review_code.md with zero findings (clean review):** A clean review has no commit hashes in findings. To attribute it: check the file's `**Commits reviewed:**` header line (review-code includes the commit range at the top of the file). Verify the commit range overlaps with the current feature's plan_hash..HEAD window. If it doesn't overlap or the header is missing: treat as stale.
+- **review_analysis.md:** Verify its `- Document:` field matches the current spec path. If it references a different spec: treat as stale, ignore.
 - **response_analysis.md:** This file is NOT read by orchestrate for state detection of code reviews. It is only relevant for spec review rounds (Step 3 round counting).
 
 ### Ambiguity Handling
