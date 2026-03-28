@@ -4,7 +4,7 @@ Fix all critical issues in `{{DOC_PATH}}` based on the review at `{{REVIEW_JSON_
 
 ## Instructions
 
-The orchestrator has already extracted the critical issues from the review JSON and provided them below. Fix each one.
+The orchestrator has already extracted the critical issues from the review JSON and provided them in the conversation context. Fix each one.
 
 ## Rules
 

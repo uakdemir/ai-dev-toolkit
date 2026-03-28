@@ -41,7 +41,12 @@ Parse arguments after `/review-doc-ralph`:
 ## Setup
 
 1. Ensure `./tmp/` directory exists (create if needed).
-2. If `--max-iterations` is 0: output `"No iterations run. Document was not reviewed."` and stop. Do not create any files.
+2. If `--max-iterations` is 0: skip loop entirely. Do not create any files (no review.schema.json, review.json, or iteration logs). Print and exit:
+```
+Ralph Wiggum Loop Skipped
+  Document: <doc-path>
+  No iterations run. Document was not reviewed.
+```
 3. Write the review JSON schema to `./tmp/review.schema.json`:
 
 ```json
@@ -88,7 +93,7 @@ Print: `[ralph] Iteration {iteration}/{max_iterations}`
 
 **If reviewer = codex:**
 1. Read `prompts/codex-reviewer.md` from this skill's directory.
-2. Replace placeholders: `{{DOC_PATH}}` with `<doc-path>`, `{{AGAINST_PATH}}` with `<ref-path>` or empty, `{{ITERATION_NUM}}` with current iteration.
+2. Replace placeholders: `{{DOC_PATH}}` with `<doc-path>`, `{{AGAINST_PATH}}` with `<ref-path>` or `"none"` if --against was not provided, `{{ITERATION_NUM}}` with current iteration.
 3. Write the resolved prompt to `./tmp/codex-prompt.txt`.
 4. Run via Bash (timeout: 300000ms):
 ```bash
@@ -153,7 +158,7 @@ If `before_hash == after_hash`: print `[ralph] Warning: document was not modifie
 
 ### Iteration Log
 
-Write to `./tmp/iteration-{iteration}.md`:
+Written after every review phase (not just after fix). Write to `./tmp/iteration-{iteration}.md`:
 
 ```markdown
 # Iteration {iteration}
@@ -161,8 +166,8 @@ Write to `./tmp/iteration-{iteration}.md`:
 **Reviewer:** {reviewer}
 **Coder:** {coder}
 **Critical issues found:** {critical_count}
-**Outcome:** Fixed {critical_count} issues, continuing
-**Issues fixed:** {list each as [category] at [location]}
+**Outcome:** [one of: "Fixed N issues, continuing" | "0 criticals, loop complete" | "Fix phase failed: <error>" | "No fixes attempted (loop aborted)"]
+**Issues fixed:** {list each as [category] at [location], or "N/A" if no fix phase ran}
 ```
 
 Print: `[ralph] Fixed. Starting iteration {iteration + 1}.`
@@ -222,16 +227,3 @@ On abort: preserve the last valid `review.json`. Write an `iteration-{iteration}
 | JSON parse failure | Retry once (re-run review). On second failure, abort. |
 | Timeout (> 300s) | Abort iteration with timeout error. |
 | Codex not found | Abort immediately: "Error: `codex` CLI not found. Install Codex or use `--solo=claude`." |
-
-## Context
-
-This is the main orchestrator for a Claude Code skill in the ai-dev-tools plugin. It's a markdown file that Claude Code reads and follows as instructions when the user invokes `/review-doc-ralph`.
-
-## Your Job
-
-1. Create the directory structure
-2. Write the SKILL.md with the EXACT content above
-3. Verify the file exists and has correct content
-4. Commit
-
-Work from: `/home/umut/projects/interview/learning-cache/python/ai-dev-toolkit`
