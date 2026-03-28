@@ -184,7 +184,7 @@ Read `references/contract-test-templates.md` now.
 
 **Barrel files:** Node.js: `npx tsc --noEmit {barrel_file}`. Python: `python -c "import {module_name}"` (verifies re-exports in `__init__.py` resolve). .NET: N/A.
 
-**Test files:** Node.js: `npx tsc --noEmit`. Python: `python -m py_compile`. .NET: `dotnet build --no-restore`.
+**Test files:** Node.js: `npx tsc --noEmit {test_file}`. Python: `python -m py_compile {test_file}`. .NET: `dotnet build --no-restore` (project containing the generated test file).
 
 **On failure:** Auto-fix common issues (path typo, missing source file). If unfixable, skip artifact with warning and continue.
 

@@ -17,6 +17,7 @@ orchestrator using confirmed module data from the Module Analysis Format.
 | `{SOURCE_EXTENSIONS}` | File extensions to scan | `['.ts', '.js']` |
 | `{MODULE_INTERNAL_DIRS}` | Dirs within the module (everything except the barrel) | `['src/auth/strategies', 'src/auth/guards']` |
 | `{WORKSPACE_PACKAGES}` | Package name → directory map (monorepo only, `{}` for single-project) | `{ '@myorg/auth': 'packages/auth' }` |
+| `{EXPORTED_SUBPATHS}` | Subpath exports from module's package.json (Node.js only, `[]` otherwise) | `['./utils', './types']` |
 | `{MODULE_PASCAL}` | PascalCase module name (.NET only) | `Auth` |
 | `{BARREL_NAMESPACE}` | Public barrel namespace (.NET only) | `MyApp.Auth` |
 | `{MODULE_INTERNAL_NAMESPACES}` | Internal sub-namespaces (.NET only) | `["MyApp.Auth.Strategies"]` |
@@ -52,6 +53,10 @@ const SOURCE_EXTENSIONS = [{SOURCE_EXTENSIONS}];
 // WORKSPACE_PACKAGES maps package names to directories (monorepo only, empty for single-project).
 // Populated by the orchestrator from workspace config. E.g.: { '@myorg/auth': 'packages/auth' }
 const WORKSPACE_PACKAGES: Record<string, string> = {WORKSPACE_PACKAGES};
+// EXPORTED_SUBPATHS lists subpath exports from the module's package.json exports field.
+// Imports through these subpaths are NOT violations (they are additional public entry points).
+// E.g.: ['./utils', './types'] from exports: { "./utils": "./src/utils/index.ts" }
+const EXPORTED_SUBPATHS: string[] = [{EXPORTED_SUBPATHS}];
 
 /**
  * Collect all source files in the project OUTSIDE the guarded module directory.
@@ -113,11 +118,11 @@ function resolvesToModule(importPath: string, consumerFile: string): string | nu
         if (normalizedPkgDir !== path.resolve(MODULE_PATH)) continue;
         // Import targets this module. Check if it's the barrel or a subpath.
         if (importPath === pkgName) return null; // Barrel import — OK
-        // Subpath import — check if listed in package.json exports
-        // (The orchestrator should only include non-exports subpaths as violations;
-        //  this template assumes the orchestrator filtered exports-listed subpaths.)
-        const subpath = importPath.slice(pkgName.length);
-        const resolved = path.resolve(pkgDir, '.' + subpath);
+        // Subpath import — check if it's a listed exports entry (public, not a violation)
+        const subpath = '.' + importPath.slice(pkgName.length);
+        if (EXPORTED_SUBPATHS.includes(subpath)) return null; // Exported subpath — OK
+        // Not in exports — this is a barrel bypass violation
+        const resolved = path.resolve(pkgDir, '.' + fsSubpath);
         if (resolved.startsWith(normalizedPkgDir + path.sep)) return resolved;
       }
     }
@@ -270,26 +275,35 @@ def _extract_imports(filepath: Path) -> list[dict]:
 def _module_path_to_fs(module_path_str: str) -> Path | None:
     """Convert a dotted Python import path to a filesystem path.
 
+    Resolves relative to the import root (MODULE_PATH's parent, e.g. src/)
+    so that `from auth.service import X` resolves to `src/auth/service.py`
+    when MODULE_PATH is `src/auth`.
+
     Returns the path if it resolves to a location inside the guarded module,
     otherwise None.
     """
     parts = module_path_str.split('.')
     module_resolved = MODULE_PATH.resolve()
+    # Import root is the parent of the module directory (e.g., src/ for src/auth)
+    import_root = MODULE_PATH.parent
 
-    # Try as package directory: X/Y/Z/__init__.py
-    candidate_dir = Path(*parts)
-    if candidate_dir.resolve() == module_resolved or _is_inside(candidate_dir.resolve(), module_resolved):
-        return candidate_dir.resolve()
+    # Try as package directory: import_root/X/Y/Z/__init__.py
+    candidate_dir = (import_root / Path(*parts)).resolve()
+    if candidate_dir == module_resolved or _is_inside(candidate_dir, module_resolved):
+        return candidate_dir
 
-    # Try as module file: X/Y/Z.py
-    candidate_file = Path(*parts[:-1]) / (parts[-1] + '.py') if len(parts) > 1 else Path(parts[0] + '.py')
-    if _is_inside(candidate_file.resolve(), module_resolved):
-        return candidate_file.resolve()
+    # Try as module file: import_root/X/Y/Z.py
+    if len(parts) > 1:
+        candidate_file = (import_root / Path(*parts[:-1]) / (parts[-1] + '.py')).resolve()
+    else:
+        candidate_file = (import_root / (parts[0] + '.py')).resolve()
+    if _is_inside(candidate_file, module_resolved):
+        return candidate_file
 
-    # Try as package init: X/Y/Z/__init__.py
-    candidate_init = Path(*parts) / '__init__.py'
-    if _is_inside(candidate_init.resolve(), module_resolved):
-        return candidate_init.resolve()
+    # Try as package init: import_root/X/Y/Z/__init__.py
+    candidate_init = (import_root / Path(*parts) / '__init__.py').resolve()
+    if _is_inside(candidate_init, module_resolved):
+        return candidate_init
 
     return None
 
@@ -402,10 +416,12 @@ public class ApiContracts{MODULE_PASCAL}Tests
     }
 
     /// <summary>
-    /// Check whether a namespace references the barrel (public API) namespace.
+    /// Check whether a namespace references the barrel (public API) namespace
+    /// without crossing into an internal namespace.
     /// </summary>
     private static bool IsBarrelReference(string ns)
     {
+        if (IsInternalNamespaceReference(ns)) return false;
         return ns.Equals(BarrelNamespace, StringComparison.Ordinal)
                || ns.StartsWith(BarrelNamespace + ".", StringComparison.Ordinal);
     }
@@ -430,7 +446,15 @@ public class ApiContracts{MODULE_PASCAL}Tests
                 if (!IsModuleNamespace(ns))
                     continue;
 
-                if (!IsBarrelReference(ns))
+                // Check internal namespaces FIRST — they are violations even though
+                // they start with the barrel namespace prefix.
+                if (IsInternalNamespaceReference(ns))
+                {
+                    var relPath = Path.GetRelativePath(Directory.GetCurrentDirectory(), file);
+                    violations.Add(
+                        $"{relPath}:{line} imports from {ns} — should import from {BarrelNamespace}");
+                }
+                else if (!IsBarrelReference(ns))
                 {
                     var relPath = Path.GetRelativePath(Directory.GetCurrentDirectory(), file);
                     violations.Add(
