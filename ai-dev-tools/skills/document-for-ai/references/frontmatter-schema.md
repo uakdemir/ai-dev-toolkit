@@ -47,7 +47,7 @@ Missing `scope` (not AI-optimized), wrong `purpose` value, or too few `ai_keywor
 ```yaml
 ---
 title: Payments API      # missing scope — not AI-optimized
-purpose: reference       # invalid — not in the 5 allowed values
+purpose: reference       # invalid — not in the 6 allowed values
 ai_keywords: [Stripe]    # invalid — fewer than 3 terms
 last_verified: 2026-03-25
 ---
