@@ -124,7 +124,7 @@ Single-pass review via Codex CLI. Combines all three review concerns (completene
 4. Run via Bash (timeout: 300000ms):
 ```bash
 codex exec -s read-only \
-  --model <codex-model> -c model_reasoning_effort=<codex-reasoning> \
+  --model <codex-model> -c 'model_reasoning_effort="<codex-reasoning>"' \
   --output-schema ./tmp/review-doc.schema.json \
   -o ./tmp/review.json \
   "$(cat ./tmp/codex-prompt.txt)"

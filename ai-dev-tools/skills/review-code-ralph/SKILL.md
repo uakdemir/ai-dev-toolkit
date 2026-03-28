@@ -213,7 +213,7 @@ Print: `[ralph] Reviewing <scope description>`
 4. Run via Bash (timeout: 300000ms):
 ```bash
 codex exec -s read-only \
-  --model <codex-model> -c model_reasoning_effort=<codex-reasoning> \
+  --model <codex-model> -c 'model_reasoning_effort="<codex-reasoning>"' \
   --output-schema ./tmp/review.schema.json \
   -o ./tmp/review.json \
   "$(cat ./tmp/codex-prompt.txt)"
@@ -270,7 +270,7 @@ Record: `before_sha=$(git rev-parse HEAD)`
 6. Run via Bash (timeout: 300000ms):
 ```bash
 codex exec -s workspace-write \
-  --model <codex-model> -c model_reasoning_effort=<codex-reasoning> \
+  --model <codex-model> -c 'model_reasoning_effort="<codex-reasoning>"' \
   "$(cat ./tmp/codex-prompt.txt)"
 ```
 7. If the command fails: retry once. If second failure, write iteration log with error, print "Aborted with error" output, stop.
