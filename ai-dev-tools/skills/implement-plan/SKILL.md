@@ -274,11 +274,13 @@ All import rewrites in monorepo plans use `rewrite-cross-package-import` (not th
 
 Action sequence:
 
-1. **create-workspace-config** — generate workspace config files per tech stack:
-   - Node.js: `pnpm-workspace.yaml` or add `workspaces` to root `package.json`
-   - Python: `pyproject.toml` with workspace config (hatch/pdm) or `pants.toml` (pants). If using plain namespace packages with no workspace tool, skip and note: "No workspace config needed for namespace packages."
-   - .NET: `.sln` file updates
-   - Use templates from `references/execution-patterns.md`
+1. **create-workspace-config** — generate or update workspace config per tech stack:
+   - **New standalone files** (e.g., `pnpm-workspace.yaml`, `pants.toml`): create from template. If already exists, skip (idempotent).
+   - **Existing root files** (e.g., `package.json`, `pyproject.toml`, `.sln`): parse existing content, merge workspace config entries (e.g., add `"workspaces"` field to existing `package.json`). Show diff to user: "Workspace config will modify `{file}`. Review changes?" User can approve or edit.
+   - Node.js: create `pnpm-workspace.yaml` OR merge `workspaces` into root `package.json`
+   - Python: merge workspace config into root `pyproject.toml` (hatch) or create `pants.toml` (pants). If using plain namespace packages, skip and note: "No workspace config needed."
+   - .NET: update existing `.sln` to add new project entries
+   - Templates in `references/execution-patterns.md`
 2. **create-package** — create the shared library package (directory + manifest with placeholder dependencies)
 3. **move-files** — move identified shared code to the shared package
 4. **rewrite-cross-package-import** — update all import paths referencing moved shared code to use workspace package names (Serena or regex)
@@ -362,7 +364,7 @@ Imports to update:                    <-- resume from here
 
 On resume, check actual filesystem state before each action:
 
-- **create-workspace-config:** if config exists, skip. If workspace config was intentionally skipped (e.g., Python namespace packages), mark as "not applicable" rather than pending — resume logic treats these differently.
+- **create-workspace-config:** for new standalone files (pnpm-workspace.yaml), skip if exists. For existing root files (package.json, .sln), check if workspace fields were already merged — skip if present. If workspace config was intentionally skipped (e.g., namespace packages), mark as "not applicable."
 - **create-package:** if package directory + manifest already exist, skip.
 - **move-file:** if source doesn't exist but target does, skip (already moved).
 - **rewrite-cross-package-import:** re-scan — some imports may already be rewritten.
