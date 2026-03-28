@@ -43,6 +43,12 @@ Both subcommands discover project directories the same way:
 
 A discovered directory is only a "project" if it contains config files relevant to the active subcommand. The prompt files define which files to look for.
 
+## Folder Structure
+
+- `prompts/` — prompt files for each phase. SKILL.md reads these sequentially.
+- `references/` — static reference data consumed by prompt files at runtime (technology detection mapping, learnings format schema). Not read by SKILL.md directly.
+- `learnings/` — accumulated best-practice configs and rationale, organized by technology bucket. Created when the user first copies proposed learnings from `tmp/consolidated/`. Never written by the skill directly.
+
 ## Subcommand: ai
 
 Execute these prompt files in sequence, completing each phase before the next:
@@ -71,6 +77,11 @@ Read `prompts/ai-apply.md` and follow its instructions.
 - Confirm the full decision summary before applying.
 - Write merged configs respecting local markers. Do NOT commit -- user reviews via `git diff`.
 - Show a summary of all changes: files updated, created, unchanged, and local sections preserved.
+
+### Learn Phase
+Read `prompts/learn-discover.md` and follow its instructions.
+The scope for this learn phase is "ai". Only process AI config files and the common-ai bucket.
+Then read `prompts/learn-report.md` and follow its instructions.
 
 ## Subcommand: lint
 
@@ -108,28 +119,47 @@ Read `prompts/lint-apply.md` and follow its instructions.
 - Apply changes: create/update root configs, wire `extends` with correct relative paths, remove redundant rules, unify Prettier values. Do NOT commit.
 - Show a summary of all changes per tool.
 
+### Learn Phase
+Read `prompts/learn-discover.md` and follow its instructions.
+The scope for this learn phase is "lint". Only process lint/tool config files and tech-specific buckets.
+Then read `prompts/learn-report.md` and follow its instructions.
+
 ## Subcommand: all
 
 Run both flows sequentially with a user checkpoint between them.
 
 ### Step 1 -- Run AI consolidation
-Execute the full `ai` subcommand flow (all four phases above).
+Execute phases 1-4 of the `ai` subcommand above (do NOT run the Learn Phase — it runs once in Step 5).
 
 ### Step 2 -- Checkpoint
 After the AI summary is displayed, ask the user:
 
 ```
-[consolidate] AI config consolidation complete. Proceed with lint config? (y/n)
+[consolidate] AI config consolidation complete. Proceed with lint config? (y/n — declining will skip lint but still run the learn phase for AI configs)
 ```
 
 - If the user confirms: proceed to Step 3.
-- If the user declines: exit. The AI changes already applied remain on disk for review.
+- If the user declines: skip lint, proceed directly to Step 5 with scope "ai".
 
 ### Step 3 -- Run lint consolidation
-Execute the full `lint` subcommand flow (all four phases above).
+Execute phases 1-4 of the `lint` subcommand above (do NOT run the Learn Phase — it runs once in Step 5).
 
 ### Step 4 -- Combined summary
 After both flows complete, show a combined summary with counts for both domains and paths to both report files (`./tmp/consolidate-ai-report.md`, `./tmp/consolidate-lint-report.md`).
+
+### Step 5 -- Learn Phase
+
+Read `prompts/learn-discover.md` and follow its instructions.
+The scope for this learn phase is determined by which flows completed with changes:
+- Both AI and lint completed with changes → scope is "both"
+- Only AI completed (user declined lint, or lint found no configs) → scope is "ai"
+- Only lint completed (AI found no configs) → scope is "lint"
+- Neither completed with changes → skip this step entirely
+Then read `prompts/learn-report.md` and follow its instructions.
+
+A flow "completed with changes" means it ran through Phase 4 and the user applied at least one change to disk. It does not count if: the flow exited early, the user skipped all items, or the user declined the final apply confirmation.
+
+**Bootstrapping exception:** If the `learnings/` folder does not exist or contains no `learnings.md` files, the learn phase runs regardless of the "completed with changes" condition — any project's configs are valuable as initial learnings. During bootstrapping, scope is determined by the same rules above but with "was attempted" replacing "completed with changes" (a flow counts as attempted if it ran at least Phase 1, regardless of whether the user applied changes).
 
 ## Error Handling
 
