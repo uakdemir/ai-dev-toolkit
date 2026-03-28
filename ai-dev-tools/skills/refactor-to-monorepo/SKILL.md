@@ -12,8 +12,9 @@ Analyze a monolith and produce a comprehensive monorepo extraction strategy. Out
 Execute these steps in order. Each step feeds into the next:
 
 1. **Tech Stack Selection** — determine stack-specific analysis patterns and tooling.
-2. **Analysis Pipeline** — four phases: domain analysis, data ownership, dependency graph, synthesis.
-3. **Output Artifacts** — generate strategy documents to `docs/monorepo-strategy/`.
+2. **Module Seed Collection (Optional)** — let the user pre-define module boundaries before analysis.
+3. **Analysis Pipeline** — four phases: domain analysis, data ownership, dependency graph, synthesis.
+4. **Output Artifacts** — generate strategy documents to `docs/monorepo-strategy/`.
 
 Reference files used throughout (do not inline their content — read them at the indicated step):
 
@@ -51,13 +52,53 @@ Present these 6 options:
 
 ---
 
-## Step 2: Analysis Pipeline
+## Step 2: Module Seed Collection (Optional)
+
+> Note: This step operates identically regardless of the tech stack selected in Step 1, including the "Other" path.
+
+Present the following prompt:
+
+```
+Before I analyze the codebase, do you already have opinions about
+which components should become separate modules?
+
+  > Yes, I have specific modules in mind
+  > No, discover everything automatically
+```
+
+**If yes**, collect seeds one at a time:
+
+```
+Module seed 1:
+  Name: auth
+  Key files/directories: src/auth/, src/middleware/auth.ts
+
+Add another module seed? (yes/no)
+```
+
+Each seed is a `{ name: string, paths: string[] }` pair. Repeat until the user stops.
+
+**Path input contract:** Paths must be repo-relative (e.g., `src/auth/`, not `/home/user/project/src/auth/`). Comma-separated list parsed into discrete entries. No glob patterns. Trailing slashes normalized (removed). Duplicate entries within a seed are deduplicated. Directories are expanded recursively — all source files under the directory at any depth are assigned to the seed's module (using stack-specific source-file extensions from `references/tech-stacks.md`).
+
+**Validation:**
+
+- **Zero seeds after opt-in:** If the user opts in but adds zero seeds, confirm: "No seeds provided. Continue with automatic discovery?" Treat as equivalent to selecting "No."
+- **Path not found:** If a seeded path does not exist, warn: "Path `{path}` not found. Remove from seed or continue anyway?" If "continue," drop the path from the seed but keep the seed module. If all paths in a seed are invalid, drop the seed entirely with a warning.
+- **Overlap:** If the same file appears in two seeds, warn: "File `{path}` is in both `{seed_a}` and `{seed_b}`. Which module should own it?" Resolve all overlaps before proceeding.
+
+**If no**, proceed to Step 3 (Analysis Pipeline) with an empty seed list. Analysis runs identically to pre-enhancement behavior.
+
+---
+
+## Step 3: Analysis Pipeline
 
 Four phases, each building on the previous. Present findings at each user checkpoint before proceeding to the next phase.
 
 ### Phase 1: Domain Analysis
 
 Goal: identify the logical business domains within the monolith.
+
+If seeds were provided in Step 2: Pre-populate the file-to-domain mapping with seeded paths. Each seeded file gets `Confidence: user-specified` (highest tier, above automated `high`/`medium`/`low`). During automated domain assignment (sub-steps 1-4), skip files already assigned via seeds. If seeds cover all source files, report no additional domains discovered. If a seed name collides with an auto-discovered domain, auto-merge into the seeded module.
 
 1. Scan routes, pages, and feature directories for user-facing domains.
    - Look for route definitions, page components, controller groupings.
@@ -74,7 +115,7 @@ Goal: identify the logical business domains within the monolith.
    - Every source file assigned to exactly one domain, `shared/`, or `unassigned`.
    - Format: table with columns `File Path`, `Assigned Domain`, `Confidence`.
    - Target: zero `unassigned` files. If any remain, flag for user input.
-5. **User checkpoint:** "I found these domain boundaries: [list with file counts per domain]. Does this match your mental model? Should I merge, split, or rename any domains?"
+5. **User checkpoint:** When seeds are present, show seeded modules first with `[seeded]` tag, then auto-discovered modules. Ask "Merge, split, rename, or adjust?" — the user can adjust seeded modules too. When no seeds are present, use the original prompt: "I found these domain boundaries: [list with file counts per domain]. Does this match your mental model? Should I merge, split, or rename any domains?"
 
 Wait for user confirmation before proceeding.
 
@@ -137,6 +178,7 @@ Goal: reconcile all three analysis views and produce final module boundaries.
    - Document the conflict: which views disagree and what each view suggests.
    - Document the chosen resolution and the rationale.
    - Common resolutions: merge two domains, split a domain, create a shared service, introduce an API boundary, designate a primary owner with read-only access for consumers.
+   - Seed-wins rule: When a conflict involves a user-seeded module, preserve the seed boundary by default. Document the conflict and the automated alternative (with coupling score as percentage, e.g. 78%). The user can override at the Phase 4 checkpoint.
 5. Produce the final module list with boundaries, confidence levels, and resolved conflicts.
 6. **User checkpoint:** "Here is the full analysis with proposed module boundaries and conflict resolutions. Please review before I generate the output artifacts."
 
@@ -144,7 +186,7 @@ Wait for user approval before generating artifacts.
 
 ---
 
-## Step 3: Output Artifacts
+## Step 4: Output Artifacts
 
 Save all artifacts to `docs/monorepo-strategy/`. Create the directory if it does not exist.
 
@@ -249,3 +291,6 @@ Load reference files only when needed to minimize context window usage:
 | Very large codebase (>100K LOC) | Process the dependency graph in chunks by top-level directory. Report progress after each chunk. Combine results in the final synthesis. |
 | No database / no tables found | Skip Phase 2 entirely. Proceed with domain analysis (Phase 1) and dependency graph (Phase 3) only. Note the Phase 2 skip in strategy.md under Current State Assessment. |
 | Partial failure in any phase | Proceed with completed phases. Include a "Limitations" section in strategy.md listing what could not be analyzed, which phase failed, and why. Affected artifacts note their limitations in a header warning. |
+| User seeds overlap (same file in two seeds) | Warn: "File `{path}` is in both `{seed_a}` and `{seed_b}`. Which module should own it?" Resolve before Phase 1. |
+| Seeded path does not exist | Warn: "Path `{path}` not found." Drop the path from the seed but keep the seed module. If all paths in a seed are invalid, drop the seed entirely with a warning. |
+| Seed name collides with auto-discovered domain | Auto-merge into the seeded module at Phase 1. Present the merge in the checkpoint with `[seeded]` tag. |
