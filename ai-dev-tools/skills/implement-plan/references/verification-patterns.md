@@ -135,3 +135,44 @@ Verification granularity: per-step / per-phase / end-only
 - Resolve circular dependency between ModuleA and ModuleB (see classification above)
 - Review regex-rewritten imports in files where Serena was unavailable
 ```
+
+## Monorepo Migration Verification
+
+### 1. Multi-Package Verification Commands
+
+| Stack | Build all | Test all |
+|---|---|---|
+| Node.js (pnpm) | `pnpm -r build` | `pnpm -r test` |
+| Node.js (npm) | `npm run build --workspaces` | `npm test --workspaces` |
+| Python | `pytest packages/*/tests/` | `pytest packages/*/tests/` |
+| .NET | `dotnet build {solution}.sln` | `dotnet test {solution}.sln` |
+
+### 2. Monorepo Execution Report Template
+
+Generated at `tmp/execution-report.md` after execution completes. Selected when the plan type is
+a monorepo migration (coexists with the layer execution report above under a separate heading).
+
+```markdown
+## Phase Summary
+
+| Phase | Module | Actions | Status |
+|---|---|---|---|
+| 0 | (preparation) | workspace config, shared extraction | Done/Failed |
+| 1 | auth | create-package, move 15 files, rewrite 8 imports | Done |
+| 2 | billing | create-package, move 22 files, rewrite 12 imports | Pending |
+```
+
+**Post-execution next steps:**
+
+1. Review and fill in dependency sections in generated package manifests
+2. Set up CI for multi-module builds (see docs/monorepo-strategy/monorepo-tooling.md)
+3. Run `/ai-dev-tools:api-contract-guard` to enforce module boundaries with barrel files
+4. Run `/ai-dev-tools:document-for-ai` to update documentation for new structure
+
+### 3. Resume Verification for Monorepo
+
+- Check for `## [DONE] Phase N:` markers in migration-plan.md
+- Filesystem reconciliation:
+  - Package dir exists → skip `create-package`
+  - Source missing + target exists → skip `move-file`
+  - Workspace config exists → skip `create-workspace-config`
