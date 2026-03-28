@@ -1,6 +1,6 @@
 ---
 **Date:** 2026-03-28
-**Status:** Approved (R6 revisions applied)
+**Status:** Approved (R7 revisions applied)
 **Plugin:** ai-dev-tools
 **Skills modified:** document-for-ai, orchestrate, review-code
 ---
@@ -92,7 +92,7 @@ ADRs are never auto-detected from code analysis. They are only produced via expl
 
 - Individual ADRs: `docs/architecture/adrs/NNNN-{title}.md` (NNNN = zero-padded sequential number)
 - Index file: `docs/architecture/adrs.md` (consolidated table of all ADRs)
-- Archive: `docs/architecture/adrs/archive/NNNN-title.md` (superseded/deprecated ADRs)
+- Archive: `docs/architecture/adrs/archive/NNNN-{title}.md` (superseded/deprecated ADRs)
 
 ### 1.5 Index File Format
 
@@ -157,7 +157,7 @@ No tech-stack or monorepo detection is needed — the extraction algorithm opera
 
 4. Filter: keep top 3 candidates with score >= 4. If fewer than 3 qualify, keep only those that do. If zero qualify, return empty — no ADRs generated.
 5. For each qualifying decision:
-   - **Deduplication check:** Before allocating a number, scan existing ADRs in `docs/architecture/adrs/` (including `archive/`) for any file whose frontmatter `spec_source` matches `{spec_path}` AND whose frontmatter `scope` matches the candidate's derived scope. This is a deterministic key — no fuzzy matching. If a match is found, skip this candidate — the ADR already exists. This makes extraction idempotent: retries after partial failures, re-invocations, and orchestrate re-runs do not create duplicates.
+   - **Deduplication check:** Before allocating a number, scan existing ADRs in `docs/architecture/adrs/` (including `archive/`) for any file whose frontmatter `spec_source` matches `{spec_path}` AND whose frontmatter `scope` matches the candidate's derived scope AND whose filename stem matches the candidate's title slug (lowercase, hyphenated). All three fields must match — this allows multiple distinct decisions from the same spec and scope (e.g., "Use Redis for sessions" and "Use JWT for auth tokens" both scoped to `auth`). If a match is found, skip this candidate — the ADR already exists. This makes extraction idempotent: retries after partial failures, re-invocations, and orchestrate re-runs do not create duplicates.
    - Determine next NNNN from the highest existing number across both `docs/architecture/adrs/` and `docs/architecture/adrs/archive/`. ADR numbers are monotonic and never reused — archived ADRs retain their original numbers. If the target file already exists in either directory, increment NNNN until an unused number is found.
    - Write ADR file using the `adr` template + frontmatter schema.
    - **Frontmatter derivation rules:**
@@ -331,7 +331,7 @@ Proposed -> Accepted -> Superseded | Deprecated
 **During extraction (Step 4):** The extraction algorithm does NOT check for supersession conflicts. It creates new ADRs only. If a new ADR conflicts with an existing one, the next UPDATE or AUDIT pass will detect it and prompt the user. This keeps Step 4's single-confirmation flow uninterrupted.
 
 When an ADR status changes to Superseded or Deprecated:
-- Move file from `docs/architecture/adrs/NNNN-title.md` to `docs/architecture/adrs/archive/NNNN-title.md`
+- Move file from `docs/architecture/adrs/NNNN-{title}.md` to `docs/architecture/adrs/archive/NNNN-{title}.md`
 - Update `docs/architecture/adrs.md` index (remove from active table, optionally list in archive section)
 - Update AI_INDEX.md (remove entry)
 - review-code never reads `archive/`
@@ -374,16 +374,17 @@ This filtering algorithm expands review-code's existing workflow Step 2 ("Read c
 review-code does NOT read all ADR files. It filters by relevance:
 
 1. **Enumerate diff file paths first.** Run `git diff --name-only HEAD~{COMMIT_COUNT}..HEAD` to collect the list of changed file paths. This is a lightweight operation that precedes ADR loading — it does not depend on the full commit analysis in review-code's Step 4.
-2. Read `docs/architecture/adrs.md` index to get the list of active ADRs with their links.
-3. For each ADR in the index, read only its frontmatter (up to the closing `---` of the YAML block). Extract `code_paths` and `status`.
+2. **Discover ADR files.** Build the candidate list by unioning two sources:
+   - Read `docs/architecture/adrs.md` index to get linked ADR paths.
+   - Enumerate `docs/architecture/adrs/*.md` directly (excluding `archive/`).
+   Union both sets by file path. This ensures review-code finds ADRs even when the index is stale, missing, or out of sync after a partial extraction.
+3. For each discovered ADR, read only its frontmatter (up to the closing `---` of the YAML block). Extract `code_paths` and `status`.
 4. **Status filter:** Skip any ADR where `status` is not `Accepted`. This is the authoritative status check — frontmatter is the single source of truth (Section 1.2). Archived ADRs in `archive/` are also excluded by directory structure.
 5. Match each `code_paths` entry against the diff file paths from step 1. Matching depends on path type:
    - **Directory entries** (ending in `/`): prefix match. E.g., ADR's `src/auth/` matches diff file `src/auth/middleware.ts`.
    - **File entries** (no trailing `/`): exact match only. E.g., ADR's `src/auth.ts` matches only `src/auth.ts`, not `src/auth.tsx`.
    If any entry matches, load the full ADR.
 6. Only loaded ADRs are used as constraints during review.
-
-**Fallback:** If `docs/architecture/adrs.md` index does not exist or is empty, enumerate `docs/architecture/adrs/*.md` directly (excluding `archive/`). Read each file's frontmatter for `status` and `code_paths`, then continue from step 4.
 
 If `docs/architecture/adrs/` directory does not exist, skip silently.
 
@@ -424,10 +425,10 @@ Context consumption stays roughly constant regardless of total ADR count.
 
 1. After a spec is approved, `/orchestrate` automatically extracts qualifying ADRs before plan writing — no extra command.
 2. review-code flags violations against accepted ADRs during code review (Step 6).
-3. ADR context loaded by review-code is bounded by the scope-filtering algorithm (Section 6.2): only ADRs whose `code_paths` prefix-match the diff files are loaded, keeping context proportional to the review scope, not the total ADR count.
+3. ADR context loaded by review-code is bounded by the scope-filtering algorithm (Section 6.2): only ADRs whose `code_paths` match the diff files (directory prefix match or file exact match) are loaded, keeping context proportional to the review scope, not the total ADR count.
 4. document-for-ai AUDIT scores ADR files using the same quality dimensions as other docs.
 5. document-for-ai UPDATE detects decision-code drift and presents it as a conflict, not an auto-fix.
 6. Superseded/deprecated ADRs are archived and invisible to review-code.
-7. Re-running extraction after a partial failure does not create duplicate ADRs (deduplication by `spec_source` + `scope`).
+7. Re-running extraction after a partial failure does not create duplicate ADRs (deduplication by `spec_source` + `scope` + title slug).
 8. ADR numbering remains monotonic after archival — archived numbers are never reused.
 9. review-code discovers ADRs even when the index file is stale or missing (fallback to directory enumeration).

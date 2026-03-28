@@ -29,3 +29,7 @@ global/
 local/
 mnt
 
+# Ignored specs/plans
+*issues-backlog.md
+*-issues-backlog-design.md
+
