@@ -1,7 +1,7 @@
 # orchestrate — Design Spec
 
 **Date:** 2026-03-28
-**Status:** Approved (R2 revisions applied)
+**Status:** Approved (R3 revisions applied)
 **Plugin:** ai-dev-tools
 **Skill:** orchestrate (new skill)
 **Type:** Meta-skill — re-invocable state machine that dispatches other skills
@@ -106,12 +106,13 @@ description: "Use when the user wants to start a development cycle, continue whe
 - On confirm: invoke `/review-doc {spec_path}`
 
 ### Step 3: RESPOND TO REVIEW
-**Trigger:** `tmp/review_analysis.md` exists AND its `**Reviewed:**` field matches the current spec path AND it has unresolved findings (Critical or Important count > 0). If `**Reviewed:**` doesn't match current spec, treat as stale and ignore.
+**Trigger:** `tmp/review_analysis.md` exists AND its `**Reviewed:**` field matches the current spec path AND it has Critical findings (Critical count > 0). If `**Reviewed:**` doesn't match current spec, treat as stale and ignore. If zero criticals but Important > 0, present as informational: "Review found {M} suggestions. Fix these or proceed to planning?"
 
 **Behavior:**
 - Present: "Review found {N} critical, {M} important findings. Ready to apply fixes?"
 - On confirm: invoke `/respond-to-review {round_number} {spec_path}` where round_number = count existing `## Round N` sections in `tmp/response_analysis.md` + 1. No arch file argument for spec reviews.
 - **Loop:** After responding, re-invoke `/review-doc` if critical findings existed. Repeat Steps 2-3 until spec status is "Approved" or "Approved with suggestions" (either = zero criticals, loop exits).
+- **Status update:** After re-review confirms zero criticals, update the spec's `**Status:**` header to `Approved (R{N} revisions applied)` so state detection recognizes the approval on subsequent `/orchestrate` invocations.
 
 ### Step 4: WRITE PLAN
 **Trigger:** Spec Approved (or Approved with suggestions), no matching plan file in `docs/superpowers/plans/`.
@@ -135,7 +136,7 @@ description: "Use when the user wants to start a development cycle, continue whe
 **Behavior:**
 - Count implementation commits since plan was written
 - Present: "Implementation has {N} commits. Ready for code review against the spec?"
-- On confirm: invoke `/review-code {N} {spec_path}` (passes BOTH commit count AND spec as analysis doc)
+- On confirm: invoke `/review-code {N} {spec_path}` where N = total commits from plan commit hash to HEAD (not feature-scoped — review-code uses "last N from HEAD" which needs the full distance). Passes spec as analysis doc for spec-drift detection.
 
 ### Step 7: FIX REVIEW FINDINGS
 **Trigger:** `tmp/review_code.md` exists with findings (Critical or High count > 0) AND the review's commit hashes match the current feature's commits (cross-check to avoid stale review from a different feature).
@@ -143,8 +144,8 @@ description: "Use when the user wants to start a development cycle, continue whe
 **Behavior:**
 - Present: "Code review found {N} issues ({C} critical, {H} high). Ready to fix?"
 - On confirm: read `tmp/review_code.md` findings, apply fixes per the suggested-fix in each finding, then re-run `/review-code` to verify
-- **Loop:** Repeat Steps 6-7 until zero critical + zero high in `tmp/review_code.md`
-- **Note:** Does NOT use `/respond-to-review` for code fixes (that skill reads `tmp/review_analysis.md`, not `tmp/review_code.md`). Code fixes are applied directly based on the review's suggested fixes.
+- **Loop:** Repeat Steps 6-7 until zero critical + zero high in `tmp/review_code.md`. On re-review, recount commits since plan (same method as Step 6 trigger) and pass the updated count.
+- **Note:** Does NOT use `/respond-to-review` for code fixes (that skill reads `tmp/review_analysis.md`, not `tmp/review_code.md`). Code fixes are applied directly based on the review's suggested fixes. Re-reviews examine current code — fixed issues won't reproduce. Intentionally deferred items may be re-raised.
 
 ### Step 8: COMPLETE
 **Trigger:** Code review clean (zero critical, zero high) or user accepts remaining findings.
@@ -180,7 +181,7 @@ Orchestrate detects the current cycle position by scanning artifacts and git:
 Spec and plan filenames encode date + feature name (e.g., `2026-03-28-convention-enforcer-design.md` → feature = `convention-enforcer`). Extract feature name by stripping date prefix and `-design`/`-plan` suffix.
 
 **Feature detection algorithm:**
-1. Find ALL specs in `docs/superpowers/specs/` that don't have a completed cycle. A cycle is complete if: (a) all plan checkboxes are `[x]` AND review is clean, OR (b) plan exists with all unchecked boxes BUT feature-specific commits exist after plan date (fallback for plans where checkboxes were not tracked)
+1. Find ALL specs in `docs/superpowers/specs/` that don't have a completed cycle. A cycle is complete if: (a) all plan checkboxes are `[x]` AND review is clean, OR (b) feature is marked Done in `tmp/current-roadmap.md` (legacy features completed before orchestrate), OR (c) plan exists with all unchecked boxes BUT feature-specific commits exist after plan date AND `tmp/review_code.md` has 0 Critical/0 High for matching commits (fallback for plans where checkboxes were not tracked)
 2. If exactly one → that's the current feature
 3. If multiple → present list: "Found multiple in-progress features: {list}. Which one?"
 4. If zero → clean slate, go to Step 1
@@ -189,16 +190,18 @@ This avoids the "most recent by date" problem — it tracks completion status, n
 
 **Commit matching:** Search `git log` for commits containing the feature name as a substring (matches both `feat(convention-enforcer):` parenthetical scope and `convention-enforcer: ...` prefix style).
 
+**Known limitation:** Feature names that are prefixes of other feature names (e.g., `implement-plan` vs `implement-plan-monorepo`) may cause inaccurate commit counts due to substring matching. The ambiguity handler (step 3 above) presents both features for user selection, so the critical path (feature identification) is unaffected. Commit counts may be slightly inflated — review-code examines actual diffs, so this is harmless.
+
 ### Implementation Detection
 
 To determine if implementation has started/completed:
-- Find the plan's commit date: `git log --format=%aI -1 -- {plan_path}`
-- Count feature-scoped commits after that date: `git log --oneline {plan_commit}..HEAD --grep='{feature_name}' -- . ':!docs/' ':!tmp/'` (scopes to feature by commit message, excludes doc/temp changes. Commits without the feature name in the message will be missed — acceptable trade-off for accuracy.)
+- Find the plan's commit hash: `git log --format=%H -1 -- {plan_path}`
+- Count commits from plan to HEAD: `git log --oneline {plan_commit_hash}..HEAD --grep='{feature_name}'` (scopes to feature by commit message substring matching. Doc/temp commits for the feature are included — review-code examines actual diffs, so inflated count is harmless.)
 - If count > 0: implementation has started
 
 ### Cross-Checking tmp/ Files
 
-`tmp/review_code.md` and `tmp/response_code.md` are global singletons (no feature prefix). To avoid attributing a stale review to the wrong feature:
+`tmp/review_code.md` and `tmp/review_analysis.md` are global singletons (no feature prefix). To avoid attributing a stale review to the wrong feature:
 - Parse commit hashes from `tmp/review_code.md` findings (each finding includes a `**Commit:**` hash)
 - Verify those commits appear in `git log --grep='{feature_name}'` output (feature-scoped, avoids "implementation window" boundary ambiguity)
 - If commits don't match current feature: treat as stale, ignore the review file
