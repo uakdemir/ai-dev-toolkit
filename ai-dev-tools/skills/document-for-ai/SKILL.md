@@ -22,6 +22,7 @@ Reference files used throughout (do not inline their content — read them at th
 - `references/doc-templates.md` — template structures and mapping rules
 - `references/frontmatter-schema.md` — required frontmatter fields and validation
 - `references/audit-checklist.md` — scoring dimensions and priority formula
+- `references/adr-extraction.md` — ADR extraction algorithm (used by the `adr` command)
 
 ---
 
@@ -83,6 +84,7 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
 **Explicit command overrides:**
 
 - `/document-for-ai humanize [optional-path]` — triggers HUMANIZE mode directly, skipping mode detection.
+- `/document-for-ai adr {spec_path}` — extracts architectural decisions from the spec as ADR documents. Bypasses the standard workflow (Steps 1-4) and follows the extraction algorithm in `references/adr-extraction.md`. See the ADR Extraction section below.
 
 ---
 
@@ -140,6 +142,18 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
    - **Completeness** — fill empty or stub sections from code analysis.
    - **Format** — correct frontmatter fields and align sections to template structure.
 
+### AUDIT: ADR Extension
+
+ADR files are scored on the same 3 dimensions (Accuracy, Completeness, Format compliance) as other docs, plus one ADR-specific check:
+
+**Status validity:** An ADR marked `Accepted` whose `code_paths` show contradicting patterns gets flagged as "potential drift or supersession." The follow-up prompt must distinguish:
+- **Implementation drift** — code diverged from the decision (fix the code or update the ADR)
+- **True supersession** — a newer decision replaced this one (archive the old ADR)
+
+Do not change status or archive without this distinction.
+
+**ADR field validation:** When `purpose: adr`, treat `status` and `spec_source` as required fields. Missing either = format compliance score of 1 for that doc.
+
 ---
 
 ## Mode: UPDATE
@@ -149,6 +163,28 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
 3. **Analyze changes.** Review git commits since the doc's `last_verified` date. If `last_verified` is missing, default to the last 30 days of commits.
 4. **Regenerate sections.** Update only the sections affected by code changes. If the doc's accuracy score is <= 2, regenerate the entire doc using its template.
 5. **Finalize.** Set `last_verified` to today on all updated docs. Update CLAUDE.md files if changes affect module structure, entry points, or dependencies.
+
+### UPDATE: ADR Extension
+
+When UPDATE mode encounters ADR files (`purpose: adr` in frontmatter), apply these additional checks:
+
+**Decision-code drift detection:**
+1. Read the ADR's `code_paths` files.
+2. Analyze git commits since `last_verified`.
+3. Flag as potential drift if:
+   - A dependency or technology named in the Decision section was removed or replaced.
+   - New code introduces patterns that contradict the Decision section. **Calibration:** Flag `SessionRepo.saveToPostgres()` when ADR says "Use Redis." Do NOT flag unrelated utility functions in the same directory.
+   - Files in `code_paths` were deleted or moved.
+4. Present specific commit hashes and diff hunks as evidence.
+
+**Spec-ADR drift detection:**
+If the spec at `spec_source` has been modified since `last_verified`, flag as potential spec-ADR drift. Present to user for review.
+
+**Resolution:**
+- If code matches decision: update `last_verified`, no changes needed.
+- If code or spec contradicts decision: flag as conflict, do NOT auto-fix. Present: "ADR {NNNN} says '{decision}' but code at {path} shows '{reality}'. Update the ADR (decision changed) or flag as code drift?"
+
+ADRs are decisions, not descriptions. Auto-fixing would silently change architectural intent.
 
 ---
 
@@ -172,6 +208,48 @@ Best-effort rendering for human readers. No quality gate applied.
 - Non-AI-optimized files — apply best-effort transformation anyway.
 - Existing files in `docs/tmp/` — overwrite without prompting.
 - Partial failure — report which files failed, continue processing remaining files.
+
+---
+
+## ADR Extraction
+
+Triggered by `/document-for-ai adr {spec_path}`. This is an explicit command override — it bypasses mode detection and the standard workflow entirely.
+
+**Algorithm:** Read and follow `references/adr-extraction.md`. That file contains the complete extraction algorithm: candidate scanning, scoring, filtering, deduplication, file writing, index updates, and error handling.
+
+**File locations:**
+- Individual ADRs: `docs/architecture/adrs/NNNN-{title}.md`
+- Index: `docs/architecture/adrs.md`
+- Archive: `docs/architecture/adrs/archive/NNNN-{title}.md`
+
+**AI_INDEX.md integration:** ADR entries appear like any other doc:
+
+| Doc | Purpose | Keywords | Path |
+|-----|---------|----------|------|
+| Redis session storage | adr | Redis, sessions, encryption, auth | docs/architecture/adrs/0001-redis-encrypted-session-storage.md |
+
+---
+
+## ADR Status Lifecycle
+
+```
+Proposed → Accepted → Superseded | Deprecated
+```
+
+- **Proposed:** Decision not yet confirmed. Reserved for manually created ADRs. Create file following the `adr` template and frontmatter schema, set `status: Proposed`, place in `docs/architecture/adrs/`. Transition to Accepted by changing the frontmatter `status` field after team review.
+- **Accepted:** Active constraint. Enforced by review-code.
+- **Superseded:** Replaced by a newer ADR. The superseding ADR's body references the old one. Moved to `archive/`.
+- **Deprecated:** No longer relevant (module removed, technology abandoned). Moved to `archive/`.
+
+### Archival
+
+Status transitions to Superseded/Deprecated are user-confirmed actions. When UPDATE mode flags decision-code drift or AUDIT flags "potentially superseded," the user is presented with the option. Archival steps execute only after user confirmation.
+
+When an ADR status changes to Superseded or Deprecated:
+1. Move file from `docs/architecture/adrs/NNNN-{title}.md` to `docs/architecture/adrs/archive/NNNN-{title}.md`
+2. Update `docs/architecture/adrs.md` index (remove from active table)
+3. Update AI_INDEX.md (remove entry)
+4. review-code never reads `archive/`
 
 ---
 
