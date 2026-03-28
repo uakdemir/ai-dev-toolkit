@@ -68,3 +68,41 @@ When evaluating accuracy, apply the following rules:
 4. **Scope of comparison:** Accuracy is assessed at the section level but rolled up to a single
    score per document. Use the lowest section accuracy as the document accuracy when any section
    contains contradictory or missing symbols.
+
+---
+
+## ADR Scoring: Reversibility × Blast Radius
+
+Used during ADR extraction (see `references/adr-extraction.md`) to determine which architectural decisions qualify for formal ADRs. Score = Reversibility × Blast radius (range 1-9). Only candidates scoring >= 4 are extracted.
+
+### Reversibility Cost
+
+| Score | Description | Examples |
+|-------|-------------|----------|
+| 3 (High) | Requires migration, data rewrite, or API breaking change to undo | Database engine choice, auth protocol, public API contract |
+| 2 (Medium) | Significant refactor but no data/API impact | Internal service boundaries, state management approach |
+| 1 (Low) | Localized change, easy to swap | Naming conventions, file organization, utility library choice |
+
+### Blast Radius
+
+| Score | Description | Examples |
+|-------|-------------|----------|
+| 3 (High) | Crosses module boundaries, affects multiple consumers | Event bus architecture, shared middleware, data format |
+| 2 (Medium) | Affects full module/feature | Module-internal storage, single-feature auth flow |
+| 1 (Low) | Affects single file or function | Helper function implementation, single test fixture |
+
+### Calibration Examples
+
+| Decision | Reversibility | Blast Radius | Score | Qualifies? |
+|----------|--------------|--------------|-------|------------|
+| Use Redis for encrypted session storage | 3 (data migration) | 2 (auth module) | 6 | Yes |
+| Event-driven notification dispatch | 3 (rewrite publishers/consumers) | 3 (crosses modules) | 9 | Yes |
+| Name controllers with -Controller suffix | 1 (rename refactor) | 1 (single file each) | 1 | No |
+| Use JWT for stateless auth tokens | 3 (token migration) | 2 (auth module) | 6 | Yes |
+| Store config in YAML not JSON | 1 (file conversion) | 2 (all config consumers) | 2 | No |
+
+### Filtering
+
+- Keep top 3 candidates with score >= 4.
+- If fewer than 3 qualify, keep only those that do.
+- If zero qualify, return empty — no ADRs generated.
