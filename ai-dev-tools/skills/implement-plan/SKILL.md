@@ -1,11 +1,11 @@
 ---
 name: implement-plan
-description: "Use when the user wants to execute a restructuring strategy from refactor-to-layers, apply file moves and import rewrites from a layer strategy spec, or restructure a codebase according to an approved layer plan — even if they don't use the exact skill name."
+description: "Use when the user wants to execute a restructuring strategy from refactor-to-layers or a monorepo migration plan from refactor-to-monorepo, apply file moves and import rewrites from a layer strategy spec or monorepo migration plan, or restructure a codebase according to an approved plan — even if they don't use the exact skill name."
 ---
 
 # implement-plan
 
-Execute restructuring strategy specs produced by refactor-to-layers. Groups steps into phases (create → move → rewrite → extract) with dependency ordering within each phase. Serena-aware for semantic refactoring, with regex fallback.
+Execute restructuring plans produced by refactor-to-layers (layer strategy specs) or refactor-to-monorepo (monorepo migration plans). Auto-detects plan type by content. For layer specs: groups steps into phases (create → move → rewrite → extract) with dependency ordering. For monorepo plans: executes Phase 0 (workspace preparation) followed by Phase 1-N (module extraction) with per-phase checkpoints. Serena-aware for semantic refactoring, with regex fallback.
 
 ## Workflow Overview
 
@@ -42,14 +42,50 @@ Check whether the `get_symbols_overview` tool is available.
 Three detection paths, in order:
 
 1. **Explicit path** — if the user provided a path, use it directly.
-2. **Auto-detect** — look for `docs/layer-architecture/strategy.md` at the project root. Also search recursively in workspace package directories for the same relative path.
-3. **Selection** — one found → use it. Multiple found → present list and ask. None found → error: "No strategy spec found. Run `/refactor-to-layers` first to generate one."
+2. **Auto-detect** — look for both:
+   - `docs/layer-architecture/strategy.md` (layer strategy spec)
+   - `docs/monorepo-strategy/migration-plan.md` (monorepo migration plan)
+   at the project root. Also search recursively in workspace package directories for the same relative paths.
+3. **Selection** — one found → use it. Multiple found → present list and ask. None found → error: "No plan found. Run `/ai-dev-tools:refactor-to-layers` or `/ai-dev-tools:refactor-to-monorepo` first to generate one."
 
 If Serena was detected in Step 1, probe a source file from the strategy scope to confirm Serena is functional.
+
+### Format Detection
+
+After the plan file is located, detect its format by content:
+
+1. **Layer strategy spec** (check first — unambiguous): identified by YAML frontmatter containing `tech_stack`, `layers`, or `composition_root`.
+2. **Monorepo migration plan**: identified by `## Phase N:` headings or `**Phase N:**` bold markers in the document body. Also match resume markers like `## [DONE] Phase N:`. The `## Phase N:` heading format is anticipated from AI formatting behavior; `**Phase N:**` is the contractual format from refactor-to-monorepo.
+3. **Neither** → error: "Unrecognized plan format. Expected a refactor-to-layers strategy spec or a refactor-to-monorepo migration plan."
+
+### Serena Warning for Monorepo Plans
+
+Evaluated after format detection (plan type is only known after this point), before Step 3.
+
+**Layer plans:** unchanged — existing warning and confirmation prompt from Step 1 applies.
+
+**Monorepo plans:** if Serena is not available, present a stronger warning requiring explicit user choice:
+
+```
+WARNING: Serena is strongly recommended for monorepo migration.
+
+Cross-package import rewrites are higher risk without semantic tools.
+Regex fallback may miss aliased imports, re-exports, and dynamic
+imports across package boundaries.
+
+  > Install Serena and continue
+  > Proceed without Serena (I accept the risk)
+```
+
+The user must explicitly choose before execution begins.
 
 ---
 
 ## Step 3: Parse and Validate
+
+The parsing path depends on the format detected in Step 2.
+
+### Layer Strategy Spec Parsing
 
 Read the strategy spec and extract:
 
@@ -74,6 +110,57 @@ Read the strategy spec and extract:
 
 - **Skip completed:** steps prefixed with `[DONE]` are skipped. Report: "Found N total steps: X remaining, Y already completed."
 
+### Monorepo Migration Plan Parsing
+
+When format detection identifies a monorepo migration plan, parse it into a structured internal model.
+
+**Parsing algorithm:**
+
+1. **Identify phases** — scan for `## Phase N:` headings, `**Phase N:**` bold markers, or resume markers (`## [DONE] Phase N:`, `[DONE] **Phase N:**`). Match using keyword matching (case-insensitive), not exact heading format.
+2. **Phase 0 (Preparation)** — extract using keyword matching (case-insensitive, matching in any heading, bold marker, or numbered list item):
+   - Workspace config details (keywords: `workspace`, `monorepo configuration`)
+   - Shared library file list (keywords: `shared library`, `shared/ candidates`, `files to move`)
+   - Import paths to update (keywords: `import paths`, `update all import`)
+3. **Phases 1-N (Module Extraction)** — extract per phase using keyword matching:
+   - Module name (from the phase text, e.g., "Phase 1: Extract auth module" → "auth")
+   - Files to move (keyword: `files to move` — lines matching `- path/to/file` or `  path/to/file` under the matched keyword)
+   - Imports to update (keyword: `imports to update`)
+   - Config changes (keyword: `configuration changes`)
+   - Verification commands (keywords: `tests to verify`, `verify`, `checkpoint`)
+
+**Note:** The upstream refactor-to-monorepo uses numbered list items (`1. Files to move`, `2. Imports to update`) not sub-section headings. The parser matches on content keywords rather than requiring exact heading format.
+
+**Internal data model (per phase):**
+
+```
+{
+  phase_number: number,           // 0 for preparation, 1-N for modules
+  phase_name: string,             // e.g., "Preparation", "Extract auth module"
+  module_name: string | null,     // null for Phase 0, module name for 1-N
+  target_package_path: string | null, // derived per-stack:
+                                  //   Node.js = packages/{name}
+                                  //   Python  = packages/{name}
+                                  //   .NET    = {name}/
+                                  // Phase 0 shared = shared/ or packages/shared
+  files_to_move: [
+    { source: string, target: string }
+  ],
+  imports_to_update: [
+    { old_path: string, new_path: string }
+  ],
+  config_changes: [string],       // free-form instructions from migration plan
+  verification: [string],         // test commands or descriptions
+  status: "pending" | "done"      // for resume support
+}
+```
+
+**Validation:**
+
+- Phase 0 must exist.
+- Each Phase 1-N must have at least one file to move. Phase 0 is valid with or without files to move (it may consist solely of workspace configuration).
+- File paths must be valid relative paths.
+- Unparseable phase → stop execution at that phase. Do not skip — later phases may depend on earlier ones.
+
 ---
 
 ## Step 4: Check Git State
@@ -86,8 +173,21 @@ Require a clean working tree. If uncommitted changes exist, stop: "Uncommitted c
 
 Read `references/verification-patterns.md` for the full pre-flight procedure.
 
+### Layer Plan Pre-flight
+
 1. **Source existence** — check every remaining step's source path. Report all missing sources at once (do not fail on the first one).
 2. **Target collisions** — for `move-file` and `extract-interface`, check if the target already exists. Prompt: overwrite or stop. No skip option — skipping invalidates downstream steps. `create-folder` targets are idempotent. `rewrite-import` has no collision concept.
+
+### Monorepo Plan Pre-flight
+
+In addition to source-file existence checks:
+
+1. **Target package directories** — should NOT already exist (unless resuming). If they do: "Package `{name}` already exists at `{path}`. This looks like a partial previous run. Resume or abort?"
+2. **Workspace root writable** — verify write access to the workspace root directory.
+3. **Source files exist** — for each phase, all source files listed in "Files to move" must exist at their current paths. Report all missing sources at once.
+4. **No cross-phase target collisions** — verify no two phases attempt to create the same target package or move files to the same target path.
+
+On validation failure: "abort or adjust plan" (no skip option — later phases may depend on earlier ones).
 
 ---
 
@@ -99,13 +199,23 @@ Present three options:
 2. **Per-phase** (default) — verify after each phase completes. Recommended balance.
 3. **End-only** — verify once after all phases. Fastest, riskiest.
 
+**Monorepo plan mapping:**
+
+| Option | Layer plan meaning | Monorepo plan meaning |
+|--------|--------------------|-----------------------|
+| Per-step | After each individual file move/rewrite | After each individual file move within a module extraction |
+| Per-phase | After each action-type phase (all moves, all rewrites) | After each monorepo phase (Phase 0, Phase 1, Phase 2...) — default recommendation |
+| End-only | After all phases complete | After all monorepo phases complete |
+
 ---
 
 ## Step 7: Execute Phases
 
-Group remaining steps by action type and execute in phase order. Read `references/execution-patterns.md` for detailed procedures.
+Read `references/execution-patterns.md` for detailed procedures. The execution path forks based on the detected plan type.
 
-## Execution Phases
+## Layer Plan Execution Phases
+
+Group remaining steps by action type and execute in phase order.
 
 Phase execution order is fixed: 0 → 1 → 2 → 3. Each phase completes fully before the next begins. Verification runs per the granularity selected in Step 6.
 
@@ -151,6 +261,111 @@ Execute all `extract-interface` actions.
 - After all extractions, run verification if granularity permits.
 
 Commit: `refactor: extract provider interfaces (extract phase)`
+
+---
+
+## Monorepo Plan Execution Phases
+
+For monorepo plans, Step 7 forks into a parallel execution path. The monorepo path shares individual action implementations (file moves, import rewrites) with the layer path but has different phase orchestration.
+
+All import rewrites in monorepo plans use `rewrite-cross-package-import` (not the existing `rewrite-import`). This applies to both Phase 0 and Phases 1-N — in both cases, the target is a workspace package name.
+
+### Phase 0: Preparation
+
+Action sequence:
+
+1. **create-workspace-config** — generate workspace config files per tech stack:
+   - Node.js: `pnpm-workspace.yaml` or add `workspaces` to root `package.json`
+   - Python: `pyproject.toml` with workspace config (hatch/pdm) or `pants.toml` (pants). If using plain namespace packages with no workspace tool, skip and note: "No workspace config needed for namespace packages."
+   - .NET: `.sln` file updates
+   - Use templates from `references/execution-patterns.md`
+2. **create-package** — create the shared library package (directory + manifest with placeholder dependencies)
+3. **move-files** — move identified shared code to the shared package
+4. **rewrite-cross-package-import** — update all import paths referencing moved shared code to use workspace package names (Serena or regex)
+5. **verify** — run build + tests, checkpoint: "All tests pass after shared extraction?"
+
+**CI setup:** Output instructions only, do not generate CI config files:
+```
+Manual step: Set up CI for multi-module builds.
+  - Build affected modules on PR
+  - Run affected tests
+  - See docs/monorepo-strategy/monorepo-tooling.md for recommendations.
+```
+
+Commit: `refactor: prepare monorepo workspace — extract shared library (Phase 0)`
+
+### Phases 1-N: Module Extraction
+
+One phase per module, ordered by lowest coupling score first (as specified in migration-plan.md). Within each phase:
+
+1. **create-package** — create package directory + manifest with placeholder dependencies
+2. **move-files** — move source files from monolith to new package (paths from migration plan)
+3. **rewrite-cross-package-import** — update cross-package import paths:
+   - **Serena mode:** `find_referencing_symbols` to find all consumers, then update import paths to use the new package name/path
+   - **Fallback mode:** regex scan for import statements targeting moved files, rewrite to new package path
+   - Cross-package imports use workspace package names (e.g., `@myorg/auth`) instead of relative paths
+4. **update-config** — build/test config changes listed in migration plan (AI-judgment action, no deterministic algorithm)
+5. **verify** — checkpoint per migration plan: "Build passes, all tests pass, no runtime errors?"
+
+Commit: `refactor: extract {module_name} to packages/{module_name} (Phase {N})`
+
+Do not proceed to Phase N+1 until Phase N's checkpoint passes.
+
+---
+
+## Commit Strategy for Monorepo Plans
+
+**Granularity:** one commit per monorepo phase.
+
+| Phase | Commit message template |
+|-------|-------------------------|
+| Phase 0 | `refactor: prepare monorepo workspace — extract shared library (Phase 0)` |
+| Phase 1-N | `refactor: extract {module_name} to packages/{module_name} (Phase {N})` |
+| Partial (interrupted) | `refactor: extract {module_name} (Phase {N}, partial — {action_type} complete)` |
+
+If execution is interrupted mid-phase, commit completed actions within the phase with a `(partial)` suffix. Resume reconciles remaining actions.
+
+---
+
+## Resume Strategy for Monorepo Plans
+
+### Phase-Level Resume
+
+Mark completed phases in the migration plan using a `[DONE]` prefix after the `##` marker:
+
+```markdown
+## [DONE] Phase 0: Preparation
+...
+## [DONE] Phase 1: Extract auth module
+...
+## Phase 2: Extract billing module    <-- resume from here
+...
+```
+
+### Within-Phase Resume
+
+If interrupted mid-phase (partial commit), mark completed action groups with inline `[DONE]`:
+
+```markdown
+## Phase 2: Extract billing module
+
+[DONE] Files to move:
+  - src/billing/service.ts -> packages/billing/src/service.ts
+  ...
+
+Imports to update:                    <-- resume from here
+  - src/billing/ -> @myorg/billing
+  ...
+```
+
+### Filesystem Reconciliation for Monorepo
+
+On resume, check actual filesystem state before each action:
+
+- **create-workspace-config:** if config exists, skip. If workspace config was intentionally skipped (e.g., Python namespace packages), mark as "not applicable" rather than pending — resume logic treats these differently.
+- **create-package:** if package directory + manifest already exist, skip.
+- **move-file:** if source doesn't exist but target does, skip (already moved).
+- **rewrite-cross-package-import:** re-scan — some imports may already be rewritten.
 
 ---
 
@@ -272,6 +487,15 @@ This is a throwaway review document, not a source of truth.
 | Tech stack mismatch | Warn if strategy spec tech_stack does not match detected project stack. Ask to continue. |
 | All steps already `[DONE]` | Report: "All steps completed. Nothing to do." |
 | Partial resume (re-run after failure) | Skip `[DONE]` steps, reconcile filesystem, re-validate remaining deps. |
+| Unrecognized plan format | Error: "Unrecognized plan format. Expected a refactor-to-layers strategy spec or a refactor-to-monorepo migration plan." |
+| Monorepo plan references missing sources | Same as existing: pre-flight validation flags all missing sources at once. User can abort or adjust plan. |
+| Package directory already exists at target | Warn: "Package `{name}` already exists at `{path}`. Resume previous run or abort?" |
+| Workspace config already exists | Warn: "Workspace config `{file}` already exists. Update or skip?" Present diff of proposed changes. |
+| Cross-package import rewrite fails (regex ambiguity) | Flag the specific import, show what regex would do, let user confirm or manually fix. |
+| Phase N verification fails | Same as existing: stop, report failures, do not proceed to Phase N+1. User can fix and resume. |
+| CI setup needed | Output instructions only: "Manual step: Set up CI. See monorepo-tooling.md." |
+| Migration plan phase cannot be parsed | Stop execution at the unparseable phase. Do not skip — later phases may depend on earlier ones. User can fix the migration plan and resume. |
+| Config instruction ambiguous or target file not found | Present the instruction to user for manual execution. Continue with remaining actions in the phase. |
 
 ---
 
