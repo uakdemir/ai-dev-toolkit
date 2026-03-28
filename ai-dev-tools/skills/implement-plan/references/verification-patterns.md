@@ -176,3 +176,4 @@ a monorepo migration (coexists with the layer execution report above under a sep
   - Package dir exists → skip `create-package`
   - Source missing + target exists → skip `move-file`
   - Workspace config exists → skip `create-workspace-config`
+  - `rewrite-cross-package-import`: re-scan — some imports may already be rewritten

@@ -145,7 +145,7 @@ Create package directory + manifest with placeholder dependencies.
   "devDependencies": {}
 }
 ```
-`// TODO: Review — add dependencies from root package.json`
+`// TODO: Review — add dependencies used by this package's source files. Check root package.json for versions.`
 
 **Python (`pyproject.toml`):**
 ```toml
@@ -163,7 +163,8 @@ dependencies = []
     <TargetFramework>{from root}</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <!-- TODO: Review — add PackageReference entries -->
+    <!-- TODO: Review — add PackageReference entries for NuGet dependencies -->
+    {project references to shared/other packages}
   </ItemGroup>
 </Project>
 ```

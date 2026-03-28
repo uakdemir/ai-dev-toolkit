@@ -54,7 +54,7 @@ If Serena was detected in Step 1, probe a source file from the strategy scope to
 
 After the plan file is located, detect its format by content:
 
-1. **Layer strategy spec** (check first — unambiguous): identified by YAML frontmatter containing `tech_stack`, `layers`, or `composition_root`.
+1. **Layer strategy spec** (check first — unambiguous): identified by YAML frontmatter containing `tech_stack`, `layers`, or `composition_root`, OR by structured step entries with `action: move-file` / `action: rewrite-import` / `action: extract-interface`.
 2. **Monorepo migration plan**: identified by `## Phase N:` headings or `**Phase N:**` bold markers in the document body. Also match resume markers like `## [DONE] Phase N:`. The `## Phase N:` heading format is anticipated from AI formatting behavior; `**Phase N:**` is the contractual format from refactor-to-monorepo.
 3. **Neither** → error: "Unrecognized plan format. Expected a refactor-to-layers strategy spec or a refactor-to-monorepo migration plan."
 
@@ -137,7 +137,7 @@ When format detection identifies a monorepo migration plan, parse it into a stru
   phase_number: number,           // 0 for preparation, 1-N for modules
   phase_name: string,             // e.g., "Preparation", "Extract auth module"
   module_name: string | null,     // null for Phase 0, module name for 1-N
-  target_package_path: string | null, // derived per-stack:
+  target_package_path: string | null, // extracted from migration plan file-move targets if present; otherwise derived per-stack:
                                   //   Node.js = packages/{name}
                                   //   Python  = packages/{name}
                                   //   .NET    = {name}/
