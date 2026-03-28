@@ -1,7 +1,7 @@
 # orchestrate — Design Spec
 
 **Date:** 2026-03-28
-**Status:** Approved (R1 revisions applied)
+**Status:** Approved (R2 revisions applied)
 **Plugin:** ai-dev-tools
 **Skill:** orchestrate (new skill)
 **Type:** Meta-skill — re-invocable state machine that dispatches other skills
@@ -106,11 +106,11 @@ description: "Use when the user wants to start a development cycle, continue whe
 - On confirm: invoke `/review-doc {spec_path}`
 
 ### Step 3: RESPOND TO REVIEW
-**Trigger:** `tmp/review_analysis.md` exists with unresolved findings for the current spec.
+**Trigger:** `tmp/review_analysis.md` exists AND its `**Reviewed:**` field matches the current spec path AND it has unresolved findings (Critical or Important count > 0). If `**Reviewed:**` doesn't match current spec, treat as stale and ignore.
 
 **Behavior:**
 - Present: "Review found {N} critical, {M} important findings. Ready to apply fixes?"
-- On confirm: invoke `/respond-to-review`
+- On confirm: invoke `/respond-to-review {round_number} {spec_path}` where round_number = count existing `## Round N` sections in `tmp/response_analysis.md` + 1. No arch file argument for spec reviews.
 - **Loop:** After responding, re-invoke `/review-doc` if critical findings existed. Repeat Steps 2-3 until spec status is "Approved" or "Approved with suggestions" (either = zero criticals, loop exits).
 
 ### Step 4: WRITE PLAN
@@ -126,11 +126,11 @@ description: "Use when the user wants to start a development cycle, continue whe
 **Behavior:**
 - Present: "Plan at `{path}` — {N} tasks, {M} completed. Continue implementation? I'll use subagent-driven-development."
 - On confirm: invoke `superpowers:subagent-driven-development`
-- If all tasks completed on prior run: skip to Step 6
 - **Dependency:** Assumes the implementation skill updates plan checkboxes `- [ ]` → `- [x]` in-place as tasks complete.
+- **Note:** If all checkboxes are already `[x]`, Step 5 doesn't trigger — state detection routes directly to Step 6. State detection evaluates ALL step triggers to find the first applicable one.
 
 ### Step 6: CODE REVIEW
-**Trigger:** Implementation commits exist after the plan's commit date (detected via `git log --follow -- {plan_path}` to find plan commit, then count commits after that).
+**Trigger:** Implementation commits exist after the plan's commit date (detected via `git log --format=%aI -1 -- {plan_path}` to find plan commit date, then count feature-scoped commits after that).
 
 **Behavior:**
 - Count implementation commits since plan was written
@@ -146,11 +146,11 @@ description: "Use when the user wants to start a development cycle, continue whe
 - **Loop:** Repeat Steps 6-7 until zero critical + zero high in `tmp/review_code.md`
 - **Note:** Does NOT use `/respond-to-review` for code fixes (that skill reads `tmp/review_analysis.md`, not `tmp/review_code.md`). Code fixes are applied directly based on the review's suggested fixes.
 
-### Step 8: COMMIT & COMPLETE
+### Step 8: COMPLETE
 **Trigger:** Code review clean (zero critical, zero high) or user accepts remaining findings.
 
 **Behavior:**
-- Present: "All critical/high issues resolved. {M} medium, {L} low remaining. Ready to finalize?"
+- Present: "All critical/high issues resolved. {M} medium, {L} low remaining. Ready to finalize?" (No new commit — implementation was committed during Step 5. Step 8 updates roadmap and checks quality gates.)
 - If `tmp/current-roadmap.md` exists: update it — mark feature as Done. If no roadmap file, skip this step.
 - Check quality gate triggers
 - Present recommendations + "What's next?"
@@ -165,20 +165,22 @@ Orchestrate detects the current cycle position by scanning artifacts and git:
 |---|---|---|
 | Feature identified | `tmp/current-roadmap.md` | Next unimplemented item (if file exists) |
 | Spec exists | `docs/superpowers/specs/*-design.md` | File exists for current feature |
-| Spec reviewed | Spec file `**Status:**` header | Contains "Approved" (matches both "Approved" and "Approved with suggestions") |
+| Spec reviewed | Spec file `**Status:**` header (line 4, match bold `**Status:**` format to avoid body content false matches) | Contains "Approved" (matches both "Approved" and "Approved with suggestions") |
+| Spec review exists with findings | `tmp/review_analysis.md` `**Reviewed:**` field | Matches current spec path AND status is "Issues Found" |
+| Spec review applied, re-review needed | `tmp/response_analysis.md` | Has entries for current round AND spec status still not "Approved" |
 | Plan exists | `docs/superpowers/plans/*-plan.md` | File exists matching spec's feature name |
 | Implementation in progress | Plan file checkboxes | Some `- [x]`, some `- [ ]` |
 | Implementation complete | Plan file checkboxes + git | All `- [x]` OR commits after plan commit date |
 | Code reviewed | `tmp/review_code.md` | File exists, commits in findings match current feature |
 | Review resolved | `tmp/review_code.md` Summary table | 0 Critical, 0 High |
-| Fixes applied, re-review needed | `tmp/response_code.md` has entries newer than `tmp/review_code.md` | Fixes applied but re-review hasn't run yet |
+| Code fixes applied, re-review needed | Commits exist after `tmp/review_code.md`'s reviewed commits | New commits since last review = fixes applied, re-review needed |
 
 ### Matching Logic
 
 Spec and plan filenames encode date + feature name (e.g., `2026-03-28-convention-enforcer-design.md` → feature = `convention-enforcer`). Extract feature name by stripping date prefix and `-design`/`-plan` suffix.
 
 **Feature detection algorithm:**
-1. Find ALL specs in `docs/superpowers/specs/` that don't have a completed cycle (no matching plan with all `[x]` checkboxes AND clean review)
+1. Find ALL specs in `docs/superpowers/specs/` that don't have a completed cycle. A cycle is complete if: (a) all plan checkboxes are `[x]` AND review is clean, OR (b) plan exists with all unchecked boxes BUT feature-specific commits exist after plan date (fallback for plans where checkboxes were not tracked)
 2. If exactly one → that's the current feature
 3. If multiple → present list: "Found multiple in-progress features: {list}. Which one?"
 4. If zero → clean slate, go to Step 1
@@ -191,15 +193,16 @@ This avoids the "most recent by date" problem — it tracks completion status, n
 
 To determine if implementation has started/completed:
 - Find the plan's commit date: `git log --format=%aI -1 -- {plan_path}`
-- Count commits after that date: `git log --oneline {plan_commit}..HEAD -- . ':!docs/' ':!tmp/'` (excludes doc/temp changes)
+- Count feature-scoped commits after that date: `git log --oneline {plan_commit}..HEAD --grep='{feature_name}' -- . ':!docs/' ':!tmp/'` (scopes to feature by commit message, excludes doc/temp changes. Commits without the feature name in the message will be missed — acceptable trade-off for accuracy.)
 - If count > 0: implementation has started
 
 ### Cross-Checking tmp/ Files
 
 `tmp/review_code.md` and `tmp/response_code.md` are global singletons (no feature prefix). To avoid attributing a stale review to the wrong feature:
-- Parse commit hashes from `tmp/review_code.md` findings (each finding includes a commit hash)
-- Verify those commits belong to the current feature's implementation window (after plan commit, before next feature)
-- If commits don't match: treat as stale, ignore the review file
+- Parse commit hashes from `tmp/review_code.md` findings (each finding includes a `**Commit:**` hash)
+- Verify those commits appear in `git log --grep='{feature_name}'` output (feature-scoped, avoids "implementation window" boundary ambiguity)
+- If commits don't match current feature: treat as stale, ignore the review file
+- Same cross-check for `tmp/review_analysis.md`: verify its `**Reviewed:**` field matches the current spec path
 
 ### Ambiguity Handling
 
@@ -251,7 +254,7 @@ What's next?
 ## Scope of Changes
 
 **New files:**
-- `ai-dev-tools/skills/orchestrate/SKILL.md` (~280-320 lines) — the orchestrator workflow, state detection, quality gate triggers, core loop steps
+- `ai-dev-tools/skills/orchestrate/SKILL.md` (~300-340 lines) — the orchestrator workflow, state detection, quality gate triggers, core loop steps
 
 **No reference files needed** — orchestrate dispatches to other skills; it doesn't have its own analysis or generation logic.
 
@@ -299,7 +302,8 @@ Orchestrate is a **dispatcher** — it invokes these skills (one per `/orchestra
 
 Quality gates are **recommended, not invoked:**
 - /convention-enforcer, /api-contract-guard, /test-audit, /consolidate
-- /refactor-to-layers, /refactor-to-monorepo, /session-handoff
+- /refactor-to-layers, /session-handoff
+- /refactor-to-monorepo is invoked manually (no automatic trigger — user decides when codebase needs monorepo extraction)
 
 ---
 
