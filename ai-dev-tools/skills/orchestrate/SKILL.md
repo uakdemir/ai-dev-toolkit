@@ -94,9 +94,28 @@ This check matches both "Approved" and "Approved with suggestions" as passing �
 **Trigger:** Spec Approved (or Approved with suggestions), no matching plan file in `docs/superpowers/plans/`. Match plan files by extracting the feature name from the spec filename and looking for `*-{feature_name}-plan.md`.
 
 **Behavior:**
-- Present: "Spec approved. Ready to write the implementation plan?"
-- On confirm: invoke `superpowers:writing-plans`
-- The writing-plans skill produces a plan file in `docs/superpowers/plans/` with checkboxes for each task.
+- Present: "Spec approved. I'll extract architectural decisions as ADRs, then write the implementation plan. Proceed?"
+- On confirm:
+  1. **ADR extraction (inline pre-processing):** Follow the extraction algorithm in `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`. This is NOT a skill invocation — no conversation takeover. Read the reference file and execute the algorithm directly.
+     - Report result (including any overlap warnings):
+
+       If qualifying decisions found:
+       > "Extracted {N} architectural decisions:
+       >   1. [{score}] {title}
+       >   2. [{score}] {title}
+       >   Filtered: {M} low-impact decisions"
+
+       If zero qualifying decisions:
+       > "No architectural decisions met the threshold for ADRs."
+
+     - **On extraction failure:** Do not auto-proceed. Report the failure and offer: (1) Retry extraction, (2) Skip ADRs and write plan, (3) Exit.
+
+  2. **Invoke `superpowers:writing-plans`** (single skill takeover for this invocation).
+- On decline: skip to next `/orchestrate` invocation. No files written.
+
+**Design constraint:** One skill takeover per invocation maintained. ADR extraction is an inline pre-processing action, not a `/document-for-ai` skill invocation. The extraction algorithm is defined once in the reference file, consumed by both the standalone command and orchestrate. The only skill takeover in Step 4 is `superpowers:writing-plans`.
+
+**Commit guidance:** ADR files and plan file are written to disk during Step 4 but not auto-committed. When committed, include `document-for-ai` in the commit message (e.g., `docs(document-for-ai): extract ADRs from feature-X spec`) so the Step 8 quality gate baseline detection works.
 
 ### Step 5: IMPLEMENT
 
@@ -223,6 +242,7 @@ Checked after Step 8 (cycle completion) and presented as recommendations. Qualit
 | convention-enforcer | >20 files changed since last run | `git diff --name-only {baseline}..HEAD` where baseline = last commit with `convention-enforcer` in message | "Warning: {N} files changed since last convention-enforcer. Run `/convention-enforcer`" |
 | api-contract-guard | New module directory created OR >15 files added | `git log --diff-filter=A --name-only {baseline}..HEAD` for new top-level directories or bulk additions | "Warning: New module `{name}` created. Run `/api-contract-guard`" |
 | test-audit | >10 commits since last run | `git log --oneline {baseline}..HEAD` where baseline = last commit with `test-audit` in message | "Warning: {N} commits since last test-audit. Run `/test-audit`" |
+| document-for-ai | >15 files changed since last run | `git diff --name-only {baseline}..HEAD` where baseline = last commit with `document-for-ai` in message. **Fallback:** If no commit message contains `document-for-ai`, check `git log -- docs/architecture/adrs/ docs/architecture/adrs.md AI_INDEX.md` for the most recent commit touching any ADR artifact. No baseline from either = "never run," always recommend. | "Warning: {N} files changed since last doc update. Run `/document-for-ai`" |
 | consolidate | >40 commits since last run | Same pattern with `consolidate` baseline | "Info: {N} commits since last consolidate. Run `/consolidate`" |
 | refactor-to-layers | Module exceeds ~30K lines | Scan directories containing source files, `wc -l` (directory detection is project-dependent — scan for directories containing source files) | "Warning: Module `{name}` at {N}K lines. Consider `/refactor-to-layers`" |
 | session-handoff | Long conversation (>50 exchanges) or user mentions context pressure | Heuristic based on conversation length (context window usage cannot be directly queried) | "Info: Long conversation. Consider `/session-handoff` before next feature" |
@@ -250,7 +270,7 @@ What's next?
 
 - Warnings first, info second.
 - Max 3 recommendations at a time. If more than 3 gates trigger, show the top 3 by priority.
-- Priority order: convention-enforcer > api-contract-guard > test-audit > consolidate > refactor-to-layers > session-handoff.
+- Priority order: convention-enforcer > api-contract-guard > test-audit > document-for-ai > consolidate > refactor-to-layers > session-handoff.
 - User can always choose "something else" — never locked into recommendations.
 - "What's next?" always offers 3 options: next feature, run a recommendation, or something else.
 
@@ -299,6 +319,7 @@ Orchestrate is a **dispatcher** — it invokes these skills (one per `/orchestra
 | /convention-enforcer | File count threshold |
 | /api-contract-guard | New directory or bulk file additions |
 | /test-audit | Commit count threshold |
+| /document-for-ai | File count threshold |
 | /consolidate | Commit count threshold |
 | /refactor-to-layers | Line count threshold |
 | /session-handoff | Conversation length heuristic |
