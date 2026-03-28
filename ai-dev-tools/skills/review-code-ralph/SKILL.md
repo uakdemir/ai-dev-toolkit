@@ -1,6 +1,6 @@
 ---
 name: review-code-ralph
-description: Iterative code review loop between Claude and Codex. Reviews commits, fixes critical issues, runs verification commands, and loops until zero criticals and no verification regressions. Use when you want automated multi-pass code quality improvement.
+description: Iterative code review loop between Claude and Codex. Reviews commits, fixes all issues by severity, runs verification commands, and loops until zero criticals and no verification regressions. Use when you want automated multi-pass code quality improvement.
 ---
 
 # Review Code Ralph
@@ -111,7 +111,7 @@ When building the reviewer prompt, look for Architecture Decision Records:
 
 ## Setup
 
-1. Ensure `./tmp/` directory exists (create if needed). Delete stale `./tmp/iteration-*.md` files.
+1. Ensure `./tmp/` directory exists (create if needed). Delete stale `./tmp/iteration-*.md` files. Delete stale `./tmp/fix-report.json` if it exists.
 2. Write the review JSON schema to `./tmp/review.schema.json`:
 
 ```json
@@ -243,28 +243,29 @@ Print: `[ralph] Reviewer (<reviewer>): {critical_count} critical, {high_count} h
 
 If `critical_count == 0`:
 1. Run verification commands, compare to baseline.
-2. If no regressions: write iteration log with outcome "0 criticals + verification pass, loop complete", jump to **Final Report**.
+2. If no regressions: run **Backlog Writing** (all issues as `status: found`), write iteration log with outcome "0 criticals + verification pass, loop complete", jump to **Final Report**.
 3. If regressions: inject synthetic critical issues into review.json — one per regression with `category: "bug"`, `severity: "critical"`, `confidence: 85`, describing the verification failure. Continue to Fix Phase.
 
 ### Fix Phase
 
-Print: `[ralph] Coder (<coder>): Fixing {critical_count} critical issues...`
+Print: `[ralph] Coder (<coder>): Fixing {total_count} issues ({critical_count} critical, {high_count} high, {medium_count} medium)...`
 
 Record: `before_sha=$(git rev-parse HEAD)`
 
 **If coder = claude:**
 1. Read `./tmp/review.json` via the Read tool.
-2. Extract all issues where `severity == "critical"`.
+2. Extract all issues from `./tmp/review.json`, ordered by severity (critical, high, medium).
 3. Collect any verification regressions from the previous Verify step (persisted between iterations).
-4. Read `prompts/claude-coder.md` from this skill's directory. Replace `{{CRITICAL_ISSUES}}` with the extracted criticals and `{{VERIFICATION_REGRESSIONS}}` with any regression details.
-5. Follow its instructions to fix all critical issues and regressions in one pass.
-6. Commit: `fix(ralph): resolve N critical issues from iteration M`
+4. Read `prompts/claude-coder.md` from this skill's directory. Replace `{{ALL_ISSUES}}` with the extracted issues and `{{VERIFICATION_REGRESSIONS}}` with any regression details. `{{VERIFICATION_REGRESSIONS}}` remains unchanged — the existing verification-regression channel continues to pass regression details separately. Regressions are NOT included in fix-report.json or backlog entries — they are synthetic issues injected by the orchestrator and tracked via the existing verification flow.
+5. Follow its instructions to fix all issues and regressions in one pass.
+6. The coder produces `./tmp/fix-report.json` alongside the code changes.
+7. Commit: `fix(ralph): resolve N issues from iteration M`
 
 **If coder = codex:**
 1. Read `./tmp/review.json`.
-2. Extract all issues where `severity == "critical"`.
+2. Extract all issues from `./tmp/review.json`, ordered by severity (critical, high, medium).
 3. Read `prompts/codex-coder.md` from this skill's directory.
-4. Replace placeholders: `{{CRITICAL_ISSUES}}` (rendered as numbered markdown blocks with `location` field for file targeting), `{{VERIFICATION_REGRESSIONS}}`, `{{SPEC_CONTENT}}`, `{{ITERATION_NUM}}`.
+4. Replace placeholders: `{{ALL_ISSUES}}` (rendered as numbered markdown blocks with `location` field for file targeting, grouped by severity), `{{VERIFICATION_REGRESSIONS}}`, `{{SPEC_CONTENT}}`, `{{ITERATION_NUM}}`.
 5. Write resolved prompt to `./tmp/codex-prompt.txt`.
 6. Run via Bash (timeout: 300000ms):
 ```bash
@@ -274,6 +275,38 @@ codex exec -s workspace-write \
 ```
 7. If the command fails: retry once. If second failure, write iteration log with error, print "Aborted with error" output, stop.
 
+### Fix Report (`./tmp/fix-report.json`)
+
+The coder produces `./tmp/fix-report.json` reporting the disposition of every issue from `review.json`:
+
+```json
+{
+  "dispositions": [
+    {
+      "issue_index": 0,
+      "action": "fixed",
+      "detail": null
+    },
+    {
+      "issue_index": 3,
+      "action": "deferred",
+      "detail": "Requires database migration outside current scope"
+    },
+    {
+      "issue_index": 5,
+      "action": "pushed-back",
+      "detail": "This is intentional behavior per requirement X in the spec"
+    }
+  ]
+}
+```
+
+- `issue_index` refers to the position in the `issues` array of `./tmp/review.json`
+- `action` is one of: `fixed`, `deferred`, `pushed-back`
+- `detail` is null for fixed issues, required string for deferred/pushed-back
+- **Completeness requirement:** Every issue in `review.json` must have a corresponding entry in `fix-report.json`. If `fix-report.json` is missing entries, treat the missing issues as `status: found` and log a warning: `[ralph] Warning: fix-report.json missing disposition for issue {index}`. If `fix-report.json` is entirely missing or malformed JSON, treat all issues as `status: found` and log an error: `[ralph] Error: fix-report.json missing/malformed, all issues recorded as found`.
+- Verification regressions are excluded from fix-report.json — they are addressed via the existing regression-fix path, not the disposition system.
+
 ### Post-Fix: SHA Tracking and Auto-Commit
 
 Record: `after_sha=$(git rev-parse HEAD)`
@@ -282,7 +315,7 @@ Record: `after_sha=$(git rev-parse HEAD)`
 
 **If `before_sha == after_sha` (no commits made):**
 1. Check `git status` for changes. If untracked files are present, ask user: `"[ralph] New files detected: <list>. Include in fix commit? (y/n)"`. If yes: `git add -A` and commit. If no: abort the loop: `"[ralph] Aborting — untracked files must be resolved before continuing. Please include, delete, or .gitignore them and re-run."`
-2. If only tracked-file modifications: `git add -u` and commit: `fix(ralph): resolve N critical issues from iteration M`.
+2. If only tracked-file modifications: `git add -u` and commit: `fix(ralph): resolve N issues from iteration M`.
 3. Re-check `after_sha`. If still no changes: log warning, next iteration re-reviews same scope.
 4. A "no changes" iteration counts toward `--max-iterations`.
 
@@ -302,6 +335,37 @@ Print: `[ralph] Verification: <command1> PASS | <command2> REGRESSION | ...`
 
 **Persist regressions:** If any regressions were detected, store the details (command, expected exit code, actual exit code) for the next iteration. These are passed to both the reviewer (via `{{PREVIOUS_FINDINGS}}` context) and the coder (via `{{VERIFICATION_REGRESSIONS}}`). Regressions persist until the verification command passes again.
 
+### Backlog Writing
+
+Append all issues from this iteration to the backlog. This occurs after Verify and before the Iteration Log.
+
+1. Read `ai-dev-tools/references/backlog-entry-format.md` for the entry template.
+2. If `./tmp/past-issues-backlog.md` does not exist, create it with the header:
+   ```
+   # Past Issues Backlog
+
+   > Auto-generated by review skills. Do not edit manually.
+   ```
+3. If no fix phase ran this iteration (stop-check), set `status: found` for all issues and skip fix-report.json cross-referencing. Otherwise, for each issue in `./tmp/review.json`:
+   - Cross-reference with `./tmp/fix-report.json` to get the disposition
+   - `fixed` → `status: fixed`
+   - `deferred` → `status: deferred` + deferral reason from fix-report
+   - `pushed-back` → `status: pushed-back` + reason from fix-report
+   - If an issue has no matching entry in fix-report.json → `status: found` (with warning logged)
+4. `Source: review-code-ralph`
+5. `Iteration: N` included on every entry
+6. `Confidence` included
+7. `Commit`: use `after_sha` from the current iteration. On stop-check iterations (no fix phase), use HEAD.
+8. `Date`: current UTC timestamp at time of backlog entry creation (ISO 8601 format).
+9. Status reflects the coder's disposition regardless of verification outcome — verification regressions are tracked separately in the iteration log.
+10. Issue title: derive from the `problem` field — use the first sentence, truncated to 80 characters. If the first sentence exceeds 80 characters, truncate at the last word boundary and append `...`.
+
+**Failure-path rule:** If an iteration aborts (fix phase failure, Codex timeout, etc.) but a valid `./tmp/review.json` exists from the current iteration's review phase, backlog entries must still be appended before the abort completes. Since no reliable `fix-report.json` exists on the abort path, record every issue as `status: found` and log a warning: `[ralph] Warning: iteration aborted, recording {N} issues as found`.
+
+**Stop-check iterations:** If the stop check fires (0 criticals, no fix phase runs), still append the issues from that final review with `status: found`.
+
+**Deduplication:** None. If the same issue appears across iterations, it gets written each time. Repetition is intentional — it signals difficulty for downstream pattern mining.
+
 ### Iteration Log
 
 Write to `./tmp/iteration-{iteration}.md`:
@@ -312,12 +376,19 @@ Write to `./tmp/iteration-{iteration}.md`:
 **Reviewer:** {reviewer}
 **Coder:** {coder}
 **Scope:** last {commit-count} commits | commits {before_sha}..{after_sha}
-**Critical issues found:** {critical_count}
-**Outcome:** [one of: "Fixed N issues, continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>" | "No fixes attempted (loop aborted)"]
-**Issues fixed:** [list as [category] at [file:line], or "N/A" if no fix phase ran]
+**Issues found:** {critical_count} critical, {high_count} high, {medium_count} medium
+**Outcome:** [one of: "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>" | "No fixes attempted (loop aborted)"]
+**Issues fixed:** {list each as [category] [severity] at [location]}
+**Issues deferred:** {list each as [category] [severity] at [location] — reason}
+**Issues pushed back:** {list each as [category] [severity] at [location] — reason}
+**Issues found (no disposition):** {list each as [category] [severity] at [location], or "none"}
 **Commits added:** {after_sha short} (or "none")
 **Verification:** {command1} PASS | {command2} REGRESSION | ...
 ```
+
+When no fix phase runs (stop-check iteration), set `Issues fixed`, `Issues deferred`, `Issues pushed back`, and `Issues found (no disposition)` to `N/A`.
+
+The `Issues found (no disposition)` line captures issues where fix-report.json was incomplete or malformed — the fallback `status: found` cases. When fix-report.json is complete, this line shows "none".
 
 Print: `[ralph] Fixed. Starting iteration {iteration + 1}.`
 

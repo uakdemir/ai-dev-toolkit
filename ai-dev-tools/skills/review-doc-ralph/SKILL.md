@@ -40,7 +40,7 @@ Parse arguments after `/review-doc-ralph`:
 
 ## Setup
 
-1. Ensure `./tmp/` directory exists (create if needed).
+1. Ensure `./tmp/` directory exists (create if needed). Delete stale `./tmp/fix-report.json` if it exists.
 2. If `--max-iterations` is 0: skip loop entirely. Do not create any files (no review.schema.json, review.json, or iteration logs). Print and exit:
 ```
 Ralph Wiggum Loop Skipped
@@ -123,25 +123,27 @@ Print: `[ralph] Reviewer (<reviewer>): {critical_count} critical, {high_count} h
 ### Stop Check
 
 If `critical_count == 0`:
-1. Write iteration log to `./tmp/iteration-{iteration}.md` with outcome "0 criticals, loop complete" and `Issues fixed: N/A`.
+1. Write iteration log to `./tmp/iteration-{iteration}.md` with outcome "0 criticals, loop complete" and `Issues fixed: N/A`, `Issues deferred: N/A`, `Issues pushed back: N/A`, `Issues found (no disposition): N/A`.
 2. Jump to **Final Report**.
 
 ### Fix Phase
 
-Print: `[ralph] Coder (<coder>): Fixing {critical_count} critical issues...`
+Print: `[ralph] Coder (<coder>): Fixing {total_count} issues ({critical_count} critical, {high_count} high, {medium_count} medium)...`
 
 Compute a document hash before fixing: `before_hash=$(sha256sum '<doc-path>' | cut -d' ' -f1)` via Bash.
 
 **If coder = claude:**
 1. Read `./tmp/review.json` via the Read tool.
-2. Extract all issues where `severity == "critical"`.
-3. Read `prompts/claude-coder.md` from this skill's directory and follow its instructions to fix all critical issues in one pass.
+2. Extract all issues from `./tmp/review.json`, ordered by severity (critical, high, medium).
+3. Read `prompts/claude-coder.md` from this skill's directory. The orchestrator injects all issues (not just criticals) via conversation context, grouped by severity. Include instructions for producing `./tmp/fix-report.json` and for when to defer/push-back.
+4. Follow its instructions to fix all issues in one pass.
+5. The coder produces `./tmp/fix-report.json` alongside the edits.
 
 **If coder = codex:**
 1. Read `./tmp/review.json`.
-2. Extract all issues where `severity == "critical"`.
+2. Extract all issues from `./tmp/review.json`, ordered by severity (critical, high, medium).
 3. Read `prompts/codex-coder.md` from this skill's directory.
-4. Replace placeholders: `{{DOC_PATH}}`, `{{CRITICAL_ISSUES}}` (rendered as numbered markdown blocks), `{{AGAINST_PATH}}`.
+4. Replace placeholders: `{{DOC_PATH}}`, `{{ALL_ISSUES}}` (rendered as numbered markdown blocks, grouped by severity), `{{AGAINST_PATH}}`.
 5. Write resolved prompt to `./tmp/codex-prompt.txt`.
 6. Run via Bash (timeout: 300000ms):
 ```bash
@@ -150,6 +152,10 @@ codex exec -s workspace-write \
   "$(cat ./tmp/codex-prompt.txt)"
 ```
 7. If the command fails: retry once. If second failure, write iteration log with error, print "Aborted with error" output, stop.
+
+### Fix Report (`./tmp/fix-report.json`)
+
+The coder produces `./tmp/fix-report.json` reporting the disposition of every issue from `review.json`. Same format and completeness requirement as review-code-ralph: missing dispositions default to warning + `found`, missing/malformed file triggers error + all issues recorded as `found`.
 
 ### Verify Fix
 
@@ -165,10 +171,17 @@ Written after every review phase (not just after fix). Write to `./tmp/iteration
 
 **Reviewer:** {reviewer}
 **Coder:** {coder}
-**Critical issues found:** {critical_count}
-**Outcome:** [one of: "Fixed N issues, continuing" | "0 criticals, loop complete" | "Fix phase failed: <error>" | "No fixes attempted (loop aborted)"]
-**Issues fixed:** {list each as [category] at [location], or "N/A" if no fix phase ran}
+**Issues found:** {critical_count} critical, {high_count} high, {medium_count} medium
+**Outcome:** [one of: "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, loop complete" | "Fix phase failed: <error>" | "No fixes attempted (loop aborted)"]
+**Issues fixed:** {list each as [category] [severity] at [location]}
+**Issues deferred:** {list each as [category] [severity] at [location] — reason}
+**Issues pushed back:** {list each as [category] [severity] at [location] — reason}
+**Issues found (no disposition):** {list each as [category] [severity] at [location], or "none"}
 ```
+
+When no fix phase runs (stop-check iteration), set `Issues fixed`, `Issues deferred`, `Issues pushed back`, and `Issues found (no disposition)` to `N/A`.
+
+The `Issues found (no disposition)` line captures issues where fix-report.json was incomplete or malformed — the fallback `status: found` cases. When fix-report.json is complete, this line shows "none".
 
 Print: `[ralph] Fixed. Starting iteration {iteration + 1}.`
 
