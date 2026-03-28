@@ -1,7 +1,7 @@
 # implement-plan: Monorepo Migration Execution — Design Spec
 
 **Date:** 2026-03-28
-**Status:** Approved (R1 revisions applied)
+**Status:** Approved (R2 revisions applied)
 **Plugin:** ai-dev-tools
 **Skill:** implement-plan (enhancement)
 **Type:** Enhancement to existing skill
@@ -60,9 +60,9 @@ After locating the plan file, detect format by content:
 
 ---
 
-## Serena Warning (Step 1 — Modified)
+## Serena Warning (evaluated after Step 2)
 
-After Serena detection, behavior depends on plan type:
+After Serena detection (Step 1) AND format detection (Step 2), evaluate the Serena warning based on plan type. The enhanced monorepo warning runs between Step 2 and Step 3, not during Step 1 — because plan type is only known after format detection.
 
 **Layer plans:** unchanged — existing warning and confirmation prompt when Serena unavailable (current behavior already warns: "Serena is not available. Import rewrites will use regex matching." and asks "Are you sure you want to continue without Serena?").
 
@@ -89,17 +89,19 @@ When format detection identifies a monorepo migration plan, Step 3 parses it int
 
 ### Parsing Algorithm
 
-1. **Identify phases** — scan for `## Phase N:` headings or `**Phase N:**` bold markers. Each match starts a new phase.
-2. **For Phase 0 (Preparation):** extract:
-   - Workspace config details (what tool/config to generate)
-   - Shared library file list (from "Extract shared library" or "Files to move" sub-section)
-   - Import paths to update (from "Update all import paths" sub-section)
-3. **For Phases 1-N (Module Extraction):** extract per phase:
-   - Module name (from the phase heading, e.g., "Phase 1: Extract auth module")
-   - Files to move (from "Files to move" sub-section — lines matching `- path/to/file` or `  path/to/file`)
-   - Imports to update (from "Imports to update" sub-section)
-   - Config changes (from "Configuration changes" sub-section)
-   - Verification commands (from "Tests to verify" sub-section)
+1. **Identify phases** — scan for `## Phase N:` headings, `**Phase N:**` bold markers, or `[DONE] ## Phase N:` / `[DONE] **Phase N:**` (resume markers). The `## Phase N:` heading format is anticipated from AI formatting behavior; the `**Phase N:**` bold-marker format is the contractual format from refactor-to-monorepo. Match both for robustness.
+2. **For Phase 0 (Preparation):** extract using keyword matching (case-insensitive, matching in any heading, bold marker, or numbered list item):
+   - Workspace config details (keyword: `workspace`, `monorepo configuration`)
+   - Shared library file list (keyword: `shared library`, `shared/ candidates`, `files to move`)
+   - Import paths to update (keyword: `import paths`, `update all import`)
+3. **For Phases 1-N (Module Extraction):** extract per phase using keyword matching:
+   - Module name (from the phase text, e.g., "Phase 1: Extract auth module" → "auth")
+   - Files to move (keyword: `files to move` — lines matching `- path/to/file` or `  path/to/file` under the matched keyword)
+   - Imports to update (keyword: `imports to update`)
+   - Config changes (keyword: `configuration changes`)
+   - Verification commands (keyword: `tests to verify`, `verify`, `checkpoint`)
+
+**Note:** The upstream refactor-to-monorepo uses numbered list items (`1. Files to move`, `2. Imports to update`) not sub-section headings. The parser matches on content keywords rather than requiring exact heading format.
 
 ### Internal Data Model (per phase)
 
@@ -108,7 +110,7 @@ When format detection identifies a monorepo migration plan, Step 3 parses it int
   phase_number: number,           // 0 for preparation, 1-N for modules
   phase_name: string,             // e.g., "Preparation", "Extract auth module"
   module_name: string | null,     // null for Phase 0, module name for 1-N
-  target_package_path: string | null, // e.g., "packages/auth" (derived from module name)
+  target_package_path: string | null, // extracted from migration plan file-move targets, or derived per-stack: Node.js = packages/{name}, Python = packages/{name}, .NET = {name}/. Phase 0 shared = shared/ or packages/shared.
   files_to_move: [
     { source: string, target: string }  // source in monolith, target in new package
   ],
@@ -124,7 +126,7 @@ When format detection identifies a monorepo migration plan, Step 3 parses it int
 ### Validation
 
 - At least Phase 0 must exist
-- Each phase must have at least one file to move (except Phase 0 which may only have workspace config)
+- Each Phase 1-N must have at least one file to move. Phase 0 is valid with or without files to move (it may consist solely of workspace configuration).
 - File paths must be valid relative paths
 - Warn on any phase that cannot be parsed: "Phase N could not be fully parsed. Review manually."
 
@@ -167,9 +169,9 @@ Map existing Step 6 options to monorepo execution:
 Mark completed phases in the migration plan using a `[DONE]` prefix on the phase heading:
 
 ```markdown
-[DONE] ## Phase 0: Preparation
+## [DONE] Phase 0: Preparation
 ...
-[DONE] ## Phase 1: Extract auth module
+## [DONE] Phase 1: Extract auth module
 ...
 ## Phase 2: Extract billing module    ← resume from here
 ...
@@ -197,7 +199,7 @@ On resume, check actual filesystem state before each action:
 - `create-package`: if package directory + manifest already exist, skip
 - `move-file`: if source doesn't exist but target does, skip (already moved)
 - `rewrite-cross-package-import`: re-scan — some imports may already be rewritten
-- `create-workspace-config`: if config exists, skip
+- `create-workspace-config`: if config exists, skip. If workspace config was intentionally skipped (e.g., Python namespace packages), mark as "not applicable" rather than pending — resume logic treats these differently.
 
 ---
 
@@ -213,7 +215,7 @@ Action sequence:
    - Python: `pyproject.toml` with workspace config (if using hatch/pdm) or `pants.toml` (if using pants). If using plain namespace packages with no workspace tool, skip and note: "No workspace config needed for namespace packages."
    - .NET: `.sln` file updates
    - Use templates from `references/execution-patterns.md`
-2. **create-shared-package** — create the shared library package (directory + manifest with placeholder dependencies)
+2. **create-package** — create the shared library package (directory + manifest with placeholder dependencies)
 3. **move-files** — move identified shared code to the shared package
 4. **rewrite-cross-package-import** — update all import paths referencing moved shared code to use workspace package names (Serena or regex)
 5. **verify** — run build + tests, checkpoint: "All tests pass after shared extraction?"
@@ -278,7 +280,9 @@ Add for monorepo:
 | `create-package` | Create package directory + manifest with placeholder deps | N/A (file creation) | N/A (file creation) |
 | `create-workspace-config` | Generate workspace config at monorepo root | N/A (file creation) | N/A (file creation) |
 | `rewrite-cross-package-import` | Update imports to use workspace package names instead of relative paths | `find_referencing_symbols` + path rewrite | Regex scan + path substitution |
-| `update-config` | Modify build/test config per migration plan (AI-judgment step with per-stack examples) | Direct file edit | Direct file edit |
+| `update-config` | Modify build/test config per migration plan instructions | Direct file edit | Direct file edit |
+
+**`update-config` note:** This is an AI-judgment action — no deterministic algorithm. The AI interprets the migration plan's free-form "Configuration changes" text using per-stack examples as guidance. Unlike other action types, there is no source/target pair or pattern template.
 
 The `move-file` action type is reused from the existing layer plan support.
 
@@ -377,7 +381,7 @@ The existing execution report at `tmp/execution-report.md` needs a monorepo-spec
 
 **Modified files:**
 
-- `ai-dev-tools/skills/implement-plan/SKILL.md` (~80-100 lines)
+- `ai-dev-tools/skills/implement-plan/SKILL.md` (~120-150 lines)
   - Frontmatter description: add monorepo migration language
   - Step 1: add stronger Serena warning for monorepo plans
   - Step 2: add auto-detect search path + format detection logic
@@ -397,10 +401,10 @@ The existing execution report at `tmp/execution-report.md` needs a monorepo-spec
 
 - `ai-dev-tools/skills/implement-plan/references/verification-patterns.md` (~20-30 lines)
   - New section: multi-package verification commands per stack
-  - Monorepo execution report template (phase summary table)
+  - Monorepo execution report template (phase summary table) — coexists alongside existing layer report template under separate headings. Template selected based on detected plan type.
   - Post-execution next steps for monorepo
 
-**Total: ~180-230 lines across 3 files**
+**Total: ~220-280 lines across 3 files**
 
 **Not modified:**
 - `ai-dev-tools/skills/refactor-to-monorepo/` — no changes to upstream skill or its output format
@@ -423,7 +427,8 @@ Add these rows to the existing error handling table:
 | Cross-package import rewrite fails (regex ambiguity) | Flag the specific import, show what regex would do, let user confirm or manually fix. |
 | Phase N verification fails | Same as existing: stop, report failures, do not proceed to Phase N+1. User can fix and resume. |
 | CI setup needed | Output instructions only: "Manual step: Set up CI. See monorepo-tooling.md." |
-| Migration plan cannot be parsed | Warn: "Phase N could not be fully parsed. Review manually." Skip unparseable phases. |
+| Migration plan cannot be parsed | Warn: "Phase N could not be fully parsed." Stop execution at the unparseable phase. User can fix the migration plan and resume. No skip — later phases may depend on earlier ones. |
+| Config instruction ambiguous or target file not found | Present the instruction to user for manual execution. Continue with remaining actions in the phase. |
 
 ---
 
