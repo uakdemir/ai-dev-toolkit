@@ -89,12 +89,12 @@ If `docs/architecture/adrs/` directory does not exist, skip ADR loading silently
 1. **Enumerate diff file paths.** Run `git diff --name-only HEAD~{COMMIT_COUNT}..HEAD` to collect changed file paths. This is lightweight and precedes ADR loading.
 
 2. **Discover ADR files.** Build the candidate list by unioning two sources:
-   - Read `docs/architecture/adrs.md` index to get linked ADR paths.
+   - Read `docs/architecture/adrs.md` index to get linked ADR paths. If the index file is missing or unreadable, skip this source entirely.
    - Enumerate `docs/architecture/adrs/*.md` directly (excluding `archive/`).
 
-   Union both sets by file path. This ensures ADRs are found even when the index is stale, missing, or out of sync.
+   Union both sets by file path. After unioning, discard any path under `docs/architecture/adrs/archive/` (a stale index may reference archived ADRs) and any path that does not exist on disk. This ensures review-code finds ADRs even when the index is stale, missing, or out of sync — and never loads archived ADRs regardless of index state.
 
-3. **Read frontmatter only.** For each discovered ADR, read only the YAML frontmatter (up to closing `---`). Extract `code_paths` and `status`.
+3. **Read frontmatter only.** For each discovered ADR that exists on disk, read only the YAML frontmatter (up to closing `---`). Extract `code_paths` and `status`.
 
 4. **Status filter.** Skip any ADR where `status` is not `Accepted`. Frontmatter `status` is the single source of truth.
 

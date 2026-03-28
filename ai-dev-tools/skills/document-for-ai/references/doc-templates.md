@@ -1,6 +1,6 @@
 # Doc Templates
 
-Six purpose-specific templates are available. Each template defines the section structure for a doc with that `purpose` value. The `purpose` frontmatter field must match one of the six template names exactly (except for the special-case `adr` template, which is only produced via explicit command invocation). Use the section descriptions below to know what content belongs in each section when generating or migrating a doc.
+Six purpose-specific templates are available. Each template defines the section structure for a doc with that `purpose` value. The `purpose` frontmatter field must match one of the six template names exactly (except for the special-case `adr` template, which is never auto-detected from code analysis). Use the section descriptions below to know what content belongs in each section when generating or migrating a doc.
 
 ---
 
@@ -66,7 +66,7 @@ Use when documenting known issues, debugging procedures, or incident runbooks.
 
 ## Template: adr
 
-Use when documenting an architectural decision — a choice with significant reversibility cost or blast radius that future development must respect. ADRs are never auto-detected from code analysis. They are only produced via explicit `/document-for-ai adr {spec_path}` command invocation.
+Use when documenting an architectural decision — a choice with significant reversibility cost or blast radius that future development must respect. ADRs are never auto-detected from code analysis. They are produced either via explicit `/document-for-ai adr {spec_path}` command or automatically by orchestrate Step 4 — both use the same extraction algorithm in `references/adr-extraction.md`.
 
 - **Title**: The decision in imperative or declarative form.
 - **Status**: One of: Proposed, Accepted, Superseded, Deprecated.
