@@ -115,7 +115,21 @@ If seeds were provided in Step 2: Pre-populate the file-to-domain mapping with s
    - Every source file assigned to exactly one domain, `shared/`, or `unassigned`.
    - Format: table with columns `File Path`, `Assigned Domain`, `Confidence`.
    - Target: zero `unassigned` files. If any remain, flag for user input.
-5. **User checkpoint:** When seeds are present, show seeded modules first with `[seeded]` tag, then auto-discovered modules. Ask "Merge, split, rename, or adjust?" — the user can adjust seeded modules too. When no seeds are present, use the original prompt: "I found these domain boundaries: [list with file counts per domain]. Does this match your mental model? Should I merge, split, or rename any domains?"
+5. **User checkpoint:** When seeds are present, use this format:
+
+   ```
+   Domain boundaries found:
+
+   [seeded] auth (23 files) — src/auth/, src/middleware/auth.ts + 18 auto-assigned
+   [seeded] billing (15 files) — src/billing/ + 3 auto-assigned
+   dashboard (31 files) — discovered via route analysis
+   notifications (8 files) — discovered via directory analysis
+   shared (12 files) — used by 3+ domains
+
+   Does this match your mental model? Merge, split, rename, or adjust?
+   ```
+
+   The user can adjust any domain at this checkpoint, including seeded ones. When no seeds are present, use the original prompt: "I found these domain boundaries: [list with file counts per domain]. Does this match your mental model? Should I merge, split, or rename any domains?"
 
 Wait for user confirmation before proceeding.
 
@@ -292,5 +306,5 @@ Load reference files only when needed to minimize context window usage:
 | No database / no tables found | Skip Phase 2 entirely. Proceed with domain analysis (Phase 1) and dependency graph (Phase 3) only. Note the Phase 2 skip in strategy.md under Current State Assessment. |
 | Partial failure in any phase | Proceed with completed phases. Include a "Limitations" section in strategy.md listing what could not be analyzed, which phase failed, and why. Affected artifacts note their limitations in a header warning. |
 | User seeds overlap (same file in two seeds) | Warn: "File `{path}` is in both `{seed_a}` and `{seed_b}`. Which module should own it?" Resolve before Phase 1. |
-| Seeded path does not exist | Warn: "Path `{path}` not found." Drop the path from the seed but keep the seed module. If all paths in a seed are invalid, drop the seed entirely with a warning. |
-| Seed name collides with auto-discovered domain | Auto-merge into the seeded module at Phase 1. Present the merge in the checkpoint with `[seeded]` tag. |
+| Seeded path does not exist | Warn: "Path `{path}` not found. Remove from seed or continue anyway?" If "continue," drop the path but keep the seed module. If all paths in a seed are invalid, drop the seed entirely with a warning. |
+| Seed name collides with auto-discovered domain | Auto-merge into the seeded module at Phase 1. Present in checkpoint: "[seeded] {name} (N files, including M auto-merged from discovered '{name}' domain)." |
