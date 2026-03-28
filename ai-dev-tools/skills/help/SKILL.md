@@ -23,7 +23,13 @@ For each discovered SKILL.md:
 
 ### Step 2: Build the COMMANDS table
 
-Produce a two-column markdown table: `Command` and `Description`.
+Produce a two-column indented plain-text list (not a markdown table). Each row is a slash command left-aligned with its description right-aligned after spacing. Use this exact format per row:
+
+```
+  /skill-name                        Short description here
+```
+
+Left-pad each row with 2 spaces. Use a minimum 2-space gap between the longest command and its description; shorter commands get more padding so descriptions align.
 
 **Row ordering:**
 1. First row: `/help` — hardcoded description `This help page`
@@ -44,11 +50,11 @@ Example derivations from frontmatter:
 
 ### Step 3: Build the SKILL FAMILIES section
 
-Use the static family mapping below. For each family, list only the member skills that were actually found during the scan (skip missing ones silently). Format each family as:
+Use the static family mapping below. For each family, list only the member skills that were actually found during the scan (skip missing ones silently). Format each family as an indented line with the family name left-aligned, followed by members comma-separated. Wrap long member lists to align with the first member:
 
 ```
-Family Name
-  skill-a, skill-b, skill-c
+  Review & Quality    review-doc, review-doc-ralph, review-code,
+                      review-code-ralph, test-audit
 ```
 
 Any non-help skill found during the scan that does not appear in any family below goes into an "Other" family at the end, using the same comma-separated format.
