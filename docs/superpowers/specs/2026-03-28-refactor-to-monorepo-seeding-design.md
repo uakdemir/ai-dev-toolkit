@@ -1,7 +1,7 @@
 # refactor-to-monorepo: User-Guided Module Seeding — Design Spec
 
 **Date:** 2026-03-28
-**Status:** Approved
+**Status:** Approved (R1 revisions applied)
 **Plugin:** ai-dev-tools
 **Skill:** refactor-to-monorepo (enhancement)
 **Type:** Enhancement to existing skill
@@ -28,16 +28,20 @@ Zero behavioral change for users who skip the seed step.
 |---|---|---|
 | Timing | Before analysis (Step 1.5) | Developer knowledge should constrain analysis, not react to it |
 | Detail level | Module name + key files/dirs | Gives concrete anchors without requiring full file mapping |
-| Constraint strength | Seeds are fixed | The whole point is that developer knows things analysis can't see |
+| Constraint strength | Seeds are fixed constraints on automated analysis | Analysis cannot override seeds. User can still adjust at checkpoints after seeing full data. |
 | Conflict resolution | Seed wins by default | Conflicts documented but resolved in favor of seed unless user overrides |
 | Injection points | Start only | Existing Phase 1 and Phase 4 checkpoints cover mid-analysis adjustments |
 | Approach | New Step 1.5 (optional) | Clean separation, existing steps minimally modified |
 
 ---
 
-## Step 1.5: Module Seed Collection (Optional)
+## New Step 2: Module Seed Collection (Optional)
 
-Insert between Step 1 (Tech Stack Selection) and Step 2 (Analysis Pipeline).
+Renumber existing steps: Step 2 (Analysis Pipeline) becomes Step 3, Step 3 (Output Artifacts) becomes Step 4. Update the Workflow Overview list accordingly. The new Step 2 is inserted between Tech Stack Selection and Analysis Pipeline.
+
+No changes to the Progressive Disclosure Schedule — this step requires no reference file reads. Existing load-point descriptions remain valid (they reference phase names, not step numbers).
+
+This step operates identically regardless of the tech stack selected in Step 1, including the "Other" path.
 
 ### Interaction
 
@@ -65,6 +69,8 @@ If **no**, proceed to Step 2 with an empty seed list. Analysis runs identically 
 
 ### Validation
 
+- If user opts in but adds zero seeds, confirm: "No seeds provided. Continue with automatic discovery?" Treat as equivalent to selecting "No."
+- Directory paths are expanded recursively — all files under the directory at any depth are assigned to the seed's module.
 - Verify each seeded path exists in the project. If a path doesn't exist, warn: "Path `{path}` not found. Remove from seed or continue anyway?"
 - If the same file appears in two seeds, warn: "File `{path}` is in both `{seed_a}` and `{seed_b}`. Which module should own it?" Resolve before proceeding.
 
@@ -74,11 +80,13 @@ If **no**, proceed to Step 2 with an empty seed list. Analysis runs identically 
 
 ### Phase 1 (Domain Analysis) — Modified
 
-**Before scanning:** Pre-populate the file-to-domain mapping with seeded paths. Each seeded file gets `Confidence: user-specified` (highest tier, above automated high/medium/low).
+**Add paragraph before Phase 1 sub-step 1 (SKILL.md line 62):** Pre-populate the file-to-domain mapping with seeded paths. Each seeded file gets `Confidence: user-specified`. Confidence tiers for the file-to-domain mapping: `user-specified` (from seeds) > `high` > `medium` > `low` (automated).
 
-**During scanning:** Automated analysis assigns remaining unassigned files to domains. It may create new domains not in the seed list — this is expected (the user seeded some modules, the analysis discovers others).
+**During scanning (sub-steps 1-4):** Automated analysis assigns remaining unassigned files to domains. During automated domain assignment, skip any file already assigned via a seed — seeds are never overridden by automated assignment. The analysis may create new domains not in the seed list — this is expected.
 
-**At the Phase 1 checkpoint:** Present seeded modules first with a `[seeded]` tag:
+If seeds cover all source files, Phase 1 reports that no additional domains were discovered and proceeds to the checkpoint with only seeded modules listed.
+
+**Replace Phase 1 checkpoint text (sub-step 5, SKILL.md line 77) with seeded format when seeds are present; retain original prompt when no seeds:**
 
 ```
 Domain boundaries found:
@@ -92,7 +100,7 @@ shared (12 files) — used by 3+ domains
 Does this match your mental model? Merge, split, rename, or adjust?
 ```
 
-The user can adjust any domain at this checkpoint — including seeded ones — using the existing merge/split/rename interaction. Seeds are not immutable after the user sees the data.
+The user can adjust any domain at this checkpoint — including seeded ones — at the existing Phase 1 checkpoint. Seeds are not immutable after the user sees the data.
 
 ### Phase 2 (Data Ownership) — Unchanged
 
@@ -104,7 +112,7 @@ No modifications. Coupling scores are computed between all modules including see
 
 ### Phase 4 (Synthesis & Conflict Resolution) — Modified
 
-Add one conflict resolution rule:
+Append to Phase 4 sub-step 4 (conflict resolution, SKILL.md lines 136-139) as an additional bullet:
 
 **When a conflict involves a user-seeded module:** The seed boundary is preserved by default. Document the conflict and what the automated analysis would have suggested:
 
@@ -120,17 +128,20 @@ The user can still override at the Phase 4 checkpoint if they change their mind 
 
 ## Error Handling Addition
 
-Add one row to the existing error handling table:
+Add these rows to the existing error handling table:
 
 | Scenario | Behavior |
 |---|---|
 | User seeds overlap (same file in two seeds) | Warn: "File `{path}` is in both `{seed_a}` and `{seed_b}`. Which module should own it?" Resolve before proceeding. |
+| Seeded path does not exist | Warn: "Path `{path}` not found. Remove from seed or continue anyway?" Continue with user's choice. |
+
+Other seed-related edge cases (empty directories, seed name collisions with auto-discovered domains) are handled at the Phase 1 checkpoint where the user can merge, split, or rename.
 
 ---
 
 ## Scope of Changes
 
-**Modified:** `ai-dev-tools/skills/refactor-to-monorepo/SKILL.md` only (~25 lines added/modified)
+**Modified:** `ai-dev-tools/skills/refactor-to-monorepo/SKILL.md` only (~35-40 lines added/modified, plus Workflow Overview renumbering)
 
 **Not modified:**
 - `references/tech-stacks.md` — seeds are a workflow concern, not stack-specific
