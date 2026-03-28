@@ -1,6 +1,6 @@
 # Doc Templates
 
-Five purpose-specific templates are available. Each template defines the section structure for a doc with that `purpose` value. The `purpose` frontmatter field must match one of the five template names exactly. Use the section descriptions below to know what content belongs in each section when generating or migrating a doc.
+Six purpose-specific templates are available. Each template defines the section structure for a doc with that `purpose` value. The `purpose` frontmatter field must match one of the six template names exactly (except for the special-case `adr` template, which is only produced via explicit command invocation). Use the section descriptions below to know what content belongs in each section when generating or migrating a doc.
 
 ---
 
@@ -61,6 +61,19 @@ Use when documenting known issues, debugging procedures, or incident runbooks.
 - **Diagnosis**: Steps to confirm the root cause. Ordered from cheapest to most invasive.
 - **Solutions**: Fixes for each confirmed cause. Mark each as temporary workaround or permanent fix. Include rollback steps where relevant.
 - **Prevention**: Changes — code, config, monitoring, or process — that would prevent this class of issue from recurring. Reference the ticket or PR if the fix has been shipped.
+
+---
+
+## Template: adr
+
+Use when documenting an architectural decision — a choice with significant reversibility cost or blast radius that future development must respect. ADRs are never auto-detected from code analysis. They are only produced via explicit `/document-for-ai adr {spec_path}` command invocation.
+
+- **Title**: The decision in imperative or declarative form.
+- **Status**: One of: Proposed, Accepted, Superseded, Deprecated.
+- **Context**: Why this decision was needed. What forces were in play.
+- **Decision**: What was chosen. Be specific — name the technology, pattern, or approach.
+- **Alternatives Considered**: What was rejected and why. List each alternative with the reason it was not chosen.
+- **Consequences**: Trade-offs accepted. What becomes easier, what becomes harder.
 
 ---
 
