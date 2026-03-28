@@ -20,8 +20,12 @@
 # Claude Code
 .claude/
 
+.serena/
+.codex
+
 # Working directories
 tmp/
 global/
 local/
 mnt
+
