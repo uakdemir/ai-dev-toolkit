@@ -95,7 +95,7 @@ If previous artifacts exist, present three options:
 
 **Single-project:** Each top-level directory under `src/` is a module (including `src/types/`, `src/config/`, `src/utils/`). Python: directories with `__init__.py` (or namespace packages). .NET: top-level namespace folders or projects.
 
-**Layer enrichment:** If a layer strategy spec exists (`docs/layer-architecture/strategy.md`), load it for priority enrichment at Step 8. Affects ordering only — not detection or generation.
+**Layer enrichment:** If a layer strategy spec exists (`docs/layer-architecture/strategy.md` or detected via refactor-to-layers output paths), load it for priority enrichment at Step 8. Affects ordering only — not detection or generation.
 
 **Edge cases:**
 - Nested modules: sub-module only if it has its own barrel file; otherwise internal to parent.
@@ -182,7 +182,7 @@ Read `references/contract-test-templates.md` now.
 
 ## Step 9a: Validate Artifacts
 
-**Barrel files:** Node.js: `npx tsc --noEmit {barrel_file}`. Python: `python -m py_compile {barrel_file}` (syntax check). .NET: N/A.
+**Barrel files:** Node.js: `npx tsc --noEmit {barrel_file}`. Python: `python -c "import {module_name}"` (verifies re-exports in `__init__.py` resolve). .NET: N/A.
 
 **Test files:** Node.js: `npx tsc --noEmit`. Python: `python -m py_compile`. .NET: `dotnet build --no-restore`.
 

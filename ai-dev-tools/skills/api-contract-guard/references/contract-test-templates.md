@@ -16,6 +16,10 @@ orchestrator using confirmed module data from the Module Analysis Format.
 | `{BARREL_PATH}` | Barrel file path | `src/auth/index.ts` |
 | `{SOURCE_EXTENSIONS}` | File extensions to scan | `['.ts', '.js']` |
 | `{MODULE_INTERNAL_DIRS}` | Dirs within the module (everything except the barrel) | `['src/auth/strategies', 'src/auth/guards']` |
+| `{WORKSPACE_PACKAGES}` | Package name → directory map (monorepo only, `{}` for single-project) | `{ '@myorg/auth': 'packages/auth' }` |
+| `{MODULE_PASCAL}` | PascalCase module name (.NET only) | `Auth` |
+| `{BARREL_NAMESPACE}` | Public barrel namespace (.NET only) | `MyApp.Auth` |
+| `{MODULE_INTERNAL_NAMESPACES}` | Internal sub-namespaces (.NET only) | `["MyApp.Auth.Strategies"]` |
 
 All placeholders are filled from the per-module analysis collected during
 Phase 1 (codebase scan) and confirmed during Phase 2 (user review).
@@ -45,6 +49,9 @@ const MODULE_NAME = '{MODULE_NAME}';
 const MODULE_PATH = '{MODULE_PATH}';
 const BARREL_PATH = '{BARREL_PATH}';
 const SOURCE_EXTENSIONS = [{SOURCE_EXTENSIONS}];
+// WORKSPACE_PACKAGES maps package names to directories (monorepo only, empty for single-project).
+// Populated by the orchestrator from workspace config. E.g.: { '@myorg/auth': 'packages/auth' }
+const WORKSPACE_PACKAGES: Record<string, string> = {WORKSPACE_PACKAGES};
 
 /**
  * Collect all source files in the project OUTSIDE the guarded module directory.
@@ -87,12 +94,37 @@ function extractImports(filePath: string): Array<{ line: number; importPath: str
 }
 
 /**
- * Check whether an import path resolves to a location inside the guarded
- * module directory. Only relative imports (starting with . or ..) are checked;
- * bare specifiers (npm packages) are skipped.
+ * Check whether an import path resolves to a location inside the guarded module.
+ *
+ * Handles two cases:
+ * 1. Relative imports (./foo, ../foo) — resolved against consumer file directory
+ * 2. Bare specifier imports (@myorg/auth/service) — matched against WORKSPACE_PACKAGES
+ *    to detect monorepo cross-module imports through unlisted subpaths
  */
 function resolvesToModule(importPath: string, consumerFile: string): string | null {
-  if (!importPath.startsWith('.')) return null;
+  // Case 2: Bare specifier — check if it targets this module's workspace package
+  if (!importPath.startsWith('.')) {
+    // WORKSPACE_PACKAGES maps package names to their directories.
+    // If the import matches a package that maps to MODULE_PATH,
+    // check whether the subpath goes through the barrel or bypasses it.
+    for (const [pkgName, pkgDir] of Object.entries(WORKSPACE_PACKAGES)) {
+      if (importPath === pkgName || importPath.startsWith(pkgName + '/')) {
+        const normalizedPkgDir = path.resolve(pkgDir);
+        if (normalizedPkgDir !== path.resolve(MODULE_PATH)) continue;
+        // Import targets this module. Check if it's the barrel or a subpath.
+        if (importPath === pkgName) return null; // Barrel import — OK
+        // Subpath import — check if listed in package.json exports
+        // (The orchestrator should only include non-exports subpaths as violations;
+        //  this template assumes the orchestrator filtered exports-listed subpaths.)
+        const subpath = importPath.slice(pkgName.length);
+        const resolved = path.resolve(pkgDir, '.' + subpath);
+        if (resolved.startsWith(normalizedPkgDir + path.sep)) return resolved;
+      }
+    }
+    return null; // Not targeting this module
+  }
+
+  // Case 1: Relative import
 
   const consumerDir = path.dirname(path.resolve(consumerFile));
   let resolved = path.resolve(consumerDir, importPath);
@@ -164,7 +196,6 @@ describe(`API contract: ${MODULE_NAME}`, () => {
 File: `tests/structural/api-contracts-{MODULE_NAME}.test.py`
 
 ```python
-import os
 import re
 from pathlib import Path
 
