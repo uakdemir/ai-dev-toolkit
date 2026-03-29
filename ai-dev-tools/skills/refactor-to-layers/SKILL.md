@@ -33,7 +33,7 @@ Reference files used throughout (do not inline their content — read them at th
 
 - `references/tech-stacks.md` — stack-specific file patterns, layer mapping heuristics, monorepo detection
 - `references/layer-definitions.md` — canonical layer hierarchy, dependency rules, violation classification
-- `references/structural-test-templates.md` — per-stack test templates across 3 enforcement tiers
+- `references/structural-test-templates/` — per-stack test templates across 3 enforcement tiers (split by backend: `node.md`, `dotnet.md`, `python.md`, `shared.md`)
 - `references/provider-patterns.md` — provider interface patterns, composition root conventions, cross-cutting concern detection
 
 If "Other" is selected for tech stack, skip `references/tech-stacks.md` entirely.
@@ -69,7 +69,7 @@ Record the sub-framework selection — it is used in Phase 1 (file classificatio
 4. What test runner do you use? (e.g., pytest, JUnit, go test)
 5. What build system do you use? (e.g., Bazel, Gradle, Make)
 
-**Progressive disclosure:** After tech stack selection, read `references/tech-stacks.md` and locate the matching stack section. If "Other" was selected, skip loading tech-stacks.md and rely on the user's answers instead.
+**Progressive disclosure:** After tech stack selection, read `references/tech-stacks.md`. Extract ONLY the section matching the selected stack (from its `##` heading through the next `##` heading or end of file). Discard all other stack sections from context. Do not retain unrelated stack information. If "Other" was selected, skip loading tech-stacks.md and rely on the user's answers instead.
 
 ---
 
@@ -186,7 +186,7 @@ Generate artifacts after Phase 2 approval. Create the `docs/layer-architecture/`
    - Provider interface inventory.
    - In monorepo mode, generate one strategy spec per package.
 
-2. **Structural tests** — read `references/structural-test-templates.md`. Generate tests across 3 tiers:
+2. **Structural tests** — read `references/structural-test-templates/<backend>.md` and `references/structural-test-templates/shared.md` (where `<backend>` is `node`, `dotnet`, or `python` based on the selected stack). Generate tests across 3 tiers:
    - Tier 1: import direction enforcement (no upward imports).
    - Tier 2: boundary enforcement (no skip-layer imports unless allowed).
    - Tier 3: provider compliance (cross-cutting concerns use provider interfaces).
@@ -217,12 +217,12 @@ Generate artifacts after Phase 2 approval. Create the `docs/layer-architecture/`
 For empty projects with zero source files:
 
 1. **Gather requirements.** Ask: "What are the main concerns of this project?" (e.g., "user auth, billing, notifications"). Use the canonical layer hierarchy by default.
-2. **Read references.** Load `references/structural-test-templates.md` and `references/provider-patterns.md` for the selected stack.
+2. **Read references.** Load `references/structural-test-templates/<backend>.md`, `references/structural-test-templates/shared.md`, and `references/provider-patterns.md` for the selected stack.
 3. **Generate artifacts:**
    - Folder structure matching the canonical layer hierarchy from `references/layer-definitions.md`.
    - Barrel/index files for each layer (e.g., `index.ts`, `__init__.py`).
    - Composition root stub (`src/app.ts`, `Program.cs`, or `src/main.py`) with DI wiring comment. Pre-populate the strategy spec's `composition_root` field. Structural tests exempt this file.
-   - Structural tests (all 3 tiers, using templates from `references/structural-test-templates.md`).
+   - Structural tests (all 3 tiers, using templates from `references/structural-test-templates/<backend>.md` + `shared.md`).
    - Provider skeleton interfaces for each user-specified concern (from `references/provider-patterns.md`).
    - Strategy spec at `docs/layer-architecture/strategy.md`.
 4. **No human summary needed** — the generated folder structure is self-documenting.
@@ -255,9 +255,9 @@ Load reference files only when needed to minimize context window usage:
 
 | Phase | Load | Section |
 |-------|------|---------|
-| After tech stack selection | `references/tech-stacks.md` | Relevant stack section only |
+| After tech stack selection | `references/tech-stacks.md` | Extract ONLY the matching stack section. Discard other stacks. |
 | Phase 1 Discovery | `references/layer-definitions.md` | Full file |
-| Phase 3 Scaffolding | `references/structural-test-templates.md` | Relevant stack + tier |
+| Phase 3 Scaffolding | `references/structural-test-templates/<backend>.md` + `shared.md` | Backend-specific templates + shared sections |
 | Phase 3 Scaffolding | `references/provider-patterns.md` | Relevant stack section |
 
 **Exception:** If "Other" was selected for tech stack, skip `references/tech-stacks.md` entirely. Derive patterns from the user's follow-up answers.
