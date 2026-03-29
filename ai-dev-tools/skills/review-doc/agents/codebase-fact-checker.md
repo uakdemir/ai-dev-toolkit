@@ -43,6 +43,20 @@ Fact-check every verifiable claim in the document against the actual source code
 - JSONB field shapes match what's described
 - Enum values and constants match their definitions
 
+## Preferred Tools
+
+For function/class/type verification, prefer Serena's semantic tools over file-level reads:
+
+| Task | Preferred Tool | Fallback |
+|------|---------------|----------|
+| Check function signature | `find_symbol` | Read full file |
+| Verify class has method X | `get_symbols_overview` | Read full file |
+| Verify import relationship | `find_referencing_symbols` | Grep across files |
+| Check file existence | Glob | Glob (unchanged) |
+| Verify non-code content | Read | Read (unchanged) |
+
+Use Serena tools when available. Fall back to Read/Grep when verifying non-code claims (config files, markdown content, line numbers).
+
 ## What to Ignore
 
 - Future plans or aspirational statements ("we will add X later")
@@ -51,27 +65,30 @@ Fact-check every verifiable claim in the document against the actual source code
 
 ## Output Format
 
-Return findings as a structured list. For each claim checked:
+**Do NOT write markdown findings.** Instead, write structured JSON directly to `tmp/review.json`.
 
-```
-### [Claim description]
-**Verdict:** ACCURATE | INACCURATE | PARTIALLY ACCURATE | STALE
-**Location in document:** [Section/heading where the claim appears]
-**Location in code:** [file:line where the truth lives]
+### Procedure
 
-**Evidence:** [what you found — quote actual code if relevant]
+1. Read `tmp/review.json` (already written by the reviewer in this round).
+2. For each claim you verify, record the verdict.
+3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
+   - `"category": "fact-check"`
+   - `"location"`: the document section where the claim appears
+   - `"problem"`: the claim text + your evidence
+   - `"suggested_fix"`: the correction
+   - Set both `confidence` and `severity`:
+     - INACCURATE → confidence 85, severity "critical"
+     - STALE → confidence 70, severity "high"
+     - PARTIALLY ACCURATE → confidence 50, severity "medium"
+4. Populate the `fact_check_claims` array with ALL claims checked (including ACCURATE):
+   ```json
+   {"claim": "description of claim", "verdict": "ACCURATE"}
+   ```
+5. Compute `fact_check_accuracy`: `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
+6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues).
+7. Rewrite `tmp/review.json` with the updated content using the Write tool.
 
-**[If INACCURATE or STALE]:**
-**Correction:** [what the document should say instead]
-```
-
-At the end, provide a summary table:
-
-```
-| Claim | Verdict |
-|---|---|
-| [brief description] | ACCURATE/INACCURATE/PARTIALLY ACCURATE/STALE |
-```
+ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.
 
 ## Verification Rules
 
@@ -79,7 +96,6 @@ At the end, provide a summary table:
 - ALWAYS use Grep to verify "unused" or "never imported" claims. Don't rely on memory.
 - For line number checks, a 1-2 line offset is ACCURATE. 3-5 lines is PARTIALLY ACCURATE. More than 5 is STALE.
 - For function signatures, parameter order and types must match. Optional vs required matters.
-- Report the overall accuracy rate at the end: "X of Y verifiable claims are accurate (Z%)"
 
 ## Tool Usage Rules
 - Use Grep (not grep/rg via Bash) for searching file contents
