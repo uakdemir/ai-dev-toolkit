@@ -98,7 +98,7 @@ While iteration <= max_iterations OR is_final_gate:
     If critical_count == 0 AND NOT is_final_gate:
       Set is_final_gate = true, continue to next iteration
     If is_final_gate (regardless of critical_count):
-      Proceed to final-round fix + fact-check, then jump to Final Report.
+      Fall through to FIX PHASE and FACT-CHECK PHASE below, then exit loop to Final Report.
 
   FIX PHASE:
     If NOT is_final_gate:
