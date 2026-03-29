@@ -5,7 +5,7 @@ description: "Use when reviewing analysis specs, design documents, or implementa
 
 # Review Doc
 
-Iterative document review with model tiering. Dispatches parallel agents to check completeness, fact-check against the codebase, and audit implementability. Synthesizes findings into structured JSON, fixes issues automatically between rounds, and produces a curated human-readable summary.
+Iterative document review with model tiering. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. In the final round, a sequential fact-checker verifies claims against the codebase. Produces a curated human-readable summary.
 
 **Output:** `tmp/review.json` (structured, machine-readable) + `tmp/review_summary.md` (curated human summary, max 10 items + aggregates).
 
@@ -14,16 +14,15 @@ Iterative document review with model tiering. Dispatches parallel agents to chec
 Parse arguments after `/review-doc`:
 
 ```
-/review-doc <doc-path> [--against <ref-path>] [--max-model <model>] [--mid-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>] [--help]
+/review-doc <doc-path> [--against <ref-path>] [--max-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>] [--help]
 ```
 
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
-| `--max-model` | opus | opus, sonnet, haiku | Fixer, final review round (3 agents) |
-| `--mid-model` | sonnet | opus, sonnet, haiku | Early review rounds (2 agents) |
-| `--min-model` | haiku | opus, sonnet, haiku | Synthesis (dedup/filter/count) |
-| `--max-iterations` | 4 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
+| `--max-model` | opus | opus, sonnet, haiku | Final round: reviewer + fixer + fact-checker |
+| `--min-model` | sonnet | opus, sonnet, haiku | Early rounds: reviewer + fixer |
+| `--max-iterations` | 1 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
 | `--effort` | high | low, medium, high | Thoroughness level passed to all agents |
 | `--help` | --- | --- | Print usage and exit |
 
@@ -34,24 +33,23 @@ When `--help` is passed, print the following and exit (no review runs):
 ```
 Usage: /review-doc <doc-path> [flags]
 
-Iterative document review with model tiering. Dispatches parallel agents to
-check completeness, fact-check against codebase, and audit implementability.
-Fixes issues automatically between rounds until zero criticals remain.
+Iterative document review with model tiering. Dispatches a single merged
+reviewer for completeness, consistency, and implementability. Fixes issues
+automatically between rounds. Fact-checker runs sequentially in the final round.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
-  --max-model <model>     Fixer + final review round        (default: opus)
-  --mid-model <model>     Early review rounds                (default: sonnet)
-  --min-model <model>     Synthesis agent                    (default: haiku)
-  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 4)
+  --max-model <model>     Final round: reviewer + fixer + fact-checker (default: opus)
+  --min-model <model>     Early rounds: reviewer + fixer      (default: sonnet)
+  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 1)
   --effort <level>        Thoroughness: low, medium, high    (default: high)
   --help                  Print this help and exit
 
 Examples:
-  /review-doc docs/spec.md                          Single-pass review (backward compat)
+  /review-doc docs/spec.md                          Single-pass review (default)
   /review-doc docs/spec.md --max-iterations 3       Iterative review, up to 3 rounds
   /review-doc docs/spec.md --against docs/plan.md   Review against reference document
-  /review-doc docs/spec.md --mid-model haiku        Faster early rounds (lower quality)
+  /review-doc docs/spec.md --min-model haiku        Faster early rounds (lower quality)
 ```
 
 ## Setup
