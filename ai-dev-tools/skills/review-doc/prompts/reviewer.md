@@ -14,6 +14,7 @@ Review the document for completeness gaps, internal contradictions, implementabi
 - Document path: provided in dispatch prompt
 - Reference document path: provided in dispatch prompt (or "none")
 - Effort level: provided in dispatch prompt (low/medium/high)
+  Interpret as: low = check only critical-severity issues, medium = check critical + high, high = full review of all severities.
 - Read the project's CLAUDE.md for conventions and constraints
 
 ## What to Check
@@ -35,6 +36,7 @@ Review the document for completeness gaps, internal contradictions, implementabi
 - Is this focused enough for a single implementation cycle?
 - Does it cover multiple independent subsystems that should be separate specs/plans?
 - YAGNI violations — features or complexity not justified by stated requirements
+- Scope creep relative to the stated goal
 
 ### Structure
 - Is the document organized so an implementer can follow it sequentially?
