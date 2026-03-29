@@ -17,7 +17,7 @@ Iterative code review with automatic fix cycles. Reviews the last N commits, fin
 |---|---|---|---|
 | `--against <spec-path>` | none | any file path | Spec as implementation contract |
 | `--max-model` | opus | opus, sonnet, haiku | All phases — reviewer, fixer |
-| `--max-iterations` | 4 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
+| `--max-iterations` | 1 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
 | `--effort` | high | low, medium, high | Thoroughness level passed to reviewer/fixer |
 | `--verify "<cmd>"` | none | any shell command | Repeatable — verification commands run after each fix |
 | `--help` | — | — | Print usage and exit |
@@ -35,7 +35,7 @@ finds issues, fixes them, and verifies. Repeats until zero criticals or cap.
 Flags:
   --against <spec-path>   Spec as implementation contract    (default: none)
   --max-model <model>     Reviewer + fixer model             (default: opus)
-  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 4)
+  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 1)
   --effort <level>        Thoroughness: low, medium, high    (default: high)
   --verify "<cmd>"        Verification command (repeatable)  (default: none)
   --help                  Print this help and exit
