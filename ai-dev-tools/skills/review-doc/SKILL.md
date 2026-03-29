@@ -74,11 +74,11 @@ Review Doc Skipped
 
 ## Edge Case: `--max-iterations 1`
 
-Single-pass mode (backward compatible with old `/review-doc`). Use the final-gate configuration directly: dispatch 3 agents at max-model (completeness + fact-checker + implementability), synthesize with min-model. No fix phase. Jump directly to Final Report. This preserves the quality of the old 3-agent Opus single-pass review.
+Single-pass mode (default). Dispatch 1 reviewer at max-model — the reviewer reads the document, applies the combined checklist, and writes `tmp/review.json` directly. Then dispatch 1 fact-checker at max-model sequentially — it reads `tmp/review.json`, appends fact-check issues, and rewrites the file. No fixer. Jump directly to Final Report.
 
 ## Iteration Flow
 
-**Guard:** If `max_iterations == 1`, skip the loop below. Instead, treat the single pass as a final-gate round: dispatch 3 agents at max-model, synthesize with min-model, no fix phase. Jump directly to Final Report. The pseudocode below applies only when `max_iterations >= 2`.
+**Guard:** If `max_iterations == 1`, skip the loop below. Use the single-pass flow described above (Edge Case: --max-iterations 1).
 
 **State:** The orchestrator maintains `is_final_gate = false` before the loop.
 
@@ -87,11 +87,9 @@ While iteration <= max_iterations OR is_final_gate:
 
   REVIEW PHASE:
     If NOT is_final_gate:
-      Dispatch 2 agents at mid-model (completeness + implementability)
-      Synthesize with min-model -> tmp/review.json
+      Dispatch 1 reviewer at min-model -> writes tmp/review.json
     If is_final_gate:
-      Dispatch 3 agents at max-model (completeness + fact-checker + implementability)
-      Synthesize with min-model -> tmp/review.json
+      Dispatch 1 reviewer at max-model -> writes tmp/review.json
 
   VALIDATION:
     Recount severities from issues array (do not trust counts from JSON)
@@ -100,19 +98,26 @@ While iteration <= max_iterations OR is_final_gate:
     If critical_count == 0 AND NOT is_final_gate:
       Set is_final_gate = true, continue to next iteration
     If is_final_gate (regardless of critical_count):
-      Jump to Final Report -- the final gate is always terminal.
-      If criticals remain, status will be "Issues Found".
+      Proceed to final-round fix + fact-check, then jump to Final Report.
 
-  FIX PHASE (skipped when is_final_gate):
-    Dispatch fixer at max-model
+  FIX PHASE:
+    If NOT is_final_gate:
+      Dispatch fixer at min-model
+    If is_final_gate:
+      Dispatch fixer at max-model
     Hash verification (before/after)
     Fix-report.json with dispositions
+
+  FACT-CHECK PHASE (final gate only):
+    Backup tmp/review.json before fact-checker runs.
+    Dispatch fact-checker at max-model sequentially (after fixer completes).
+    If fact-checker fails, fall back to backup with warning.
 
   ITERATION LOG -> tmp/iteration-N.md
   iteration += 1
 ```
 
-The final-gate round is review-only -- no fix phase. It is the Opus quality pass on the cleanest version of the document. The final gate is exempt from the `--max-iterations` cap: if criticals reach zero at iteration N == max_iterations, the final gate still runs as iteration N+1. Terminal output reports this as e.g. "5/4" (5 iterations with cap of 4). This ensures the fact-checker always runs on the final document regardless of when criticals converge.
+The final gate is exempt from the `--max-iterations` cap: if criticals reach zero at iteration N == max_iterations, the final gate still runs as iteration N+1. Terminal output reports this as e.g. "5/4" (5 iterations with cap of 4).
 
 ## Agent Dispatch (Early Rounds)
 
