@@ -123,16 +123,11 @@ The final gate is exempt from the `--max-iterations` cap: if criticals reach zer
 
 All `agents/` and `prompts/` paths in this section are relative to this skill's root directory (e.g., `ai-dev-tools/skills/review-doc/`).
 
-The orchestrator dispatches each agent using the Agent tool with the appropriate `model` parameter. For early rounds: `Agent(prompt: <prompt>, model: "sonnet")`.
+The orchestrator dispatches a single reviewer agent at min-model.
 
-Two agents dispatched **in parallel** at mid-model:
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>, model: <min-model>)`.
 
-1. **Completeness & Consistency Reviewer** -- read `agents/completeness-reviewer.md` before dispatch
-2. **Implementability Auditor** -- read `agents/implementability-auditor.md` before dispatch
-
-Read `prompts/reviewer.md` for complete dispatch instructions (how to construct each agent's prompt, what context to include).
-
-Each agent dispatch must include:
+The dispatch prompt must include:
 - The effort level (`--effort` value)
 - The document path to review
 - The `--against` reference path (if provided)
@@ -141,34 +136,21 @@ No fact-checker in early rounds. Early rounds focus on structural/completeness i
 
 ## Agent Dispatch (Final Gate)
 
-Three agents dispatched **in parallel** at max-model (`Agent(prompt: <prompt>, model: "opus")`):
+Three agents dispatched **sequentially** at max-model:
 
-1. **Completeness & Consistency Reviewer** -- `agents/completeness-reviewer.md`
-2. **Codebase Fact-Checker** -- `agents/codebase-fact-checker.md`
-3. **Implementability Auditor** -- `agents/implementability-auditor.md`
+1. **Merged Reviewer** — read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt: `Agent(prompt: <reviewer-prompt>, model: <max-model>)`. The reviewer writes `tmp/review.json`.
 
-Read `prompts/reviewer.md` for complete dispatch instructions.
+2. **Fixer** — read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>, model: <max-model>)`. The fixer reads `tmp/review.json`, applies fixes, writes `tmp/fix-report.json`.
 
-All three agents run at Opus for maximum depth on the cleaned document.
+3. **Codebase Fact-Checker** — backup `tmp/review.json` first. Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <max-model>)`. The fact-checker reads `tmp/review.json`, appends fact-check issues, sets `fact_check_claims` and `fact_check_accuracy`, rewrites the file. If the fact-checker fails, restore the backup and add a warning.
 
-## Synthesis
-
-Read the synthesis agent prompt from `agents/synthesis.md` before dispatching.
-
-Dispatched as a single Agent at min-model (`Agent(prompt: <prompt>, model: "haiku")`). The synthesis agent receives the combined raw markdown findings from all review agents as conversation context (not a file), plus `is_final_gate: true/false` in the dispatch prompt. The agent writes `tmp/review.json` using the Write tool.
-
-The synthesis agent performs:
-1. **Deduplicate** -- same location AND same underlying deficiency
-2. **Filter** -- drop findings with confidence < 40
-3. **Categorize by severity** -- >= 80 critical, 60-79 high, 40-59 medium
-4. **Fact-check conversion** (final gate only) -- convert fact-checker verdicts to issue objects with `category: "fact-check"`. Map verdict to confidence: INACCURATE -> 85 (critical), STALE -> 70 (high), PARTIALLY ACCURATE -> 50 (medium). ACCURATE verdicts are not converted to issues. If not final gate: set `fact_check_claims: []` and `fact_check_accuracy: 100`.
-5. **Cap at 20** -- critical + high first, then medium by descending confidence. If critical + high exceed 20, raise the cap to include all of them (criticals and highs are never dropped).
-6. **Compute fact_check_accuracy** (final gate only) -- `(accurate + 0.5 * partially_accurate) / total * 100`. Otherwise: already set to 100 in step 4.
-7. **Write** `tmp/review.json`
+All three run sequentially — each depends on the previous step's output.
 
 ## Fixer
 
-Dispatched as a single Agent at max-model (`Agent(prompt: <prompt>, model: "opus")`).
+Dispatched as a single Agent. Model depends on the round:
+- Early rounds: `Agent(prompt: <prompt>, model: <min-model>)` (Sonnet by default)
+- Final round: `Agent(prompt: <prompt>, model: <max-model>)` (Opus by default)
 
 Read `prompts/coder.md` for complete dispatch instructions.
 
@@ -183,6 +165,22 @@ Produces `tmp/fix-report.json` with dispositions for every issue:
 - `fixed` -- issue resolved
 - `deferred` -- out of scope, with reason
 - `pushed-back` -- reviewer finding is incorrect, with reason
+
+## Fact-Checker Dispatch
+
+The fact-checker runs **sequentially after the fixer** in the final round only. It is always terminal — no fix phase follows.
+
+Before dispatch, the orchestrator backs up `tmp/review.json` (the reviewer+fixer output). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
+
+Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <max-model>)`.
+
+The fact-checker:
+1. Reads `tmp/review.json`
+2. Verifies claims against the codebase using preferred Serena tools (see agent prompt)
+3. Appends fact-check issues to the `issues` array with `category: "fact-check"`
+4. Populates `fact_check_claims` and computes `fact_check_accuracy`
+5. Recomputes `critical_count` and `high_count` from the full issues array
+6. Rewrites `tmp/review.json`
 
 ## Hash Verification
 
@@ -286,9 +284,9 @@ Write to `tmp/iteration-N.md` after each iteration:
 ```markdown
 # Iteration N
 
-**Reviewer model:** mid-model or max-model
-**Agents:** 2 (completeness + implementability) or 3 (+ fact-checker)
-**Fixer model:** max-model (or "N/A -- final gate, review only")
+**Reviewer model:** min-model or max-model
+**Agents:** 1 (merged reviewer) or 1 + fact-checker (final round)
+**Fixer model:** min-model or max-model
 **Issues found:** X critical, Y high, Z medium
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, final gate triggered" | "0 criticals, loop complete" | "Fix phase failed: <error>"
 **Issues fixed:** [category] [severity] at [location]
