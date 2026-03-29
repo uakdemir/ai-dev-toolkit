@@ -60,7 +60,7 @@ Present these 6 options:
 
 > Note: 5 questions (vs 3 for document-for-ai) because monorepo analysis requires build tooling and workspace structure information in addition to language/framework details.
 
-**Progressive disclosure:** After tech stack selection, read `references/tech-stacks.md` and locate the section matching the selected stack. Use its entry points, import patterns, and tooling recommendations to guide all subsequent analysis. If "Other" was selected, skip loading tech-stacks.md and rely on the user's answers instead.
+**Progressive disclosure:** After tech stack selection, read `references/tech-stacks.md`. Extract ONLY the section matching the selected stack (from its `##` heading through the next `##` heading or end of file). Discard all other stack sections from context. Do not retain unrelated stack information. Use the extracted section's entry points, import patterns, and tooling recommendations to guide all subsequent analysis. If "Other" was selected, skip loading tech-stacks.md and rely on the user's answers instead.
 
 ---
 
@@ -295,13 +295,13 @@ Load reference files only when needed to minimize context window usage:
 
 | When | Read | Purpose |
 |------|------|---------|
-| After tech stack selection | `references/tech-stacks.md` | Stack-specific patterns, validation files, tooling |
+| After tech stack selection | `references/tech-stacks.md` | Extract ONLY the matching stack section. Discard other stacks. |
 | Phase 1 start | `references/analysis-framework.md` | Domain analysis heuristics |
 | Phase 3 start | `references/analysis-framework.md` | Coupling score formula, import analysis approach |
 | Phase 4 conflict resolution | `references/migration-patterns.md` | Conflict resolution decision tree |
 | Artifact generation: module specs | `references/module-spec-template.md` | Per-module document template |
 | Artifact generation: migration plan | `references/migration-patterns.md` | Extraction ordering and phasing patterns |
-| Artifact generation: tooling | `references/tech-stacks.md` | Stack-specific monorepo tooling section |
+| Artifact generation: tooling | `references/tech-stacks.md` | Extract ONLY the matching stack's monorepo tooling section |
 
 **Exception:** If "Other" was selected for tech stack, skip `references/tech-stacks.md` entirely. Derive patterns from the user's follow-up answers.
 
