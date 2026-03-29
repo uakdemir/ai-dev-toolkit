@@ -577,14 +577,15 @@ git commit -m "fix(review-code): resolve N issues from iteration M"
 - NEVER run destructive git commands (reset --hard, clean -f)
 ```
 
-- [ ] **Step 4: Create prompts directory and verify**
+- [ ] **Step 4: Verify both files exist**
 
 ```bash
-mkdir -p ai-dev-tools/skills/review-code/prompts
 ls ai-dev-tools/skills/review-code/prompts/
 ```
 
 Expected: `coder.md  reviewer.md`
+
+(Write tool auto-creates parent directories — no explicit mkdir needed.)
 
 - [ ] **Step 5: Commit**
 
@@ -905,21 +906,43 @@ Replace with:
 
 - [ ] **Step 2: Update orchestrate/SKILL.md — output file references**
 
-Read `ai-dev-tools/skills/orchestrate/SKILL.md`. Make these replacements throughout:
+Read `ai-dev-tools/skills/orchestrate/SKILL.md`. Apply these specific replacements:
 
-1. Replace all `tmp/review_analysis.md` with `tmp/review_summary.md`
-2. Replace all `tmp/review_code.md` with `tmp/review_summary.md`
+**2a. File name replacements (replace_all):**
 
-For the State Detection table, update:
-- "Spec review findings" row: change `review_analysis.md` reference + `- Document:` field check to `review_summary.md` + `**Reviewed:**` field check
-- "Code reviewed" row: change `review_code.md` reference to `review_summary.md` + `**Scope:**` field check
+| old_string | new_string | replace_all |
+|---|---|---|
+| `tmp/review_analysis.md` | `tmp/review_summary.md` | yes |
+| `tmp/review_code.md` | `tmp/review_summary.md` | yes |
+| `review_analysis.md` (standalone refs in prose) | `review_summary.md` | yes |
+| `review_code.md` (standalone refs in prose) | `review_summary.md` | yes |
 
-For Steps 2, 3 (spec review), update file references to `review_summary.md`.
-For Steps 6-7 (code review), update file references to `review_summary.md` and note that structured data is in `review.json`.
+**2b. Field parsing pattern replacements:**
 
-For stale-review detection: update field parsing patterns:
-- `- Document:` → `**Reviewed:**` (review-doc)
-- Commit hash cross-referencing: read from `tmp/review.json` issues array `location` fields
+| old_string | new_string |
+|---|---|
+| `` `- Document:` field does not match `` | `` `**Reviewed:**` field does not match `` |
+| `` `- Document:` field matches `` | `` `**Reviewed:**` field matches `` |
+| `` `- Status:` field `` | `` `**Status:**` field `` |
+| `its \`- Document:\` field` | `its \`**Reviewed:**\` field` |
+
+**2c. Stale-detection logic updates (lines ~220-224):**
+
+Replace the `review_code.md with findings:` paragraph: commit hashes are now in `tmp/review.json` issues array `location` fields (not `**Commit:**` in markdown). Parse from JSON.
+
+Replace the `review_code.md with zero findings:` paragraph: the `**Commits reviewed:**` header becomes `**Scope:**` in the new review_summary.md format. Update the attribution check accordingly.
+
+**2d. Severity label replacements:**
+
+The spec changed severity labels: "Important" → "High", "Minor" → "Medium". Apply:
+
+| old_string | new_string |
+|---|---|
+| `Important > 0` | `High > 0` |
+| any other `Important` severity references | `High` |
+| any `Minor` severity references | `Medium` |
+
+Verify after: `grep -i "important\|minor" ai-dev-tools/skills/orchestrate/SKILL.md` should return no severity-context matches.
 
 - [ ] **Step 3: Update help/SKILL.md**
 
@@ -958,7 +981,7 @@ git commit -m "feat: update downstream skills for unified review output"
 - Delete: `ai-dev-tools/skills/review-doc-ralph/` (entire directory)
 - Delete: `ai-dev-tools/skills/review-code-ralph/` (entire directory)
 - Delete: `ai-dev-tools/skills/review-doc/prompts/codex-reviewer.md`
-- Delete: `ai-dev-tools/skills/review-code/agents/openai.yaml`
+- Delete: `ai-dev-tools/skills/review-code/agents/openai.yaml` (Codex/OpenAI artifact — not in spec deletion list but exists and should be cleaned up)
 
 - [ ] **Step 1: Verify files exist before deletion**
 
@@ -1030,7 +1053,7 @@ Expected: no matches.
 - [ ] **Step 3: Verify tool constraints in all agent/prompt files**
 
 Run: `grep -l "Tool Usage Rules" ai-dev-tools/skills/review-doc/agents/*.md ai-dev-tools/skills/review-doc/prompts/*.md ai-dev-tools/skills/review-code/prompts/*.md`
-Expected: all 7 files listed (3 agents + synthesis + 2 review-doc prompts + 2 review-code prompts).
+Expected: 7 files listed (3 review-doc agents + synthesis.md + review-doc/prompts/coder.md + 2 review-code prompts). Note: review-doc/prompts/reviewer.md is a dispatch template without Tool Usage Rules.
 
 - [ ] **Step 4: Verify JSON schemas present in SKILL.md files**
 
