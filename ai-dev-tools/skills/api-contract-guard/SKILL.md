@@ -3,6 +3,18 @@ name: api-contract-guard
 description: "Use when the user wants to define module API boundaries, enforce that consumers import through barrel files, generate contract tests for module encapsulation, create index/barrel files for modules, or prevent AI agents from importing internal module paths — even if they don't use the exact skill name."
 ---
 
+<help-text>
+api-contract-guard — Enforce module API boundaries via barrel files
+
+USAGE
+  /api-contract-guard
+
+EXAMPLES
+  /api-contract-guard                Analyze and enforce API contracts
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # api-contract-guard
 
 Detect modules, analyze barrel file state (present/missing/incomplete), scan cross-module imports to find boundary violations, and generate enforcement artifacts. The user confirms which modules to guard, approves or modifies proposed barrel files, and reviews generated structural tests + violations report. Barrel file = contract — the skill creates missing barrels with user approval and generates structural tests that enforce consumers only import through the barrel.

@@ -3,6 +3,24 @@ name: document-for-ai
 description: "Use when the user wants to create, migrate, audit, or maintain AI-optimized documentation, restructure existing docs for AI consumption, generate CLAUDE.md files, create doc indexes, or improve AI agent efficiency through better documentation — even if they don't use the exact skill name."
 ---
 
+<help-text>
+document-for-ai — Generate AI-optimized documentation
+
+USAGE
+  /document-for-ai [command] [path]
+
+PARAMETERS
+  humanize [path]    Render AI docs for human readers
+  adr <spec_path>    Extract architectural decisions from spec
+
+EXAMPLES
+  /document-for-ai                   Generate CLAUDE.md and AI_INDEX.md
+  /document-for-ai humanize          Render docs for humans
+  /document-for-ai adr docs/spec.md  Extract ADRs from spec
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # document-for-ai
 
 Generate, migrate, audit, and maintain AI-optimized documentation for any codebase. Produces structured docs with purpose-specific templates, standardized frontmatter, navigable indexes (AI_INDEX.md), and a CLAUDE.md hierarchy that gives AI agents instant project context.

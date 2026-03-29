@@ -3,6 +3,18 @@ name: orchestrate
 description: "Use when the user wants to start a development cycle, continue where they left off, check what's next, automate their brainstorm-review-implement-review-commit workflow, or get recommendations for quality gates — even if they don't use the exact skill name."
 ---
 
+<help-text>
+orchestrate — Manage your full development cycle
+
+USAGE
+  /orchestrate
+
+EXAMPLES
+  /orchestrate                       Detect state and suggest next step
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # orchestrate
 
 A meta-skill that manages the developer's core development loop and advises on quality gates. Single entry point: `/orchestrate`. It detects where you are in the cycle by scanning artifacts and git, presents the next step with context, and invokes the appropriate skill on confirmation.

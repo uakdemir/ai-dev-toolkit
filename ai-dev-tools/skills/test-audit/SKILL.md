@@ -3,6 +3,26 @@ name: test-audit
 description: "Use when the user wants to audit test quality, find coverage gaps, detect flaky tests, assess assertion quality, identify missing edge cases, prioritize test improvements, or evaluate test suite health — even if they don't use the exact skill name."
 ---
 
+<help-text>
+test-audit — Audit test quality and coverage gaps
+
+USAGE
+  /test-audit [path] [flags]
+
+PARAMETERS
+  path               Scope audit to a directory
+  --changed           Audit only git-changed files
+  --base <branch>    Merge base for --changed
+
+EXAMPLES
+  /test-audit                        Full codebase audit
+  /test-audit src/services/          Path-scoped audit
+  /test-audit --changed              Changed files only
+  /test-audit --changed --base main  Explicit merge base
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # test-audit
 
 Analyze test suites and production code across 4 dimensions — coverage gaps, assertion quality, flakiness signals, and missing edge cases. Produce a prioritized test improvement plan scored by risk × effort. Optionally generate fixes by category.

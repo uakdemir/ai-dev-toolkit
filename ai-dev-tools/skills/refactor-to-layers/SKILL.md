@@ -3,6 +3,18 @@ name: refactor-to-layers
 description: "Use when the user wants to enforce architectural layers within a module or project, add dependency direction rules, reduce AI agent context through structural boundaries, introduce provider/dependency injection patterns, or generate structural tests that enforce layer compliance — even if they don't use the term 'layers'."
 ---
 
+<help-text>
+refactor-to-layers — Enforce layered architecture within modules
+
+USAGE
+  /refactor-to-layers
+
+EXAMPLES
+  /refactor-to-layers                Analyze or scaffold layer structure
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # refactor-to-layers
 
 Analyze a codebase and enforce a layered dependency architecture (Types > Config > Data > Service > Providers > API > UI). Generate structural tests that verify layer compliance and provider interfaces that decouple cross-cutting concerns. Inspired by OpenAI's harness engineering approach.

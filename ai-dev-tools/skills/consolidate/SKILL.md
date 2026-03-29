@@ -3,6 +3,25 @@ name: consolidate
 description: Unify AI configs and linting rules across a monorepo. Diffs AI configs across projects, wires lint config inheritance, and offers direct unification where inheritance isn't available. Use /consolidate ai for AI configs, /consolidate lint for linting, /consolidate all for both.
 ---
 
+<help-text>
+consolidate — Unify AI configs or linting rules across monorepo
+
+USAGE
+  /consolidate <subcommand>
+
+PARAMETERS
+  ai                 Consolidate AI configs only
+  lint               Consolidate linting rules only
+  all                Both AI configs and linting rules
+
+EXAMPLES
+  /consolidate ai                    Unify AI configs
+  /consolidate lint                  Unify linting rules
+  /consolidate all                   Unify everything
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # /consolidate
 
 Unifies configuration across a monorepo. Operates via subcommands that target different config domains.
