@@ -1,0 +1,12 @@
+{
+  "name": "ai-dev-tools",
+  "owner": {
+    "name": "ai-dev-tools"
+  },
+  "plugins": [
+    {
+      "name": "ai-dev-tools",
+      "source": "./"
+    }
+  ]
+}
