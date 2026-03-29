@@ -34,6 +34,15 @@ The current review skills take 25-45 minutes per review cycle. Four separate ski
 | `--max-iterations` | 4 | Safety cap |
 | `--effort` | high | Thoroughness level passed to all agents |
 
+### Edge Case: `--max-iterations 0`
+
+Skip the loop entirely. Do not create any files (no review.json, no iteration logs). Print and exit:
+```
+Review Doc Skipped
+  Reviewed: <doc-path>
+  No iterations run. Document was not reviewed.
+```
+
 ### Iteration Flow
 
 ```
@@ -216,6 +225,15 @@ No `--mid-model` or `--min-model` — code review uses `max-model` throughout be
 1. `git rev-parse HEAD` succeeds. If not: `"Error: no commits in repository."`
 2. If on `main` or `master`: `"[ralph] Warning: you are on branch 'main'. Fix commits will land here. Continue?"`
 3. If `git status --porcelain` non-empty: `"[ralph] Working tree is dirty. Please commit or stash your changes before running review-code."`
+
+### Edge Case: `--max-iterations 0`
+
+Skip the loop entirely. Do not create any files. Print and exit:
+```
+Review Code Skipped
+  Scope: last N commits
+  No iterations run. Code was not reviewed.
+```
 
 ### Iteration Flow
 
@@ -469,11 +487,10 @@ Note: `fact_check_claims` is only populated on the final-gate round (when fact-c
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["critical_count", "high_count", "issues", "fact_check_accuracy"],
+  "required": ["critical_count", "high_count", "issues"],
   "properties": {
     "critical_count": { "type": "integer", "minimum": 0 },
     "high_count": { "type": "integer", "minimum": 0 },
-    "fact_check_accuracy": { "type": "integer", "minimum": 0, "maximum": 100 },
     "issues": {
       "type": "array",
       "items": {
