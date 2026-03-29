@@ -3,6 +3,25 @@ name: convention-enforcer
 description: "Use when the user wants to enforce coding conventions, prevent AI agent drift, harden linter rules, generate convention-based structural tests, detect naming/error handling/import/logging inconsistencies, or analyze a codebase for convention violations — even if they don't use the exact skill name."
 ---
 
+<help-text>
+convention-enforcer — Detect and enforce coding conventions
+
+USAGE
+  /convention-enforcer [flags]
+
+PARAMETERS
+  --re-analyze       Full run from scratch
+  --skip-enforced    Skip already-enforced categories
+  --start-fresh      Remove existing artifacts before re-analysis
+
+EXAMPLES
+  /convention-enforcer               Analyze conventions
+  /convention-enforcer --re-analyze  Full re-analysis from scratch
+  /convention-enforcer --start-fresh Clean slate analysis
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # convention-enforcer
 
 Analyze codebase conventions across 7 fixed categories plus open-ended discovery. Two agents (core + discovery) scan in parallel, findings are merged and presented. The user confirms detected conventions, picks which to harden, and reviews generated enforcement artifacts (structural tests + linter rules + violations report).

@@ -3,6 +3,18 @@ name: implement-plan
 description: "Use when the user wants to execute a restructuring strategy from refactor-to-layers or a monorepo migration plan from refactor-to-monorepo, apply file moves and import rewrites from a layer strategy spec or monorepo migration plan, or restructure a codebase according to an approved plan — even if they don't use the exact skill name."
 ---
 
+<help-text>
+implement-plan — Execute a restructuring plan
+
+USAGE
+  /implement-plan
+
+EXAMPLES
+  /implement-plan                    Auto-detect and execute latest plan
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # implement-plan
 
 Execute restructuring plans produced by refactor-to-layers (layer strategy specs) or refactor-to-monorepo (monorepo migration plans). Auto-detects plan type by content. For layer specs: groups steps into phases (create → move → rewrite → extract) with dependency ordering. For monorepo plans: executes Phase 0 (workspace preparation) followed by Phase 1-N (module extraction) with per-phase checkpoints. Serena-aware for semantic refactoring, with regex fallback.

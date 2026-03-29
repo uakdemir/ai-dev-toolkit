@@ -3,6 +3,18 @@ name: refactor-to-monorepo
 description: "Use when the user wants to split a monolith into modules, identify module boundaries, analyze code coupling, plan a monorepo migration, evaluate monorepo tooling, or reduce codebase size for better AI agent efficiency — even if they don't explicitly say monorepo."
 ---
 
+<help-text>
+refactor-to-monorepo — Analyze monolith for monorepo extraction strategy
+
+USAGE
+  /refactor-to-monorepo
+
+EXAMPLES
+  /refactor-to-monorepo              Analyze and produce extraction plan
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # refactor-to-monorepo
 
 Analyze a monolith and produce a comprehensive monorepo extraction strategy. Output is documents only — no code changes are made. The process is interactive with user checkpoints at key decision points.

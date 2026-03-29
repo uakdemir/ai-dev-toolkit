@@ -3,6 +3,27 @@ name: changelog-from-commits
 description: "Use when the user wants to generate release notes, create a changelog, produce a changelog from git history, document what changed between versions, summarize commits for a release, or group changes by type — even if they don't use the exact skill name."
 ---
 
+<help-text>
+changelog-from-commits — Generate release notes from git history
+
+USAGE
+  /changelog-from-commits [range] [options]
+
+PARAMETERS
+  range                Git range (e.g. v1.0..v2.0)
+  --version <label>    Override version label
+  --since <date>       Commits since date (YYYY-MM-DD)
+  --last <N>           Last N commits
+
+EXAMPLES
+  /changelog-from-commits                     Auto-detect from tags
+  /changelog-from-commits v1.0.0..v2.0.0      Specific range
+  /changelog-from-commits --last 20           Last 20 commits
+  /changelog-from-commits --since 2026-01-01  Since date
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # changelog-from-commits
 
 Generate meaningful release notes from git history, grouped by category (Features, Fixes, Breaking Changes, Other Changes). Auto-detects tag ranges, classifies commits using Conventional Commits with AI fallback, and prepends to `CHANGELOG.md`.

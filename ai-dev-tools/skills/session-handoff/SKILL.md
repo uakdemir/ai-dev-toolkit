@@ -3,6 +3,18 @@ name: session-handoff
 description: "Use when the user wants to generate a handoff document for the next AI session, capture session progress, save context between sessions, create a session summary, preserve decisions and pending work, wrap up a session, or indicate they are done for now — even if they don't use the exact skill name."
 ---
 
+<help-text>
+session-handoff — Create handoff document for next session
+
+USAGE
+  /session-handoff
+
+EXAMPLES
+  /session-handoff                   Generate handoff from current session
+</help-text>
+
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+
 # session-handoff
 
 Generate a structured handoff document at `tmp/session-handoff.md` for consumption by the next AI agent session. Gathers facts from git state and context from conversation, producing a terse, machine-parseable file with YAML frontmatter + 5 sections.
