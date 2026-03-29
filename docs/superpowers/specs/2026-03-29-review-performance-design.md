@@ -22,17 +22,55 @@ The current review skills take 25-45 minutes per review cycle. Four separate ski
 ### Argument Parsing
 
 ```
-/review-doc <doc-path> [--against <ref-path>] [--max-model <model>] [--mid-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>]
+/review-doc <doc-path> [--against <ref-path>] [--max-model <model>] [--mid-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>] [--help]
 ```
 
-| Flag | Default | Purpose |
-|---|---|---|
-| `--against <ref-path>` | none (optional) | Reference document for cross-checking |
-| `--max-model` | opus | Fixer, final review round (3 agents) |
-| `--mid-model` | sonnet | Early review rounds (2 agents) |
-| `--min-model` | haiku | Synthesis (dedup/filter/count) |
-| `--max-iterations` | 4 | Safety cap |
-| `--effort` | high | Thoroughness level passed to all agents |
+| Flag | Default | Values | Purpose |
+|---|---|---|---|
+| `--against <ref-path>` | none | any file path | Reference document for cross-checking |
+| `--max-model` | opus | opus, sonnet, haiku | Fixer, final review round (3 agents) |
+| `--mid-model` | sonnet | opus, sonnet, haiku | Early review rounds (2 agents) |
+| `--min-model` | haiku | opus, sonnet, haiku | Synthesis (dedup/filter/count) |
+| `--max-iterations` | 4 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
+| `--effort` | high | low, medium, high | Thoroughness level passed to all agents |
+| `--help` | — | — | Print usage and exit |
+
+### `--help` Output
+
+When `--help` is passed, print the following and exit (no review runs):
+
+```
+Usage: /review-doc <doc-path> [flags]
+
+Iterative document review with model tiering. Dispatches parallel agents to
+check completeness, fact-check against codebase, and audit implementability.
+Fixes issues automatically between rounds until zero criticals remain.
+
+Flags:
+  --against <ref-path>    Reference document for cross-checking (default: none)
+  --max-model <model>     Fixer + final review round        (default: opus)
+  --mid-model <model>     Early review rounds                (default: sonnet)
+  --min-model <model>     Synthesis agent                    (default: haiku)
+  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 4)
+  --effort <level>        Thoroughness: low, medium, high    (default: high)
+  --help                  Print this help and exit
+
+Examples:
+  /review-doc docs/spec.md                          Single-pass review (backward compat)
+  /review-doc docs/spec.md --max-iterations 3       Iterative review, up to 3 rounds
+  /review-doc docs/spec.md --against docs/plan.md   Review against reference document
+  /review-doc docs/spec.md --mid-model haiku        Faster early rounds (lower quality)
+```
+
+### Setup
+
+1. Ensure `./tmp/` directory exists (create if needed).
+2. Delete stale files from prior runs: `./tmp/review.json`, `./tmp/review_summary.md`, `./tmp/fix-report.json`, `./tmp/iteration-*.md`.
+
+### Pre-Flight Checks
+
+1. Validate `<doc-path>` exists. If not: `"Error: document not found: <doc-path>"`
+2. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
 
 ### Edge Case: `--max-iterations 0`
 
@@ -43,16 +81,24 @@ Review Doc Skipped
   No iterations run. Document was not reviewed.
 ```
 
+### Edge Case: `--max-iterations 1`
+
+Single-pass mode (backward compatible with old `/review-doc`). Use the final-gate configuration directly: dispatch 3 agents at max-model (completeness + fact-checker + implementability), synthesize with min-model. No fix phase. This preserves the quality of the old 3-agent Opus single-pass review.
+
 ### Iteration Flow
 
+**Guard:** If `max_iterations == 1`, skip the loop below. Instead, treat the single pass as a final-gate round: dispatch 3 agents at max-model, synthesize with min-model, no fix phase. Jump directly to Final Report. The pseudocode below applies only when `max_iterations >= 2`.
+
+**State:** The orchestrator maintains `is_final_gate = false` before the loop.
+
 ```
-For iteration 1 to max_iterations:
+While iteration <= max_iterations OR is_final_gate:
 
   REVIEW PHASE:
-    If this is NOT the final-gate round:
+    If NOT is_final_gate:
       Dispatch 2 agents at mid-model (completeness + implementability)
       Synthesize with min-model → tmp/review.json
-    If this IS the final-gate round:
+    If is_final_gate:
       Dispatch 3 agents at max-model (completeness + fact-checker + implementability)
       Synthesize with min-model → tmp/review.json
 
@@ -60,24 +106,28 @@ For iteration 1 to max_iterations:
     Recount severities from issues array (do not trust counts from JSON)
 
   STOP CHECK:
-    If critical_count == 0 AND this is NOT the final-gate round:
-      Trigger one more review-only round (the "final gate") at max-model
-    If critical_count == 0 AND this IS the final-gate round:
-      Jump to Final Report
+    If critical_count == 0 AND NOT is_final_gate:
+      Set is_final_gate = true, continue to next iteration
+    If is_final_gate (regardless of critical_count):
+      Jump to Final Report — the final gate is always terminal.
+      If criticals remain, status will be "Issues Found".
 
-  FIX PHASE (skipped on final-gate round):
+  FIX PHASE (skipped when is_final_gate):
     Dispatch fixer at max-model
     Hash verification (before/after)
     Fix-report.json with dispositions
 
   ITERATION LOG → tmp/iteration-N.md
+  iteration += 1
 ```
 
-The final-gate round is review-only — no fix phase. It is the Opus quality pass on the cleanest version of the document. This round always runs when criticals reach zero, even if it means using one extra iteration slot.
+The final-gate round is review-only — no fix phase. It is the Opus quality pass on the cleanest version of the document. The final gate is exempt from the `--max-iterations` cap: if criticals reach zero at iteration N == max_iterations, the final gate still runs as iteration N+1. Terminal output reports this as e.g. "5/4" (5 iterations with cap of 4). This ensures the fact-checker always runs on the final document regardless of when criticals converge.
 
 ### Agent Dispatch (Early Rounds — mid-model)
 
-Two agents dispatched in parallel at `mid-model`:
+All `agents/` and `prompts/` paths in this spec are relative to the skill's root directory (e.g., `ai-dev-tools/skills/review-doc/`). The orchestrator dispatches each agent using the Agent tool with the appropriate `model` parameter: `model: "sonnet"` for mid-model rounds, `model: "opus"` for max-model rounds, `model: "haiku"` for min-model synthesis.
+
+Two agents dispatched in parallel at `mid-model` (`Agent(prompt: <prompt>, model: "sonnet")`):
 - **Completeness & Consistency Reviewer** — read from `agents/completeness-reviewer.md`
 - **Implementability Auditor** — read from `agents/implementability-auditor.md`
 
@@ -94,23 +144,25 @@ All three agents run at Opus for maximum depth on the cleaned document.
 
 ### Synthesis
 
-Dispatched as a single Agent at `min-model`. Receives raw findings from all review agents. Performs:
+Read the synthesis agent prompt from `agents/synthesis.md` before dispatching. Dispatched as a single Agent at `min-model`. The synthesis agent receives the combined raw markdown findings from all review agents as conversation context (not a file), plus `is_final_gate: true/false` in the dispatch prompt. The agent writes `tmp/review.json` using the Write tool. Performs:
 1. Deduplicate — same location AND same underlying deficiency
 2. Filter — drop findings with confidence < 40
 3. Categorize by severity — >= 80 critical, 60-79 high, 40-59 medium
-4. Map fact-checker verdicts to confidence — INACCURATE → 85 (critical), STALE → 70 (high), PARTIALLY ACCURATE → 50 (medium)
-5. Cap at 20 — critical + high first, then medium by descending confidence
-6. Compute fact_check_accuracy — `(accurate + 0.5 * partially_accurate) / total * 100`
+4. If `is_final_gate` is true: convert fact-checker verdicts to issue objects with `category: "fact-check"`, `location` from the claim's document section, `problem` from the claim text + evidence, `suggested_fix` from the correction. Map verdict to confidence: INACCURATE → 85 (critical), STALE → 70 (high), PARTIALLY ACCURATE → 50 (medium). ACCURATE verdicts are not converted to issues — they appear in `fact_check_claims` only. If `is_final_gate` is false: skip this step, set `fact_check_claims: []` and `fact_check_accuracy: 100`.
+5. Cap at 20 — critical + high first, then medium by descending confidence. If critical + high exceed 20, raise the cap to include all of them (criticals and highs are never dropped). The Final Report's summary takes the top 10 from this capped set.
+6. If `is_final_gate` is true: compute fact_check_accuracy — `(accurate + 0.5 * partially_accurate) / total * 100`. Otherwise: already set to 100 in step 4.
 7. Write `tmp/review.json`
 
 ### Fixer
 
-Dispatched as a single Agent at `max-model`. Receives:
-- All issues grouped by severity (critical first, then high, then medium)
+Dispatched as a single Agent at `max-model`. The orchestrator reads `tmp/review.json`, extracts all issues grouped by severity, and includes them in the Agent dispatch prompt as conversation context (matching the existing claude-coder.md pattern). Receives:
+- All issues grouped by severity (critical first, then high, then medium) — injected via conversation context
 - The document path
 - Reference document path (if `--against` provided)
 
-Edits the document using the Edit tool. Produces `tmp/fix-report.json` with dispositions for every issue:
+The fixer reads the document content using the Read tool (not passed via dispatch context). This matches the existing claude-coder.md pattern where the fixer reads the file to understand context around each issue before editing.
+
+Edits the document using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/fix-report.json`). Produces `tmp/fix-report.json` with dispositions for every issue:
 - `fixed` — issue resolved
 - `deferred` — out of scope, with reason
 - `pushed-back` — reviewer finding is incorrect, with reason
@@ -174,6 +226,27 @@ Review Doc Complete
   Full review: tmp/review.json
 ```
 
+### Final Report
+
+When the loop completes (final gate passes or max iterations exhausted):
+1. The orchestrator (SKILL.md) generates `tmp/review_summary.md` directly — no agent dispatch needed. Read `tmp/review.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
+2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
+3. Apply status logic (below).
+4. Print terminal output.
+
+### Backlog Writing
+
+review-doc does NOT write to `tmp/past-issues-backlog.md`. Document reviews produce section-level locations (e.g., "Section 3.2"), not code-level locations (e.g., "src/auth.ts:42"). The backlog format is designed for code findings. Deferred/pushed-back doc review items are recorded in iteration logs and the review summary only.
+
+### Cross-Iteration Tracking
+
+The orchestrator maintains the following state across the loop:
+- `total_fixed = {critical: 0, high: 0, medium: 0}` — per-severity breakdown (populates "X Critical fixed | Y High fixed | Z Medium fixed")
+- `total_deferred = 0` — flat count (populates "Deferred: D")
+- `total_pushed_back = 0` — flat count (populates "Pushed back: P")
+
+After each fix phase, parse `tmp/fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/review.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Update counters before the file is overwritten in the next iteration. These aggregates populate the review summary and terminal output.
+
 ### Status Logic
 
 First match wins:
@@ -204,27 +277,59 @@ First match wins:
 ### Argument Parsing
 
 ```
-/review-code <commit-count> [--against <spec-path>] [--max-model <model>] [--max-iterations N] [--effort <level>] [--verify "<cmd>"]
+/review-code <commit-count> [--against <spec-path>] [--max-model <model>] [--max-iterations N] [--effort <level>] [--verify "<cmd>"] [--help]
 ```
 
-| Flag | Default | Purpose |
-|---|---|---|
-| `--against <spec-path>` | none (optional) | Spec as implementation contract |
-| `--max-model` | opus | All phases — reviewer, fixer |
-| `--max-iterations` | 4 | Safety cap |
-| `--effort` | high | Thoroughness level passed to reviewer/fixer |
-| `--verify "<cmd>"` | none | Repeatable — verification commands run after each fix |
+| Flag | Default | Values | Purpose |
+|---|---|---|---|
+| `--against <spec-path>` | none | any file path | Spec as implementation contract |
+| `--max-model` | opus | opus, sonnet, haiku | All phases — reviewer, fixer |
+| `--max-iterations` | 4 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
+| `--effort` | high | low, medium, high | Thoroughness level passed to reviewer/fixer |
+| `--verify "<cmd>"` | none | any shell command | Repeatable — verification commands run after each fix |
+| `--help` | — | — | Print usage and exit |
+
+### `--help` Output
+
+When `--help` is passed, print the following and exit (no review runs):
+
+```
+Usage: /review-code <commit-count> [flags]
+
+Iterative code review with automatic fix cycles. Reviews the last N commits,
+finds issues, fixes them, and verifies. Repeats until zero criticals or cap.
+
+Flags:
+  --against <spec-path>   Spec as implementation contract    (default: none)
+  --max-model <model>     Reviewer + fixer model             (default: opus)
+  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 4)
+  --effort <level>        Thoroughness: low, medium, high    (default: high)
+  --verify "<cmd>"        Verification command (repeatable)  (default: none)
+  --help                  Print this help and exit
+
+Examples:
+  /review-code 3                                     Review last 3 commits
+  /review-code 5 --against docs/spec.md              Review against spec
+  /review-code 3 --verify "npm test" --verify "npm run lint"  With verification
+  /review-code 3 --max-iterations 1                  Single-pass, no fixes
+```
 
 No `--mid-model` or `--min-model` — code review uses `max-model` throughout because:
 - Single reviewer agent (no ensemble to compensate for a weaker model)
 - Code review requires Opus-level reasoning for subtle bugs
 - No synthesis step (single agent produces JSON directly)
 
+### Setup
+
+1. Ensure `./tmp/` directory exists (create if needed).
+2. Delete stale files from prior runs: `./tmp/review.json`, `./tmp/review_summary.md`, `./tmp/fix-report.json`, `./tmp/iteration-*.md`.
+3. Do NOT delete `./tmp/past-issues-backlog.md` — it is intentionally append-only across runs.
+
 ### Pre-Flight Checks
 
 1. `git rev-parse HEAD` succeeds. If not: `"Error: no commits in repository."`
-2. If on `main` or `master`: `"[ralph] Warning: you are on branch 'main'. Fix commits will land here. Continue?"`
-3. If `git status --porcelain` non-empty: `"[ralph] Working tree is dirty. Please commit or stash your changes before running review-code."`
+2. If on `main` or `master`: `"Warning: you are on branch 'main'. Fix commits will land here. Continue?"` Print the warning and pause for user confirmation. This is a blocking prompt — the user must explicitly approve. If the skill is invoked programmatically (e.g., from orchestrate), the invoking skill is responsible for branch validation before dispatch.
+3. If `git status --porcelain` non-empty: `"Working tree is dirty. Please commit or stash your changes before running review-code."` This check runs once during pre-flight only. Verification command side-effects (coverage reports, cache files) are expected during the loop and do not re-trigger this check. The fixer uses `git add -u` (tracked files only) when committing to avoid including verification artifacts.
 
 ### Edge Case: `--max-iterations 0`
 
@@ -234,6 +339,10 @@ Review Code Skipped
   Scope: last N commits
   No iterations run. Code was not reviewed.
 ```
+
+### Edge Case: `--max-iterations 1`
+
+Single-pass mode (backward compatible with old `/review-code`). The loop runs one iteration: review → stop-check → conditionally fix. If the reviewer finds zero criticals, the stop-check runs verification. If verification finds regressions, synthetic criticals are injected and the fix phase runs within the same iteration (followed by one final verification to determine terminal status). If the reviewer finds criticals, the normal fix phase runs. In either case, the loop ends after iteration 1. This is review+fix behavior, which differs from old `/review-code` (review-only) — the backward compat table reflects this: old single-pass users get the same review, plus automatic fixing if issues are found.
 
 ### Iteration Flow
 
@@ -247,21 +356,28 @@ For iteration 1 to max_iterations:
   VALIDATION:
     Recount severities from issues array
     Schema validation (required fields, enum values)
+    If invalid JSON or schema fails: retry review once, abort on second failure
 
-  STOP CHECK:
-    If critical_count == 0:
-      Run verification commands, compare to baseline
-      If no regressions:
-        Write backlog, jump to Final Report
-      If regressions:
-        Inject synthetic critical issues, continue to Fix Phase
+  STOP CHECK (only when critical_count == 0):
+    Run verification commands, compare to baseline
+    If no regressions:
+      BACKLOG WRITING (all issues as status: found) → tmp/past-issues-backlog.md
+      ITERATION LOG → tmp/iteration-N.md
+      Jump to Final Report
+    If regressions:
+      Inject synthetic criticals into tmp/review.json (append to issues array,
+        update critical_count), re-write the file
+      Fall through to Fix Phase
 
-  FIX PHASE:
+  FIX PHASE (when critical_count > 0):
     Dispatch fixer agent at max-model
-    Fixer commits: "fix(ralph): resolve N issues from iteration M"
+    Fixer commits: "fix(review-code): resolve N issues from iteration M"
 
-  BACKLOG WRITING → tmp/past-issues-backlog.md
-  VERIFICATION → run --verify commands, track regressions
+  VERIFICATION (post-fix):
+    Run --verify commands, compare to baseline
+    Track regressions for next iteration's reviewer and fixer context
+
+  BACKLOG WRITING (with dispositions from fix-report.json) → tmp/past-issues-backlog.md
   ITERATION LOG → tmp/iteration-N.md
 ```
 
@@ -276,7 +392,7 @@ Single agent dispatched at `max-model`. Receives:
 - ADRs (scope-based filtering, up to 200 lines)
 - Previous iteration findings (if iteration > 1)
 
-Produces `tmp/review.json` directly — structured JSON matching the review schema.
+Writes `tmp/review.json` directly using the Write tool. The reviewer prompt must include the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
 
 ### Context Budgets
 
@@ -291,7 +407,7 @@ Single agent dispatched at `max-model`. Receives:
 - Verification regressions (if any)
 - Spec content (if `--against` provided)
 
-Edits code, commits with message `fix(ralph): resolve N issues from iteration M`, produces `tmp/fix-report.json`.
+Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/fix-report.json`.
 
 ### Verification Commands
 
@@ -304,9 +420,9 @@ Edits code, commits with message `fix(ralph): resolve N issues from iteration M`
 
 ### ADR Discovery
 
-Scope-based filtering kept from current review-code-ralph:
+Scope-based filtering kept from current review-code-ralph (the simpler approach is intentional — the base review-code's richer algorithm with frontmatter parsing and status filtering is not carried forward; the iterative loop catches what the richer upfront filtering would have caught):
 - Discover ADR index using fallback sequence: `docs/architecture/adrs.md` → `docs/adrs/` → `docs/adr/` → `adr/`. Use first match.
-- Filter ADRs whose `code_paths` match files in the diff
+- Read all `.md` files in the matched directory
 - Include matched ADRs in reviewer context (within 200-line budget)
 
 ### Backlog Writing
@@ -315,6 +431,7 @@ Kept from current review-code-ralph:
 - Append all issues to `tmp/past-issues-backlog.md` after each iteration
 - Cross-reference with `tmp/fix-report.json` for dispositions
 - Read entry template from `ai-dev-tools/references/backlog-entry-format.md`
+- Use `Source: review-code` for all entries
 - No deduplication (intentional — repetition signals difficulty)
 - On stop-check iterations (no fix phase): all issues recorded as `status: found`
 - On abort: record all issues as `status: found` with warning
@@ -375,6 +492,31 @@ Review Code Complete
   Backlog: tmp/past-issues-backlog.md
 ```
 
+### Diff Scope per Iteration
+
+- **Iteration 1:** Diff the last `<commit-count>` commits (`git diff HEAD~N..HEAD`).
+- **Iteration 2+:** Diff only the fix commits from the previous iteration (`git diff $before_sha..$after_sha`). If the fixer made no commits, re-review the original scope.
+
+### Final Report
+
+When the loop completes (criticals zero + verification pass, or max iterations exhausted):
+1. Generate `tmp/review_summary.md` from the last iteration's `tmp/review.json` (top 10 issues by severity, then descending confidence).
+2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
+3. Apply status logic (below).
+4. Print terminal output.
+
+### Cross-Iteration Tracking
+
+Same mechanism as review-doc: orchestrator maintains running `total_fixed` (per-severity), `total_deferred` (flat), `total_pushed_back` (flat) counters. Parse `tmp/fix-report.json` after each fix phase before it's overwritten. Additionally maintains `fix_commit_shas = []` — after each fix phase where `after_sha != before_sha`, append the short SHA. This populates the "Commits added" line in terminal output.
+
+### Verification with `--max-iterations 1`
+
+With a single iteration: if the reviewer finds zero criticals, the stop-check runs verification. If regressions are detected, the orchestrator appends synthetic critical issues to `tmp/review.json` (update the issues array and `critical_count`), re-writes the file, then continues to the fix phase within the same iteration. After the fix phase, run verification one final time to determine terminal status. The loop then ends (cap reached). If regressions persist, status is "Issues Found." If resolved, apply normal status logic.
+
+### When `--verify` Is Not Provided
+
+If no `--verify` commands are configured, skip verification comparison and treat as no regressions. Terminal output: `Verification: none configured`.
+
 ### Status Logic
 
 First match wins:
@@ -404,6 +546,15 @@ First match wins:
 ---
 
 ## Agent Tool Constraints
+
+### `--effort` Semantics
+
+The `--effort` flag is included as `effort: <level>` in each agent's dispatch prompt. Agent prompts interpret it as:
+- `low` — check only critical-severity issues, skip thorough cross-referencing
+- `medium` — check critical + high-severity concerns
+- `high` (default) — full review, all severity levels
+
+### Tool Usage Rules
 
 Added to every agent prompt file (reviewer agents, fixer agents, synthesis agent):
 
@@ -511,6 +662,8 @@ Note: `fact_check_claims` is only populated on the final-gate round (when fact-c
 }
 ```
 
+Note: Neither schema includes `medium_count`. This is intentional — `medium_count` is always derived from the issues array during the validation step ("Recount severities from issues array"). The `critical_count` and `high_count` fields exist for backward compatibility with the existing schema but are never trusted.
+
 ---
 
 ## Files to Delete
@@ -530,19 +683,23 @@ Note: Content from ralph skills is merged into the base skills, not lost.
 |---|---|
 | `ai-dev-tools/skills/review-doc/SKILL.md` | Full rewrite — merge ralph, model tiering, remove Codex |
 | `ai-dev-tools/skills/review-code/SKILL.md` | Full rewrite — merge ralph, remove Codex |
-| `ai-dev-tools/skills/review-doc/prompts/reviewer.md` | Rename from claude-reviewer.md, update for model tiering |
-| `ai-dev-tools/skills/review-doc/prompts/coder.md` | Rename from claude-coder.md |
-| `ai-dev-tools/skills/review-code/prompts/reviewer.md` | Rename from claude-reviewer.md |
-| `ai-dev-tools/skills/review-code/prompts/coder.md` | Rename from claude-coder.md |
+| `ai-dev-tools/skills/review-doc/prompts/reviewer.md` | New file — based on `review-doc-ralph/prompts/claude-reviewer.md`, rewritten for model tiering (2-agent vs 3-agent dispatch, separate synthesis agent) |
+| `ai-dev-tools/skills/review-doc/prompts/coder.md` | New file — based on `review-doc-ralph/prompts/claude-coder.md`, add tool constraints |
+| `ai-dev-tools/skills/review-code/prompts/reviewer.md` | New file — based on `review-code-ralph/prompts/claude-reviewer.md`, rewritten for unified review-code (single agent, add stat-only file coverage instruction). Must use the updated review-code schema (without `fact_check_accuracy`) — remove it from both `required` and `properties` when adapting. |
+| `ai-dev-tools/skills/review-code/prompts/coder.md` | New file — based on `review-code-ralph/prompts/claude-coder.md`. Changes: update commit message from `fix(ralph):` to `fix(review-code):`, add `{{SPEC_CONTENT}}` placeholder for spec content, keep `{{ALL_ISSUES}}` and `{{VERIFICATION_REGRESSIONS}}` placeholders, add tool constraints. |
 | `ai-dev-tools/skills/review-doc/agents/completeness-reviewer.md` | Add tool constraints, update inputs |
 | `ai-dev-tools/skills/review-doc/agents/codebase-fact-checker.md` | Add tool constraints, update inputs |
 | `ai-dev-tools/skills/review-doc/agents/implementability-auditor.md` | Add tool constraints, update inputs |
+| `ai-dev-tools/skills/review-doc/agents/synthesis.md` | New file — min-model agent: dedup, filter, categorize, cap at 20, compute fact_check_accuracy, write tmp/review.json |
+| `ai-dev-tools/references/backlog-entry-format.md` | Update `Source` enum: remove `review-code-ralph`, keep `review-code` |
+| `ai-dev-tools/skills/orchestrate/SKILL.md` | Update all references: `tmp/review_analysis.md` → `tmp/review_summary.md`, `tmp/review_code.md` → `tmp/review_summary.md` + `tmp/review.json`. Update Steps 2, 3, 6-7, and State Detection table. |
+| `ai-dev-tools/skills/help/SKILL.md` | Update review output file references (`review_analysis.md` → `review_summary.md`, `review_code.md` → `review_summary.md`) and severity labels |
 
 ## Error Handling
 
 | Failure mode | Behavior |
 |---|---|
-| Agent returns invalid JSON | Retry review once. Second failure: abort with error. |
+| Agent returns invalid JSON or schema validation fails | Retry review once. Second failure: abort with error. |
 | Fix introduces new criticals | Normal loop — next iteration catches them. |
 | Git operations fail | Abort with error. |
 | Verification command fails | Not an error — data for regression comparison (review-code only). |
@@ -557,11 +714,21 @@ No explicit per-agent timeout. The `--max-iterations` cap prevents runaway loops
 | `/review-doc docs/spec.md` | `/review-doc docs/spec.md --max-iterations 1` |
 | `/review-doc-ralph docs/spec.md --solo=claude` | `/review-doc docs/spec.md` |
 | `/review-doc-ralph docs/spec.md --solo=claude --max-iterations 2` | `/review-doc docs/spec.md --max-iterations 2` |
-| `/review-code 3 --against spec.md` | `/review-code 3 --against spec.md --max-iterations 1` |
+| `/review-code 3 spec.md` | `/review-code 3 --against spec.md --max-iterations 1` (note: analysis doc changes from required positional to optional `--against` flag). Behavior change: old command was review-only, new command is review+fix (see Edge Case: `--max-iterations 1` under review-code). |
 | `/review-code-ralph 3 --against spec.md --solo=claude` | `/review-code 3 --against spec.md` |
 | `/review-code-ralph 3 --against spec.md --solo=claude --verify "npm test"` | `/review-code 3 --against spec.md --verify "npm test"` |
 
 The old `/review-doc-ralph` and `/review-code-ralph` commands will no longer exist. The skill description for `/review-doc` and `/review-code` should be updated to cover both single-pass and iterative use cases.
+
+### Breaking Changes for Downstream Skills
+
+- **Output path:** `tmp/review_analysis.md` → `tmp/review_summary.md`. The `/orchestrate` skill references review output and is updated in this spec (see Files to Create/Modify). The `/respond-to-review` skill is a user-level skill at `~/.claude/skills/respond-to-review/` (outside this repo) — it must be updated separately to read `tmp/review_summary.md` or preferably `tmp/review.json` for structured data.
+- **review-code output:** `tmp/review_code.md` no longer produced. review-code now outputs `tmp/review_summary.md` and `tmp/review.json` instead. The `/orchestrate` skill's Steps 6-7 and state detection are updated in this spec.
+- **review-code schema:** `fact_check_accuracy` removed. Consumers that read `review.json` and expect this field must be updated.
+- **Severity naming:** Markdown severity labels change from "Important/Minor" to "high/medium". Consumers parsing severity values in markdown output must be updated.
+- **Verification auto-detection:** Removed. The old review-code-ralph auto-detected verification commands from package.json/Makefile/pyproject.toml/Cargo.toml. Users must now explicitly pass `--verify` flags.
+- **Backlog Source field:** Changes from `review-code-ralph` to `review-code` for new entries. Historical backlog entries may still contain `review-code-ralph`.
+- **review-doc schema:** `fact_check_claims` is a new required field (array of `{claim, verdict}` objects). Not present in the old review-doc-ralph schema. Consumers reading `tmp/review.json` from review-doc should handle this field. `/respond-to-review` should be updated to display claim verdicts.
 
 ## Estimated Performance
 
