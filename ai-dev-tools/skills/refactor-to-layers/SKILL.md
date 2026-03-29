@@ -186,7 +186,7 @@ Generate artifacts after Phase 2 approval. Create the `docs/layer-architecture/`
    - Provider interface inventory.
    - In monorepo mode, generate one strategy spec per package.
 
-2. **Structural tests** — read `references/structural-test-templates/<backend>.md` and `references/structural-test-templates/shared.md` (where `<backend>` is `node`, `dotnet`, or `python` based on the selected stack). Generate tests across 3 tiers:
+2. **Structural tests** — read `references/structural-test-templates/<backend>.md` and `references/structural-test-templates/shared.md` (where `<backend>` is `node`, `dotnet`, or `python` based on the selected stack). If "Other" was selected, skip structural-test-templates entirely and derive test patterns from the user's answers. Generate tests across 3 tiers:
    - Tier 1: import direction enforcement (no upward imports).
    - Tier 2: boundary enforcement (no skip-layer imports unless allowed).
    - Tier 3: provider compliance (cross-cutting concerns use provider interfaces).
@@ -217,12 +217,12 @@ Generate artifacts after Phase 2 approval. Create the `docs/layer-architecture/`
 For empty projects with zero source files:
 
 1. **Gather requirements.** Ask: "What are the main concerns of this project?" (e.g., "user auth, billing, notifications"). Use the canonical layer hierarchy by default.
-2. **Read references.** Load `references/structural-test-templates/<backend>.md`, `references/structural-test-templates/shared.md`, and `references/provider-patterns.md` for the selected stack.
+2. **Read references.** Load `references/structural-test-templates/<backend>.md`, `references/structural-test-templates/shared.md`, and `references/provider-patterns.md` for the selected stack. If "Other" was selected, skip structural-test-templates entirely.
 3. **Generate artifacts:**
    - Folder structure matching the canonical layer hierarchy from `references/layer-definitions.md`.
    - Barrel/index files for each layer (e.g., `index.ts`, `__init__.py`).
    - Composition root stub (`src/app.ts`, `Program.cs`, or `src/main.py`) with DI wiring comment. Pre-populate the strategy spec's `composition_root` field. Structural tests exempt this file.
-   - Structural tests (all 3 tiers, using templates from `references/structural-test-templates/<backend>.md` + `shared.md`).
+   - Structural tests (all 3 tiers, using templates from `references/structural-test-templates/<backend>.md` + `shared.md`). Skip if "Other" stack.
    - Provider skeleton interfaces for each user-specified concern (from `references/provider-patterns.md`).
    - Strategy spec at `docs/layer-architecture/strategy.md`.
 4. **No human summary needed** — the generated folder structure is self-documenting.

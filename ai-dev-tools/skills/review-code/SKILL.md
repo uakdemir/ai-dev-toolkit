@@ -44,7 +44,7 @@ Examples:
   /review-code 3                                     Review last 3 commits
   /review-code 5 --against docs/spec.md              Review against spec
   /review-code 3 --verify "npm test" --verify "npm run lint"  With verification
-  /review-code 3 --max-iterations 1                  Single-pass, no fixes
+  /review-code 3 --max-iterations 1                  Single-pass (review + fix)
 ```
 
 ## Setup
