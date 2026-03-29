@@ -1,74 +1,302 @@
 ---
 name: review-doc
-description: Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Also use when asked to verify a spec or plan before implementation, check if a document is ready for handoff, or validate claims in a technical document against the codebase. Invoke with /review-doc <path> optionally followed by --against <reference-path>. Add --codex to use Codex CLI instead of Claude agents.
+description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles with model tiering. Invoke with /review-doc <doc-path>."
 ---
 
 # Review Doc
 
-Review a spec or plan document for completeness, factual accuracy, and implementability. Synthesize findings into a prioritized report.
+Iterative document review with model tiering. Dispatches parallel agents to check completeness, fact-check against the codebase, and audit implementability. Synthesizes findings into structured JSON, fixes issues automatically between rounds, and produces a curated human-readable summary.
 
-**Output:** Always saved to `tmp/review_analysis.md` (matches `/respond-to-review` input convention).
+**Output:** `tmp/review.json` (structured, machine-readable) + `tmp/review_summary.md` (curated human summary, max 10 items + aggregates).
 
 ## Argument Parsing
 
 Parse arguments after `/review-doc`:
 
-| Input | Behavior |
-|---|---|
-| `/review-doc docs/specs/foo.md` | Review standalone (Claude agents) |
-| `/review-doc docs/specs/foo.md --against docs/specs/bar.md` | Review with cross-reference (Claude agents) |
-| `/review-doc docs/specs/foo.md --codex` | Review standalone (Codex CLI) |
-| `/review-doc docs/specs/foo.md --against docs/specs/bar.md --codex` | Review with cross-reference (Codex CLI) |
+```
+/review-doc <doc-path> [--against <ref-path>] [--max-model <model>] [--mid-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>] [--help]
+```
 
-**Rules:**
-- First token is always the document path to review
-- `--against <path>` is optional — provides a reference document for cross-checking (e.g., reviewing a plan against its spec)
-- If `--against` is not provided, agents review the document standalone
-- `--codex` — use Codex CLI instead of Claude parallel agents
-- `--codex-model <model>` — override Codex model (default: `o3`)
-- `--codex-reasoning <level>` — override Codex reasoning effort (default: `high`)
+| Flag | Default | Values | Purpose |
+|---|---|---|---|
+| `--against <ref-path>` | none | any file path | Reference document for cross-checking |
+| `--max-model` | opus | opus, sonnet, haiku | Fixer, final review round (3 agents) |
+| `--mid-model` | sonnet | opus, sonnet, haiku | Early review rounds (2 agents) |
+| `--min-model` | haiku | opus, sonnet, haiku | Synthesis (dedup/filter/count) |
+| `--max-iterations` | 4 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
+| `--effort` | high | low, medium, high | Thoroughness level passed to all agents |
+| `--help` | --- | --- | Print usage and exit |
 
-## Reviewer: Claude Agents (default)
+### `--help` Output
 
-Dispatch three parallel Opus agents. Read each agent prompt file before dispatching. Launch all three **in parallel** using the Agent tool with `model: "opus"`.
+When `--help` is passed, print the following and exit (no review runs):
 
-Each agent receives:
+```
+Usage: /review-doc <doc-path> [flags]
+
+Iterative document review with model tiering. Dispatches parallel agents to
+check completeness, fact-check against codebase, and audit implementability.
+Fixes issues automatically between rounds until zero criticals remain.
+
+Flags:
+  --against <ref-path>    Reference document for cross-checking (default: none)
+  --max-model <model>     Fixer + final review round        (default: opus)
+  --mid-model <model>     Early review rounds                (default: sonnet)
+  --min-model <model>     Synthesis agent                    (default: haiku)
+  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 4)
+  --effort <level>        Thoroughness: low, medium, high    (default: high)
+  --help                  Print this help and exit
+
+Examples:
+  /review-doc docs/spec.md                          Single-pass review (backward compat)
+  /review-doc docs/spec.md --max-iterations 3       Iterative review, up to 3 rounds
+  /review-doc docs/spec.md --against docs/plan.md   Review against reference document
+  /review-doc docs/spec.md --mid-model haiku        Faster early rounds (lower quality)
+```
+
+## Setup
+
+1. Ensure `./tmp/` directory exists (create if needed).
+2. Delete stale files from prior runs: `./tmp/review.json`, `./tmp/review_summary.md`, `./tmp/fix-report.json`, `./tmp/iteration-*.md`.
+
+## Pre-Flight Checks
+
+1. Validate `<doc-path>` exists. If not: `"Error: document not found: <doc-path>"`
+2. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
+
+## Edge Case: `--max-iterations 0`
+
+Skip the loop entirely. Do not create any files (no review.json, no iteration logs). Print and exit:
+
+```
+Review Doc Skipped
+  Reviewed: <doc-path>
+  No iterations run. Document was not reviewed.
+```
+
+## Edge Case: `--max-iterations 1`
+
+Single-pass mode (backward compatible with old `/review-doc`). Use the final-gate configuration directly: dispatch 3 agents at max-model (completeness + fact-checker + implementability), synthesize with min-model. No fix phase. Jump directly to Final Report. This preserves the quality of the old 3-agent Opus single-pass review.
+
+## Iteration Flow
+
+**Guard:** If `max_iterations == 1`, skip the loop below. Instead, treat the single pass as a final-gate round: dispatch 3 agents at max-model, synthesize with min-model, no fix phase. Jump directly to Final Report. The pseudocode below applies only when `max_iterations >= 2`.
+
+**State:** The orchestrator maintains `is_final_gate = false` before the loop.
+
+```
+While iteration <= max_iterations OR is_final_gate:
+
+  REVIEW PHASE:
+    If NOT is_final_gate:
+      Dispatch 2 agents at mid-model (completeness + implementability)
+      Synthesize with min-model -> tmp/review.json
+    If is_final_gate:
+      Dispatch 3 agents at max-model (completeness + fact-checker + implementability)
+      Synthesize with min-model -> tmp/review.json
+
+  VALIDATION:
+    Recount severities from issues array (do not trust counts from JSON)
+
+  STOP CHECK:
+    If critical_count == 0 AND NOT is_final_gate:
+      Set is_final_gate = true, continue to next iteration
+    If is_final_gate (regardless of critical_count):
+      Jump to Final Report -- the final gate is always terminal.
+      If criticals remain, status will be "Issues Found".
+
+  FIX PHASE (skipped when is_final_gate):
+    Dispatch fixer at max-model
+    Hash verification (before/after)
+    Fix-report.json with dispositions
+
+  ITERATION LOG -> tmp/iteration-N.md
+  iteration += 1
+```
+
+The final-gate round is review-only -- no fix phase. It is the Opus quality pass on the cleanest version of the document. The final gate is exempt from the `--max-iterations` cap: if criticals reach zero at iteration N == max_iterations, the final gate still runs as iteration N+1. Terminal output reports this as e.g. "5/4" (5 iterations with cap of 4). This ensures the fact-checker always runs on the final document regardless of when criticals converge.
+
+## Agent Dispatch (Early Rounds)
+
+All `agents/` and `prompts/` paths in this section are relative to this skill's root directory (e.g., `ai-dev-tools/skills/review-doc/`).
+
+The orchestrator dispatches each agent using the Agent tool with the appropriate `model` parameter. For early rounds: `Agent(prompt: <prompt>, model: "sonnet")`.
+
+Two agents dispatched **in parallel** at mid-model:
+
+1. **Completeness & Consistency Reviewer** -- read `agents/completeness-reviewer.md` before dispatch
+2. **Implementability Auditor** -- read `agents/implementability-auditor.md` before dispatch
+
+Read `prompts/reviewer.md` for complete dispatch instructions (how to construct each agent's prompt, what context to include).
+
+Each agent dispatch must include:
+- The effort level (`--effort` value)
 - The document path to review
 - The `--against` reference path (if provided)
-- Instruction to read the project's CLAUDE.md for conventions
 
-**Agent 1 — Completeness & Consistency Reviewer:**
-Read `~/.claude/skills/review-doc/agents/completeness-reviewer.md` and dispatch.
+No fact-checker in early rounds. Early rounds focus on structural/completeness issues that Sonnet handles well. Fact-checking on a noisy early draft wastes time.
 
-**Agent 2 — Codebase Fact-Checker:**
-Read `~/.claude/skills/review-doc/agents/codebase-fact-checker.md` and dispatch.
+## Agent Dispatch (Final Gate)
 
-**Agent 3 — Implementability Auditor:**
-Read `~/.claude/skills/review-doc/agents/implementability-auditor.md` and dispatch.
+Three agents dispatched **in parallel** at max-model (`Agent(prompt: <prompt>, model: "opus")`):
 
-### Agent Synthesis
+1. **Completeness & Consistency Reviewer** -- `agents/completeness-reviewer.md`
+2. **Codebase Fact-Checker** -- `agents/codebase-fact-checker.md`
+3. **Implementability Auditor** -- `agents/implementability-auditor.md`
 
-After all three agents return:
+Read `prompts/reviewer.md` for complete dispatch instructions.
 
-1. **Deduplicate** — merge findings that flag the same section/issue from different angles
-2. **Filter** — drop findings with confidence below 40
-3. **Cap** — maximum 20 findings
-4. **Categorize** by severity:
-   - **Critical** (confidence >= 80): blocks implementation, must fix
-   - **Important** (confidence 60-79): should fix before handoff
-   - **Minor** (confidence 40-59): advisory, nice to fix
-5. **Fact-check summary** — include the accuracy table from the Codebase Fact-Checker
-6. **Write report** to `tmp/review_analysis.md` (create `tmp/` if needed)
-7. **Print verdict** to terminal
+All three agents run at Opus for maximum depth on the cleaned document.
 
-## Reviewer: Codex CLI (`--codex`)
+## Synthesis
 
-Single-pass review via Codex CLI. Combines all three review concerns (completeness, fact-check, implementability) in one prompt.
+Read the synthesis agent prompt from `agents/synthesis.md` before dispatching.
 
-### Setup
+Dispatched as a single Agent at min-model (`Agent(prompt: <prompt>, model: "haiku")`). The synthesis agent receives the combined raw markdown findings from all review agents as conversation context (not a file), plus `is_final_gate: true/false` in the dispatch prompt. The agent writes `tmp/review.json` using the Write tool.
 
-1. Ensure `./tmp/` directory exists.
-2. Write the review JSON schema to `./tmp/review-doc.schema.json`:
+The synthesis agent performs:
+1. **Deduplicate** -- same location AND same underlying deficiency
+2. **Filter** -- drop findings with confidence < 40
+3. **Categorize by severity** -- >= 80 critical, 60-79 high, 40-59 medium
+4. **Fact-check conversion** (final gate only) -- convert fact-checker verdicts to issue objects with `category: "fact-check"`. Map verdict to confidence: INACCURATE -> 85 (critical), STALE -> 70 (high), PARTIALLY ACCURATE -> 50 (medium). ACCURATE verdicts are not converted to issues. If not final gate: set `fact_check_claims: []` and `fact_check_accuracy: 100`.
+5. **Cap at 20** -- critical + high first, then medium by descending confidence. If critical + high exceed 20, raise the cap to include all of them (criticals and highs are never dropped).
+6. **Compute fact_check_accuracy** (final gate only) -- `(accurate + 0.5 * partially_accurate) / total * 100`. Otherwise: already set to 100 in step 4.
+7. **Write** `tmp/review.json`
+
+## Fixer
+
+Dispatched as a single Agent at max-model (`Agent(prompt: <prompt>, model: "opus")`).
+
+Read `prompts/coder.md` for complete dispatch instructions.
+
+The orchestrator reads `tmp/review.json`, extracts all issues grouped by severity (critical first, then high, then medium), and includes them in the Agent dispatch prompt as conversation context. The dispatch prompt must include:
+- All issues grouped by severity
+- The document path
+- Reference document path (if `--against` provided)
+
+The fixer reads the document content using the Read tool (not passed via dispatch context). Edits the document using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/fix-report.json`).
+
+Produces `tmp/fix-report.json` with dispositions for every issue:
+- `fixed` -- issue resolved
+- `deferred` -- out of scope, with reason
+- `pushed-back` -- reviewer finding is incorrect, with reason
+
+## Hash Verification
+
+Before fix phase: compute `sha256sum '<doc-path>' | cut -d' ' -f1` via Bash.
+After fix phase: same command, compare values.
+
+If unchanged: print `Warning: document was not modified. Proceeding to next review.`
+
+## Output Artifacts
+
+| File | Purpose | Consumer |
+|---|---|---|
+| `tmp/review.json` | Structured JSON from last iteration | `/respond-to-review`, machines |
+| `tmp/review_summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
+| `tmp/fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
+| `tmp/iteration-N.md` | Per-iteration log | Debugging, audit |
+
+## Review Summary Format
+
+The orchestrator generates `tmp/review_summary.md` directly during the Final Report step. Format:
+
+```markdown
+# Review Summary
+
+**Date:** YYYY-MM-DD HH:MM
+**Reviewed:** <doc-path>
+**Against:** <ref-path or "standalone">
+**Status:** Approved | Approved with suggestions | Issues Found
+**Iterations:** N/M
+
+## Aggregate
+X Critical fixed | Y High fixed | Z Medium fixed
+Remaining: A Critical | B High | C Medium
+Deferred: D | Pushed back: P
+
+## Fact-Check Accuracy
+X/Y verifiable claims accurate (Z%)
+
+## Remaining Issues (top 10 by severity)
+
+### 1. [Title]
+**Severity:** high | **Category:** completeness | **Location:** Section 3.2
+**Problem:** ...
+**Status:** deferred -- reason
+
+[... up to 10 items]
+```
+
+## Terminal Output
+
+After saving the summary, print:
+
+```
+Review Doc Complete
+  Reviewed: <doc-path>
+  Against: <ref-path or "standalone">
+  Iterations: N/M
+  Status: Approved with suggestions
+  Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed
+  Remaining: 0 Critical | 2 High | 1 Medium
+  Fact-check: X/Y claims accurate (Z%)
+  Summary: tmp/review_summary.md
+  Full review: tmp/review.json
+```
+
+## Final Report
+
+When the loop completes (final gate passes or max iterations exhausted):
+
+1. The orchestrator generates `tmp/review_summary.md` directly -- no agent dispatch needed. Read `tmp/review.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
+2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
+3. Apply status logic (see Status Logic below).
+4. Print terminal output (see Terminal Output above).
+
+## Backlog Writing
+
+review-doc does **NOT** write to `tmp/past-issues-backlog.md`. Document reviews produce section-level locations (e.g., "Section 3.2"), not code-level locations (e.g., "src/auth.ts:42"). The backlog format is designed for code findings. Deferred and pushed-back document review items are recorded in iteration logs and the review summary only.
+
+## Cross-Iteration Tracking
+
+The orchestrator maintains the following state across the loop:
+
+- `total_fixed = {critical: 0, high: 0, medium: 0}` -- per-severity breakdown (populates "X Critical fixed | Y High fixed | Z Medium fixed")
+- `total_deferred = 0` -- flat count (populates "Deferred: D")
+- `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
+
+After each fix phase, parse `tmp/fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/review.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Update counters before the file is overwritten in the next iteration.
+
+## Status Logic
+
+First match wins:
+
+1. **Issues Found**: `critical_count > 0` OR `fact_check_accuracy < 75`
+2. **Approved with suggestions**: `fact_check_accuracy < 90` OR high/medium issues remain
+3. **Approved**: all other cases
+
+## Iteration Log Format
+
+Write to `tmp/iteration-N.md` after each iteration:
+
+```markdown
+# Iteration N
+
+**Reviewer model:** mid-model or max-model
+**Agents:** 2 (completeness + implementability) or 3 (+ fact-checker)
+**Fixer model:** max-model (or "N/A -- final gate, review only")
+**Issues found:** X critical, Y high, Z medium
+**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, final gate triggered" | "0 criticals, loop complete" | "Fix phase failed: <error>"
+**Issues fixed:** [category] [severity] at [location]
+**Issues deferred:** [category] [severity] at [location] -- reason
+**Issues pushed back:** [category] [severity] at [location] -- reason
+**Issues found (no disposition):** [category] [severity] at [location], or "none"
+```
+
+## JSON Schema
+
+The review-doc schema for `tmp/review.json` validation reference:
 
 ```json
 {
@@ -116,104 +344,4 @@ Single-pass review via Codex CLI. Combines all three review concerns (completene
 }
 ```
 
-### Dispatch
-
-1. Read `prompts/codex-reviewer.md` from this skill's directory.
-2. Replace placeholders: `{{DOC_PATH}}` with `<doc-path>`, `{{AGAINST_PATH}}` with `<ref-path>` or `"none"`, `{{ITERATION_NUM}}` with `1`.
-3. Write the resolved prompt to `./tmp/codex-prompt.txt`.
-4. Run via Bash (timeout: 300000ms):
-```bash
-codex exec -s read-only \
-  --model <codex-model> -c 'model_reasoning_effort="<codex-reasoning>"' \
-  --output-schema ./tmp/review-doc.schema.json \
-  -o ./tmp/review.json \
-  "$(cat ./tmp/codex-prompt.txt)"
-```
-5. If the command fails (non-zero exit): retry once. If it fails again, print error and stop.
-6. If `codex` is not found: print `"Error: codex CLI not found. Run without --codex to use Claude agents."` and stop.
-
-### Codex JSON → Report Conversion
-
-1. Read `./tmp/review.json`.
-2. Parse the JSON. Recount severities from the issues array (do not trust `critical_count`/`high_count`).
-3. Cap at 20 findings: keep all critical and high first, then fill with medium by descending confidence.
-4. Convert to the markdown report format (see Report Format below):
-   - Map `fact_check_claims` → Fact-Check Summary table
-   - Map `critical` severity → Critical section
-   - Map `high` severity → Important section
-   - Map `medium` severity → Minor section
-   - Use `fact_check_accuracy` from the JSON
-5. Write to `tmp/review_analysis.md`.
-6. Print verdict to terminal.
-
-## Report Format
-
-Write this to `tmp/review_analysis.md`:
-
-```markdown
-# Document Review
-
-**Date:** [YYYY-MM-DD HH:MM]
-**Reviewed:** [document path]
-**Against:** [reference path, or "standalone"]
-**Status:** Approved | Approved with suggestions | Issues Found
-
----
-
-## Fact-Check Summary
-
-| Claim | Verdict |
-|---|---|
-| [claim] | ACCURATE / INACCURATE / STALE |
-
-**Accuracy rate:** X of Y verifiable claims accurate (Z%)
-
----
-
-## Critical (must fix)
-
-### 1. [Finding title]
-**Confidence:** N/100 | **Category:** [completeness|consistency|scope|fact-check|implementability]
-**Location:** [section/heading in document]
-
-**Problem:** [description]
-**Suggested fix:** [concrete suggestion]
-
----
-
-## Important (should fix)
-
-[same format]
-
----
-
-## Minor (advisory)
-
-[same format]
-
----
-
-## Verdict
-
-[2-3 sentences: overall assessment, readiness for implementation, biggest risk]
-```
-
-## Terminal Output
-
-After saving the report, print only:
-
-```
-Document Review Complete
-  Reviewed: [document path]
-  Against: [reference path or "standalone"]
-  Status: [Approved | Approved with suggestions | Issues Found]
-  Fact-check: X/Y claims accurate (Z%)
-  Critical: N | Important: N | Minor: N
-  Report: tmp/review_analysis.md
-```
-
-## Status Logic
-
-- **Approved:** Zero critical findings AND fact-check accuracy >= 90%
-- **Approved with suggestions:** Zero critical findings but has important/minor findings, or accuracy 75-89%
-- **Issues Found:** Any critical findings OR fact-check accuracy < 75%
+Note: `fact_check_claims` is only populated on the final-gate round (when the codebase fact-checker runs). On early rounds (no fact-checker), set `fact_check_claims: []` and `fact_check_accuracy: 100`.
