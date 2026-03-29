@@ -53,8 +53,7 @@ Example derivations from frontmatter:
 Use the static family mapping below. For each family, list only the member skills that were actually found during the scan (skip missing ones silently). Format each family as an indented line with the family name left-aligned, followed by members comma-separated. Wrap long member lists to align with the first member:
 
 ```
-  Review & Quality    review-doc, review-doc-ralph, review-code,
-                      review-code-ralph, test-audit
+  Review & Quality    review-doc, review-code, test-audit
 ```
 
 Any non-help skill found during the scan that does not appear in any family below goes into an "Other" family at the end, using the same comma-separated format.
@@ -65,7 +64,7 @@ The `help` skill itself does not appear in any family.
 
 | Family | Members |
 |--------|---------|
-| Review & Quality | review-doc, review-doc-ralph, review-code, review-code-ralph, test-audit |
+| Review & Quality | review-doc, review-code, test-audit |
 | Documentation | document-for-ai, session-handoff, changelog-from-commits |
 | Refactoring | refactor-to-layers, refactor-to-monorepo, implement-plan |
 | Conventions | convention-enforcer, api-contract-guard, consolidate |
@@ -118,10 +117,6 @@ COMMON WORKFLOWS
     /review-doc path/to/spec.md --against path/to/reference.md
       (cross-checks spec against a reference document)
 
-  "I want automated review-fix cycles"
-    /review-doc-ralph or /review-code-ralph — iterates with Codex
-    until clean
-
   "I want to improve my codebase structure"
     /refactor-to-layers (enforce dependency layers)
     /refactor-to-monorepo (plan monorepo extraction)
@@ -135,12 +130,9 @@ TIPS
   - orchestrate detects state from artifacts (specs, plans, reviews
     in tmp/). No need to tell it where you are — just re-invoke
     /orchestrate.
-  - ralph skills (review-code-ralph, review-doc-ralph) auto-iterate
-    between Claude and Codex until zero critical issues. Use them
-    when you want hands-off quality improvement.
   - review-doc dispatches 3 parallel agents (completeness, fact-check,
     implementability). Add --codex for single-pass Codex review instead.
-  - All review output lands in tmp/ (review_analysis.md, review_code.md).
+  - All review output lands in tmp/ (review_summary.md, review.json).
     Process findings with /respond-to-review (a separate user-level skill,
     not part of this plugin).
   - document-for-ai generates CLAUDE.md files and AI_INDEX.md — run it

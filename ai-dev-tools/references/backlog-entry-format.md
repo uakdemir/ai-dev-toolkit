@@ -1,6 +1,6 @@
 # Backlog Entry Format
 
-> Shared template used by review-code and review-code-ralph when writing to `./tmp/past-issues-backlog.md`.
+> Shared template used by review-code when writing to `./tmp/past-issues-backlog.md`.
 
 ## File Structure
 
@@ -23,12 +23,10 @@ Each entry is a block separated by `---`:
 ### [Issue Title]
 
 - **Date:** YYYY-MM-DDTHH:MM:SSZ
-- **Source:** review-code | review-code-ralph
-- **Iteration:** N (review-code-ralph only; omit for review-code)
+- **Source:** review-code
 - **Severity:** critical | high | medium | low
 - **Category:** bug | architecture | spec-drift | security | test-gap
 - **Location:** path/to/file.ext:line_number
-- **Confidence:** N (review-code-ralph only; omit for review-code)
 - **Commit:** short_hash (when available)
 - **Status:** found | fixed | deferred | pushed-back
 
@@ -48,7 +46,7 @@ Why the coder chose not to fix this.
 
 | Status | Meaning |
 |--------|---------|
-| `found` | Identified by reviewer, no fix attempted (review-code output, or ralph's final stop-check review) |
+| `found` | Identified by reviewer, no fix attempted |
 | `fixed` | Coder resolved the issue |
 | `deferred` | Coder chose to skip with reason |
 | `pushed-back` | Coder disputes the reviewer's finding with reason |
@@ -56,10 +54,8 @@ Why the coder chose not to fix this.
 ## Field Rules
 
 - Fields that do not apply are omitted entirely (no placeholders, no "N/A")
-- `low` severity is available for review-code (review-code-ralph does not produce it)
-- No deduplication — repeated issues across ralph iterations are written each time (repetition signals difficulty for downstream pattern mining)
+- `low` severity is available for review-code
 
 ## Issue Title Derivation
 
-- **review-code:** Use the `[Issue Title]` from the markdown review output directly.
-- **review-code-ralph:** Derive from the `problem` field — use the first sentence, truncated to 80 characters. If the first sentence exceeds 80 characters, truncate at the last word boundary and append `...`.
+- Use the `[Issue Title]` from the markdown review output directly.

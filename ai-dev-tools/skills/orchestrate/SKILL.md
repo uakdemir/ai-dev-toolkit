@@ -69,22 +69,22 @@ Execute these steps in order. State detection (see below) determines which step 
 
 **Trigger:** Spec file exists in `docs/superpowers/specs/`, AND either:
 - The spec's `**Status:**` header (line 4, bold format) does not contain "Approved", OR
-- `tmp/review_analysis.md` does not exist or its `- Document:` field does not match the current spec path (review not yet run for this spec).
+- `tmp/review_summary.md` does not exist or its `**Reviewed:**` field does not match the current spec path (review not yet run for this spec).
 
 This check matches both "Approved" and "Approved with suggestions" as passing — either means zero criticals.
 
 **Behavior:**
 - Present: "Spec written at `{path}`. Ready to review? I'll dispatch 3 parallel review agents."
 - On confirm: invoke `/review-doc {spec_path}`
-- The review skill produces `tmp/review_analysis.md` with `- Status:` field.
+- The review skill produces `tmp/review_summary.md` with `**Status:**` field.
 - **Clean review path:** If the review returns "Approved" or "Approved with suggestions" (zero criticals), update the spec's `**Status:**` header to "Approved" immediately, so the next `/orchestrate` invocation advances to Step 4. Do not wait for Step 3 to update it.
 
 ### Step 3: RESPOND TO REVIEW
 
-**Trigger:** `tmp/review_analysis.md` exists AND its `- Document:` field matches the current spec path AND Critical count > 0. If `- Document:` does not match current spec, treat as stale and ignore. If zero criticals but Important > 0, present as informational: "Review found {M} suggestions. Fix these or proceed to planning?"
+**Trigger:** `tmp/review_summary.md` exists AND its `**Reviewed:**` field matches the current spec path AND Critical count > 0. If `**Reviewed:**` does not match current spec, treat as stale and ignore. If zero criticals but High > 0, present as informational: "Review found {M} suggestions. Fix these or proceed to planning?"
 
 **Behavior:**
-- Present: "Review found {N} critical, {M} important findings. Ready to apply fixes?"
+- Present: "Review found {N} critical, {M} high findings. Ready to apply fixes?"
 - On confirm: invoke `/respond-to-review {round_number} {spec_path}` where round_number = count `## Round N` sections in `tmp/response_analysis.md` that belong to the current spec (match by spec name in section content) + 1. If no matching sections exist, round = 1. No arch file argument for spec reviews.
 - **Loop:** After responding, re-invoke `/review-doc` if critical findings existed. Repeat Steps 2-3 until spec status is "Approved" or "Approved with suggestions" (either = zero criticals, loop exits).
 - **Status update:** After re-review confirms zero criticals, update the spec's `**Status:**` header to `Approved (R{N} revisions applied)` so state detection recognizes the approval on subsequent `/orchestrate` invocations.
@@ -139,14 +139,14 @@ This check matches both "Approved" and "Approved with suggestions" as passing �
 
 ### Step 7: FIX REVIEW FINDINGS
 
-**Trigger:** `tmp/review_code.md` exists with Critical or High count > 0 AND the review's commit hashes match the current feature's commits (cross-check to avoid stale review from a different feature).
+**Trigger:** `tmp/review_summary.md` exists with Critical or High count > 0 AND the review's commit hashes match the current feature's commits (cross-check to avoid stale review from a different feature).
 
 **Behavior:**
 - Present: "Code review found {N} issues ({C} critical, {H} high). Ready to fix?"
-- On confirm: read `tmp/review_code.md` findings, apply fixes per the suggested-fix in each finding.
+- On confirm: read `tmp/review_summary.md` findings, apply fixes per the suggested-fix in each finding.
 - Re-run `/review-code` with updated commit count (recount commits since plan hash using same method as Step 6).
-- **Loop:** Repeat Steps 6-7 until zero critical and zero high in `tmp/review_code.md`. On re-review, recount commits since plan hash (same method as Step 6) and pass the updated count.
-- **Note:** Does NOT use `/respond-to-review` for code fixes. That skill reads `tmp/review_analysis.md`, not `tmp/review_code.md`. Code fixes are applied directly based on the review's suggested fixes. Re-reviews examine current code — fixed issues will not reproduce. Intentionally deferred items may be re-raised.
+- **Loop:** Repeat Steps 6-7 until zero critical and zero high in `tmp/review_summary.md`. On re-review, recount commits since plan hash (same method as Step 6) and pass the updated count.
+- **Note:** Does NOT use `/respond-to-review` for code fixes. That skill is for doc review responses, not code reviews. Code fixes are applied directly based on the review's suggested fixes. Re-reviews examine current code — fixed issues will not reproduce. Intentionally deferred items may be re-raised.
 
 ### Step 8: COMPLETE
 
@@ -173,13 +173,13 @@ Evaluate the state table top-to-bottom. The first matching trigger determines wh
 | Feature identified | `tmp/current-roadmap.md` | Next unimplemented item (if file exists) |
 | Spec exists | `docs/superpowers/specs/*-design.md` | File exists for current feature |
 | Spec reviewed | Spec file `**Status:**` header (line 4, bold format) | Contains "Approved" (matches both "Approved" and "Approved with suggestions") |
-| Spec review has findings | `tmp/review_analysis.md` `- Document:` field | Matches current spec path AND status is "Issues Found" |
+| Spec review has findings | `tmp/review_summary.md` `**Reviewed:**` field | Matches current spec path AND status is "Issues Found" |
 | Spec review applied | `tmp/response_analysis.md` | Has entries for current round AND spec status still not "Approved" |
 | Plan exists | `docs/superpowers/plans/*-plan.md` | File exists matching spec's feature name |
 | Implementation in progress | Plan file checkboxes | Some `- [x]`, some `- [ ]` |
 | Implementation complete | Plan file checkboxes + git | All `- [x]` OR commits after plan commit hash |
-| Code reviewed | `tmp/review_code.md` | File exists, commits in findings match current feature |
-| Review resolved | `tmp/review_code.md` Summary table | 0 Critical, 0 High |
+| Code reviewed | `tmp/review_summary.md` | File exists, commits in findings match current feature |
+| Review resolved | `tmp/review_summary.md` Summary table | 0 Critical, 0 High |
 | Fixes applied, re-review needed | Commits after reviewed commits | New commits since last review |
 
 ### Feature Detection Algorithm
@@ -187,9 +187,9 @@ Evaluate the state table top-to-bottom. The first matching trigger determines wh
 1. Scan `docs/superpowers/specs/` for all `*-design.md` files.
 2. For each spec, extract the feature name from the filename.
 3. Check if the feature's cycle is complete. A cycle is complete if:
-   - (a) Matching plan exists with all checkboxes `[x]` AND `tmp/review_code.md` is clean (0 Critical, 0 High) with commit hashes matching this feature, OR
+   - (a) Matching plan exists with all checkboxes `[x]` AND `tmp/review_summary.md` is clean (0 Critical, 0 High) with commit hashes matching this feature, OR
    - (b) Feature is marked Done in `tmp/current-roadmap.md` (legacy features completed before orchestrate), OR
-   - (c) Plan exists with all unchecked boxes BUT feature-specific commits exist after plan hash AND `tmp/review_code.md` has 0 Critical/0 High for matching commits (fallback for plans where checkboxes were not tracked).
+   - (c) Plan exists with all unchecked boxes BUT feature-specific commits exist after plan hash AND `tmp/review_summary.md` has 0 Critical/0 High for matching commits (fallback for plans where checkboxes were not tracked).
 4. Collect all specs whose cycle is NOT complete.
 5. If exactly one incomplete spec: that is the current feature.
 6. If multiple incomplete specs: present list: "Found multiple in-progress features: {list}. Which one?"
@@ -217,11 +217,11 @@ To determine if implementation has started or completed:
 
 ### Cross-Checking tmp/ Files
 
-`tmp/review_code.md` and `tmp/review_analysis.md` are global singletons (no feature prefix). They contain results from whatever feature was last reviewed, which may not be the current feature. To avoid attributing a stale review to the wrong feature:
+`tmp/review_summary.md` and `tmp/review.json` are global singletons (no feature prefix). They contain results from whatever feature was last reviewed, which may not be the current feature. To avoid attributing a stale review to the wrong feature:
 
-- **review_code.md with findings:** Parse commit hashes from findings (each finding includes a `**Commit:**` hash). Verify those commits appear in `git log --grep='{feature_name}'` output. If commits do not match: treat as stale, ignore.
-- **review_code.md with zero findings (clean review):** A clean review has no commit hashes in findings. To attribute it: check the file's `**Commits reviewed:**` header line (review-code includes the commit range at the top of the file). Verify the commit range overlaps with the current feature's plan_hash..HEAD window. If it doesn't overlap or the header is missing: treat as stale.
-- **review_analysis.md:** Verify its `- Document:` field matches the current spec path. If it references a different spec: treat as stale, ignore.
+- **Code review with findings:** Parse commit hashes from the `tmp/review.json` issues array `location` fields. Verify those commits appear in `git log --grep='{feature_name}'` output. If commits do not match: treat as stale, ignore.
+- **Code review with zero findings (clean review):** A clean review has no commit hashes in findings. To attribute it: check the `**Scope:**` header in `tmp/review_summary.md` (review-code includes the commit range). Verify the commit range overlaps with the current feature's plan_hash..HEAD window. If it doesn't overlap or the header is missing: treat as stale.
+- **Doc review:** Verify the `**Reviewed:**` field in `tmp/review_summary.md` matches the current spec path. If it references a different spec: treat as stale, ignore.
 - **response_analysis.md:** This file is NOT read by orchestrate for state detection of code reviews. It is only relevant for spec review rounds (Step 3 round counting).
 
 ### Ambiguity Handling
@@ -292,7 +292,7 @@ Handle each scenario gracefully. Never crash or leave the user without options.
 | Stale artifacts (>30 days) | Ask: "Found stale spec for `{name}` from {date}. Continue or start fresh?" If start fresh, do not delete old artifacts — user handles cleanup. |
 | Plan partially completed | Present progress: "{N}/{M} tasks done. Resume?" Show which tasks remain. |
 | No roadmap to update at Step 8 | Skip roadmap update, proceed to quality gate check. |
-| tmp/review_code.md has stale data from different feature | Cross-check commit hashes in findings against current feature's commits via `git log --grep`. If mismatch, ignore and treat as "no review yet." |
+| tmp/review_summary.md has stale data from different feature | Cross-check commit hashes in findings against current feature's commits via `git log --grep`. If mismatch, ignore and treat as "no review yet." |
 
 ---
 
