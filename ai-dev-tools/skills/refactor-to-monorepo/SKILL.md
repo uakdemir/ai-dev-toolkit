@@ -242,6 +242,95 @@ Goal: reconcile all three analysis views and produce final module boundaries.
 
 Wait for user approval before generating artifacts.
 
+### Checklist Crystallization (After Phase 4 Approval)
+
+After the user approves the Phase 4 synthesis and before generating output artifacts (Step 4), crystallize accumulated observations into project-local checklists.
+
+#### Convention: `tmp/checklists/`
+
+All checklists live in `tmp/checklists/`. The directory contains an `index.md` registry and one or more checklist files.
+
+**`index.md` format:**
+
+```markdown
+# Project Checklists
+
+| Checklist | Description | Phase | Recommended Skill |
+|-----------|-------------|-------|-------------------|
+| [monorepo-extraction.md](monorepo-extraction.md) | Universal extraction pitfalls | both | refactor-to-monorepo, implement-plan |
+```
+
+**Column definitions:**
+
+| Column | Values | Purpose |
+|--------|--------|---------|
+| Phase | `analysis`, `coding`, or `both` | `analysis` = refactor-to-monorepo phases 1-4, `coding` = implement-plan phases 1-N, `both` = both contexts |
+| Recommended Skill | Comma-separated skill names | Filter: split on comma, trim whitespace, exact-match each element |
+
+**Entry format** (each entry in a checklist file):
+
+```markdown
+### <short title>
+
+- **Trigger:** <when this hazard applies>
+- **Rule:** <what to do>
+- **Why:** <what goes wrong if ignored>
+```
+
+Entries are appended, never reordered.
+
+**Write protocol (for append operations by `implement-plan` — NOT used during crystallization):**
+
+1. Read `index.md` to check if a matching file already exists.
+2. If matching file exists, append entries. Do not create duplicates.
+3. After creating a new file, add a row to `index.md`.
+4. If `tmp/checklists/` does not exist, create it and `index.md` together.
+
+#### Crystallization Sequence
+
+> **Note:** Crystallization is the initial population event and is exempt from the append-only write protocol above. On re-run, delete existing contents before proceeding.
+
+1. If `tmp/checklists/` already exists (re-run), delete all contents (files and subdirectories), including any entries appended by `implement-plan` during a prior lifecycle. Create `tmp/checklists/` if it does not exist.
+2. Generate a **universal checklist** (`tmp/checklists/monorepo-extraction.md`). Always emitted. Include:
+   - Entries from accumulated observations matching universal categories: singleton state, shared DB patterns, circular dependencies, `.gitignore` blanket pattern traps
+   - **Always-included entries** (regardless of observations):
+
+     ```markdown
+     ### Commit strategy
+
+     - **Trigger:** Always — applies to every extraction phase.
+     - **Rule:** One commit per migration phase, bundling all actions within that phase (file moves, import rewrites, config changes). Do not split a phase's actions across multiple commits.
+     - **Why:** Per-phase commits map directly to the migration plan, making resume and rollback predictable. A mid-phase partial commit uses a `(partial)` suffix and is the exception, not the norm.
+
+     ### Per-phase mechanical checklist
+
+     - **Trigger:** Always — applies before marking any migration phase complete.
+     - **Rule:** For each file moved in this phase: (1) update all import paths that reference it, (2) verify the file is listed in the correct package's exports, (3) confirm the old location either re-exports or is deleted.
+     - **Why:** Skipping any of these steps causes silent import resolution failures that pass local compilation but break at runtime or in downstream packages.
+     ```
+
+   - Unused destructured variables after service extraction (always included — mechanical hazard)
+   - **Fallback for unowned observations:** observations tagged to files not owned by any module (shared/, config files) are also added here.
+
+3. If tech stack is options 1-5 (not "Other") AND at least one stack-specific observation was accumulated, generate a **stack-specific checklist**. Skip entirely if zero stack-specific observations. File name mapping:
+
+   | Stack option | File name |
+   |---|---|
+   | 1 (Node.js + React) | `node-ts-extraction.md` |
+   | 2 (Node.js + Vue) | `node-ts-extraction.md` |
+   | 3 (.NET + React) | `dotnet-extraction.md` |
+   | 4 (.NET + Vue) | `dotnet-extraction.md` |
+   | 5 (Python + React) | `python-extraction.md` |
+
+   Stack-specific categories by stack:
+   - Node.js/TypeScript: conditional exports, pnpm phantom deps, `vi.mock` barrel behavior, `declare module` type resolution
+   - .NET: assembly binding redirects, `InternalsVisibleTo` breaks, shared `appsettings.json` ownership
+   - Python: relative import breakage, `sys.modules` singleton state, `conftest.py` fixture visibility
+
+4. Create `index.md` with rows for each generated file. Use Phase = `both` for all rows.
+
+**Empty checklist prevention:** If zero non-obvious findings beyond always-included entries, still emit the universal checklist with the always-included entries.
+
 ---
 
 ## Step 4: Output Artifacts
