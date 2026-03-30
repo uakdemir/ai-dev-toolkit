@@ -106,6 +106,38 @@ Each seed is a `{ name: string, paths: string[] }` pair. Repeat until the user s
 
 Four phases, each building on the previous. Present findings at each user checkpoint before proceeding to the next phase.
 
+### Observation Accumulation (All Phases)
+
+While executing phases 1-3, the agent watches for non-obvious extraction hazards in parallel with the phase's primary analysis goal. These observations feed into checklist generation after Phase 4.
+
+**What to watch for:**
+
+| Category | What to look for | Example |
+|----------|-----------------|---------|
+| Singleton state | Module-level `let`/`var` with mutation | `let _env = null` in `env.ts` |
+| Shared DB patterns | Same query pattern (lookup + transform) in 3+ modules | `findFirst(customers) + decrypt(apiKey)` |
+| Circular dependencies | Import cycles between proposed modules | A → B → C → A |
+| Phantom dependencies | Imports that resolve only via hoisting | `import pino from 'pino'` without it in `package.json` |
+| Test mock fragility | Barrel re-export mocks that become tautological after extraction | `vi.mock('@scope/pkg')` on internal delegation |
+| Conditional export gaps | Missing `types` or `import` conditions in `package.json` exports | Only `types` → runtime crash; only `import` → no TS resolution |
+| Build/config traps | Blanket `.gitignore` patterns, `declare module` resolution | `config` pattern matching `src/config/env.ts` |
+
+**Tagging:** Each observation is tagged with the file path(s) where it was detected (e.g., `src/config/env.ts`). This tagging is used during artifact generation to associate observations with specific modules.
+
+**Quality bar:** Only record observations that are counter-intuitive, invisible at compile time, or cause silent runtime failures. If the accumulated list exceeds ~20 entries, keep only the most severe per category (prioritize silent runtime failures over build-time failures).
+
+**Observations are NOT written to disk during phases 1-3.** They are held in conversation context only.
+
+**Checkpoint one-liner:** At each phase checkpoint (the existing user confirmation prompt), append accumulated observation counts:
+
+```
+[Observations: 2 singleton candidates, 1 shared DB pattern, 3 phantom dep candidates]
+```
+
+Omit the line if no observations were found in the phase.
+
+> **Phase 2 note:** Phase 2 (data ownership) has no explicit "Wait for user confirmation" step. Observations accumulated during Phase 2 are deferred to the Phase 3 checkpoint. Do not add a new confirmation prompt to Phase 2.
+
 ### Phase 1: Domain Analysis
 
 Goal: identify the logical business domains within the monolith.
