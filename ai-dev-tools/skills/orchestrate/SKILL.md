@@ -302,6 +302,42 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
 - Present recommendations and "What's next?" with the standard 3 options.
 - This completes the cycle for the current feature. The next `/orchestrate` invocation will detect a clean slate (or another in-progress feature) and route accordingly.
 
+**When `--strict` is active**, enrich Step 8 with verification and structured finishing:
+
+#### Verification Gate (--strict only)
+
+Discover and run the project's test/build commands fresh (see Error Handling: test/build command discovery algorithm). If failing:
+- "Verification failed. Fix before completing?"
+- → Yes: fix failing tests inline, then re-run verification
+- → No: proceed with warning in completion output
+
+#### Structured Finishing (--strict only)
+
+After quality gate recommendations, present:
+
+```
+── Step 8: Complete ──────────────────────────
+Feature: <feature-name>
+Status: <Approved | Approved with suggestions | Issues Found>
+Verification: <PASS | FAIL with details>
+
+Options:
+  [1] Print merge command for <base-branch>
+  [2] Keep branch as-is (no action)
+  [3] Generate session handoff for next session
+
+Proceed with?
+```
+
+**Base-branch resolution:** Use the branch that was checked out when `/orchestrate` was first invoked (captured at Step 1 via `git rev-parse --abbrev-ref HEAD` before any feature branch is created). If not available, prompt the user: "Which branch should this merge into?"
+
+**Option behaviors:**
+- [1] Print the `git merge` command for the user to run manually. Do not execute it.
+- [2] Exit with no action.
+- [3] Dispatch `/session-handoff`.
+
+**Blocked task reporting:** If any tasks were marked BLOCKED during Step 5, include them in the Status field: e.g., "Status: Approved with 2 blocked tasks".
+
 ---
 
 ## State Detection
