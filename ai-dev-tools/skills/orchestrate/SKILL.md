@@ -90,7 +90,7 @@ After Step 0 completes:
         └── Different HEAD → lightweight validation:
              git log --oneline <hint_head>..HEAD
              ├── 0 commits → full scan fallback (rebase/amend/force-push/reset)
-             ├── Commits match feature name → advance step (step-specific checks)
+             ├── Commits match feature name → advance step (see validation table below)
              └── Commits don't match feature → Read references/full-scan.md
 
 2. If step == "finalized":
@@ -104,7 +104,7 @@ After Step 0 completes:
         └── Multiple or none match → Read references/full-scan.md
 ```
 
-**Step-specific validation** (1 tool call each): 1: spec not exist. 2: spec Status header. 3: review_summary Reviewed matches spec AND Critical>0 (Critical=0+High>0: advance to 4 with info; Reviewed mismatch: stale, route to 2). 4: plan exists. 5: plan checkboxes. 6: commits since plan_hash. 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
+**Step-specific validation** (1 tool call each): 1: spec not exist (if exists → 2). 2: spec Status header. 3: check review_summary Reviewed field matches hint spec AND read Critical/High counts — Critical>0: stay at 3; Critical=0 + High>0: advance to 4 (present info message first); Critical=0 + High=0: advance to 4; Reviewed mismatch: stale, route to 2. 4: plan exists. 5: plan checkboxes. 6: commits since plan_hash (`git log <plan_hash>..HEAD`; if plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}`). 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
 
 If validation contradicts hint, advance to next logical step (don't full-scan).
 
@@ -137,12 +137,12 @@ Execute in order. First matching trigger wins.
 **Step 1 — Brainstorm:** No spec in `docs/superpowers/specs/` for current feature. Check `tmp/current-roadmap.md` for next item. Invoke `superpowers:brainstorming`. Edge: superpowers plugin missing -> warn, offer manual spec creation.
 **Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Invoke `/review-doc {spec_path}`. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
 **Step 3 — Respond to Review:** review_summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}`. Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
-**Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. Edge: extraction failure -> retry/skip/exit.
+**Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
 **Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. Default: invoke `superpowers:subagent-driven-development`. --strict: Read references/strict-mode.md, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
 **Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Invoke `/review-code {N} {spec_path}`. Edge: >50% non-feature commits interleaved -> warn.
 **Step 7 — Fix Findings:** review_summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
-- **Phase 1 (pre-confirmation):** Present status only. No git baselines. "Ready to finalize?"
+- **Phase 1 (pre-confirmation):** Present `── Step 8: Complete ──` with Feature name, Status (Approved/Approved with suggestions), and "Ready to finalize?" No git baselines.
 - **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> recommendations -> "What's next?"
 - **--strict Phase 2:** Update hint to `finalized` -> Read references/strict-mode.md (verification gate) -> Read references/quality-gates.md (baselines) -> roadmap -> structured finishing.
 
@@ -162,6 +162,7 @@ Execute in order. First matching trigger wins.
 | No roadmap file | Ask "What feature?" at Step 1. Skip roadmap update at Step 8. |
 | Invoked skill fails | Report failure, offer: Retry / Skip / Exit. |
 | Context pressure (YELLOW/RED) | Handled by Step 0 + YELLOW gate. Resume via artifacts on next invocation. |
+| No test/build command discoverable (--strict) | Discovery: (1) check CLAUDE.md, (2) package.json scripts, (3) Makefile test target, (4) probe pytest/jest/cargo test. None found → skip verification gate: "No verification command found. Configure in CLAUDE.md." |
 
 ---
 

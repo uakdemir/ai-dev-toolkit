@@ -123,7 +123,7 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
 
 ## Verification Gate (--strict only)
 
-Discover and run the project's test/build commands fresh (see Error Handling: test/build command discovery algorithm). If failing:
+Discover and run the project's test/build commands fresh (discovery: check CLAUDE.md → package.json scripts → Makefile test target → probe pytest/jest/cargo test; none found → skip gate with "No verification command found. Configure in CLAUDE.md."). If failing:
 - "Verification failed. Fix before completing?"
 - → Yes: fix failing tests inline, then re-run verification
 - → No: proceed with warning in completion output
