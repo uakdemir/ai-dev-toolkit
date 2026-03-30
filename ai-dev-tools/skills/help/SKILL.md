@@ -3,7 +3,7 @@ name: help
 description: Show available commands and usage for the ai-dev-tools plugin
 ---
 
-You MUST read `ai-dev-tools/VERSION` using the Read tool to get the current version number — do NOT guess or assume the version. Output the following text (replacing `{VERSION}` with the exact version from that file), then stop:
+You MUST read `ai-dev-tools/.claude-plugin/plugin.json` using the Read tool to get the current version number from the `"version"` field — do NOT guess or assume the version. Output the following text (replacing `{VERSION}` with the exact version from that file), then stop:
 
 <help-output>
 ai-dev-tools v{VERSION} — AI-native development automation
