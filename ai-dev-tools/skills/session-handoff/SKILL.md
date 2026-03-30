@@ -145,6 +145,12 @@ pending_items: <count>
 2. Write the composed document to `tmp/session-handoff.md`, overwriting any existing file.
 3. **Self-check:** Read the file back and confirm: frontmatter contains `git_available`, `branch`, `uncommitted_changes`, `uncommitted_files`, `session_commits`, `pending_items`; all 5 section headers (`## Done`, `## Pending`, `## Decisions`, `## Gotchas`, `## Git State`) are present. If validation fails, attempt one rewrite. If second attempt also fails, write as-is and warn: "Handoff written but missing: {list of missing elements}."
 4. Print confirmation: "Handoff written to `tmp/session-handoff.md`." Check the project's root `CLAUDE.md` for a reference to `session-handoff.md`. If not found, append: "Note: Add this line to your CLAUDE.md for auto-discovery: `If tmp/session-handoff.md exists, read it before starting any work.`"
+5. Print a continuation prompt the user can paste into a new session:
+   ```
+   ── Continuation prompt ─────────────────────────
+   Read tmp/session-handoff.md and continue where the previous session left off.
+   ────────────────────────────────────────────────
+   ```
 
 ---
 
