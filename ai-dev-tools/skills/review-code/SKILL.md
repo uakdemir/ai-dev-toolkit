@@ -249,6 +249,60 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (below).
 4. Print terminal output.
+5. If status is "Approved with suggestions", run the Respond to Remaining Issues phase (below).
+
+## Respond to Remaining Issues
+
+**Trigger:** Status is "Approved with suggestions" (high/medium issues remain, zero criticals).
+
+After printing the terminal output, present each remaining issue from `tmp/review.json` (sorted by severity descending, then confidence descending) and ask the user to categorize:
+
+```
+── Remaining Issues ────────────────────────────
+N issues to address (H high, M medium).
+
+For each issue:
+  [A] Apply — fix this issue now
+  [D] Defer — skip, record reason
+  [P] Push back — dispute finding, record reason
+  [S] Skip all remaining — defer all without individual review
+
+Issue 1/N: [severity] [category] at [location]
+  Problem: <problem text>
+  Suggested fix: <fix text>
+
+  [A/D/P/S]?
+```
+
+**Behavior per choice:**
+- **[A] Apply:** Apply the suggested fix directly. Use the same approach as the fixer agent — edit the file, verify the change doesn't break anything (run `--verify` commands if configured). After all applied fixes, commit with: `fix(review-code): apply N review suggestions`.
+- **[D] Defer:** Record to `tmp/response_analysis.md` with reason (prompt: "Reason for deferring?"). Update `tmp/review_summary.md` status to "deferred — {reason}".
+- **[P] Push back:** Record to `tmp/response_analysis.md` with reason (prompt: "Reason for pushing back?"). Update `tmp/review_summary.md` status to "pushed back — {reason}".
+- **[S] Skip all:** Defer all remaining issues with reason "Batch deferred by user". Record each to `tmp/response_analysis.md`.
+
+After all issues are processed, update `tmp/review_summary.md` with final dispositions and reprint the terminal output with updated counts.
+
+**Response analysis format:** Append to `tmp/response_analysis.md` using the same format as `/respond-to-review`:
+
+```markdown
+## Review-Code Response — <date>
+
+### [N] — [Issue title derived from problem]
+**Status:** Applied | Deferred | Pushed back
+
+**[If Applied]**
+Change: what was changed and where
+
+**[If Deferred]**
+Reason: user's reason
+
+**[If Pushed back]**
+Reason: user's reason
+
+---
+```
+
+**When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" means criticals remain — the loop should have handled them, or max iterations were exhausted (user needs to fix manually).
 
 ## Cross-Iteration Tracking
 
