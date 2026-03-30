@@ -48,27 +48,104 @@ A meta-skill that manages the developer's core development loop and advises on q
 /orchestrate
     |
     v
+0. Context health check (before anything else)
+    |
+    v
 1. Detect current state (scan artifacts + git)
     |
     v
-2. Present status + next step with context
+2. Context-aware gate (combine health + detected step)
     |
     v
-3. User confirms -> invoke skill (skill takes over conversation)
+3. Present status + next step with context
+    |
+    v
+4. User confirms -> invoke skill (skill takes over conversation)
    User overrides -> do what they want
    User exits -> state persists in artifacts
     |
     v
-4. After skill completes -> user re-invokes /orchestrate
+5. After skill completes -> user re-invokes /orchestrate
     |
     v
-5. If cycle just completed -> check quality gate triggers -> present recommendations
+6. If cycle just completed -> check quality gate triggers -> present recommendations
     |
     v
-6. "What's next?" -> next feature / run recommendation / something else
+7. "What's next?" -> next feature / run recommendation / something else
 ```
 
 Each `/orchestrate` invocation handles ONE step. The user re-invokes after each skill completes. This is the natural Claude Code interaction model — skills do not nest.
+
+### Step 0: Context Health Check
+
+Runs on every invocation (both standard and `--strict`), before state detection.
+
+**Estimation:**
+```
+estimated_used = number_of_user_messages_in_conversation × 2_000
+estimated_used = max(estimated_used, 10_000)
+usage_percent = estimated_used / 200_000 × 100
+```
+
+**Compression signal boost:** If the conversation contains a system-generated summary of prior context (indicating the system has already compressed messages), override to RED regardless of message count. This is a strong signal that context is critically low.
+
+**Zones:**
+
+| Zone | Threshold | Immediate action |
+|---|---|---|
+| GREEN | < 60% | Proceed to state detection |
+| YELLOW | 60–80% | Proceed to state detection, then evaluate at Step 2 (context-aware gate) |
+| RED | > 80% or compression detected | Auto-handoff (see below) |
+
+**RED behavior:**
+```
+⚠ Context critically low (~X% estimated).
+Generating session handoff before proceeding...
+```
+Auto-run `/session-handoff`. Then print:
+```
+Session handoff saved to tmp/session-handoff.md.
+Start a new conversation and run /orchestrate to continue.
+Your state is preserved in artifacts — orchestrate will pick up where you left off.
+```
+Exit. Do not proceed to state detection.
+
+### Step 2: Context-Aware Gate (YELLOW only)
+
+After state detection determines the next step, combine the YELLOW signal with the step's context cost to decide whether to auto-handoff or warn.
+
+**Step cost classification:**
+
+| Next step | Cost | YELLOW action |
+|---|---|---|
+| Step 5 (Implement) | Heavy — multi-task execution, 50K+ tokens | Auto-handoff |
+| Step 6 (Code review) | Heavy — full diff analysis, multi-iteration | Auto-handoff |
+| Step 7 (Fix findings) | Heavy — edit + re-review loop back to Step 6 | Auto-handoff |
+| Step 1 (Brainstorm) | Moderate — skill takeover | Warn only |
+| Step 2 (Spec review) | Moderate — agent dispatch | Warn only |
+| Step 3 (Respond to review) | Moderate — edits + re-review | Warn only |
+| Step 4 (Write plan) | Moderate — skill takeover | Warn only |
+| Step 8 (Complete) | Light — wrap-up | Warn only |
+
+**Auto-handoff (YELLOW + heavy step):**
+```
+⚠ Context at ~X% and about to start <step name> (context-heavy).
+This is a natural boundary — better to hand off now with a fresh context.
+Generating session handoff...
+```
+Auto-run `/session-handoff`. Then print:
+```
+Session handoff saved to tmp/session-handoff.md.
+Start a new conversation and run /orchestrate to continue.
+<Step name> will execute with a full context window.
+```
+Exit.
+
+**Warn only (YELLOW + moderate/light step):**
+```
+ℹ Context at ~X%. Consider /session-handoff after this step.
+```
+Proceed normally.
 
 ---
 
@@ -425,7 +502,7 @@ Checked after Step 8 (cycle completion) and presented as recommendations. Qualit
 | document-for-ai | >15 files changed since last run | `git diff --name-only {baseline}..HEAD` where baseline = last commit with `document-for-ai` in message. **Fallback:** If no commit message contains `document-for-ai`, check `git log -- docs/architecture/adrs/ docs/architecture/adrs.md AI_INDEX.md` for the most recent commit touching any ADR artifact. No baseline from either = "never run," always recommend. | "Warning: {N} files changed since last doc update. Run `/document-for-ai`" |
 | consolidate | >40 commits since last run | Same pattern with `consolidate` baseline | "Info: {N} commits since last consolidate. Run `/consolidate`" |
 | refactor-to-layers | Module exceeds ~30K lines | Scan directories containing source files, `wc -l` (directory detection is project-dependent — scan for directories containing source files) | "Warning: Module `{name}` at {N}K lines. Consider `/refactor-to-layers`" |
-| session-handoff | Long conversation (>50 exchanges) or user mentions context pressure | Heuristic based on conversation length (context window usage cannot be directly queried) | "Info: Long conversation. Consider `/session-handoff` before next feature" |
+| session-handoff | Long conversation (>50 exchanges) or user mentions context pressure | Superseded by Step 0/Step 2 context health check for mid-cycle detection. This quality gate trigger remains for post-cycle recommendation only (between features). | "Info: Long conversation. Consider `/session-handoff` before next feature" |
 
 ### Detection of "Last Run"
 
@@ -467,7 +544,9 @@ Handle each scenario gracefully. Never crash or leave the user without options.
 | Multiple specs without plans | Present list with dates and status, ask user to pick. |
 | Invoked skill fails | Report the failure with context, offer: "Retry / Skip to next step / Exit" |
 | Git history unavailable | Skip quality gate trigger checks, warn: "Cannot check quality gate triggers without git history." Core loop still works via file scanning. |
-| Long conversation / context pressure | Recommend `/session-handoff` before proceeding. Context exhaustion is handled by the resume mechanism — the next `/orchestrate` invocation detects state from artifacts regardless of session history. |
+| Long conversation / context pressure | Handled by Step 0 (RED = auto-handoff) and Step 2 (YELLOW + heavy step = auto-handoff, YELLOW + light step = warn). Context exhaustion is handled by the resume mechanism — the next `/orchestrate` invocation detects state from artifacts regardless of session history. |
+| Context estimation inaccurate | The heuristic (`messages × 2_000`) is approximate. False RED may trigger unnecessary handoff (cost: 2 minutes). Missed RED may cause degraded responses (cost: lost session quality). The compression signal boost (override to RED if system has compressed messages) adds a second, more reliable signal. |
+| Session-handoff fails during auto-handoff | Report failure, print: "Could not generate handoff. Your artifacts are still saved — start a new conversation and run `/orchestrate` to continue." Exit. |
 | User says "something else" | Exit orchestrate, let user do whatever they want. `/orchestrate` will re-detect state next time. |
 | Stale artifacts (>30 days) | Ask: "Found stale spec for `{name}` from {date}. Continue or start fresh?" If start fresh, do not delete old artifacts — user handles cleanup. |
 | Plan partially completed | Present progress: "{N}/{M} tasks done. Resume?" Show which tasks remain. |
