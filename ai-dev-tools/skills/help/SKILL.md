@@ -3,10 +3,10 @@ name: help
 description: Show available commands and usage for the ai-dev-tools plugin
 ---
 
-Output the following text exactly, then stop:
+Read `ai-dev-tools/VERSION` to get the current version number. Output the following text (replacing `{VERSION}` with the version from that file), then stop:
 
 <help-output>
-ai-dev-tools — AI-native development automation
+ai-dev-tools v{VERSION} — AI-native development automation
 
 MAIN COMMAND
   /orchestrate              Manages your full development cycle automatically.
