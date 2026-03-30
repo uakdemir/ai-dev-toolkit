@@ -205,6 +205,70 @@ Any input other than 1, 2, or 3 re-presents the options.
 
 **Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate --strict` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit. The `--strict` flag is not persisted across sessions — the exit message includes the full command as a reminder.
 
+#### Override Dispatch (--strict only)
+
+After user selects [1] or [2], dispatch to the chosen superpowers skill with a behavioral override block prepended to the dispatch prompt.
+
+**If user selected [1] Single-agent**, dispatch to `superpowers:executing-plans` with this preamble prepended:
+
+```
+IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
+
+1. TDD ENFORCEMENT: You MUST use red-green-refactor for every task.
+   Write a failing test first, watch it fail, write minimal code to
+   pass, watch it pass, then refactor. No production code without a
+   failing test. This is non-negotiable.
+
+2. VERIFICATION GATE: After completing each task, run the project's
+   test/build commands and confirm they pass BEFORE proceeding to the
+   next task. Do not skip this step.
+
+3. SPEC COMPLIANCE CHECK: After each task, verify: "Did I build
+   exactly what the plan specified? Nothing more, nothing less?"
+   If you detect drift, fix before proceeding.
+
+4. RETRY ON FAILURE: If tests fail for a task, you have 2 retry
+   attempts to fix. If still failing after 2 retries, mark the task
+   as BLOCKED and continue to the next task. Report all blocked
+   tasks when execution completes.
+```
+
+Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip.
+
+Single-agent spec compliance limitation: Self-assessment is less reliable than the subagent spec-reviewer, but is the only option without subagent architecture. Drift will be caught by review-code at Step 6.
+
+**If user selected [2] Subagent-per-task**, dispatch to `superpowers:subagent-driven-development` with this preamble prepended:
+
+```
+IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
+
+1. TDD ENFORCEMENT: The implementer subagent MUST use red-green-refactor
+   for every change. Write a failing test first, watch it fail, write
+   minimal code to pass, watch it pass, then refactor. No production
+   code without a failing test. This is non-negotiable.
+
+2. VERIFICATION GATE: After each task completes, the coordinator
+   (not the implementer subagent) must run the project's test/build
+   commands and confirm they pass BEFORE marking the task as done.
+   Do not rely on the subagent's self-report — run verification fresh.
+
+3. SKIP CODE QUALITY REVIEW: Do NOT dispatch the code-quality-reviewer
+   after each task. Quality review is handled by a superior engine
+   (review-code with confidence scoring and noise filtering) at a
+   later stage. Dispatching both is redundant and wastes tokens.
+
+4. KEEP SPEC COMPLIANCE REVIEW: DO dispatch the spec-reviewer after
+   each task. This lightweight "did you build what the plan said?"
+   check is essential for catching scope drift.
+
+5. RETRY ON FAILURE: If a subagent's tests fail, allow 2 retry
+   attempts. If still failing after 2 retries, mark the task as
+   BLOCKED and continue to the next task. Report all blocked tasks
+   when execution completes.
+```
+
+**Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure mode is benign: the agent may occasionally dispatch the code-quality-reviewer (wasting tokens), skip TDD enforcement, or skip verification (all caught by review-code at Step 6 and the Step 8 verification gate). No destructive failure path exists.
+
 ### Step 6: CODE REVIEW
 
 **Trigger:** Implementation commits exist after the plan's last commit. Detect the plan's commit hash via `git log --format=%H -1 -- {plan_path}`. Count commits from that hash to HEAD: `git log --oneline {plan_hash}..HEAD`. Note: use `%H` for commit hashes, not `%aI` for dates.
