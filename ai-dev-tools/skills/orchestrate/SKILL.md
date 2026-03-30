@@ -148,9 +148,62 @@ This check matches both "Approved" and "Approved with suggestions" as passing �
 
 **Behavior:**
 - Present: "Plan at `{path}` -- {N} tasks, {M} completed. Continue implementation? I'll use subagent-driven-development."
-- On confirm: invoke `superpowers:subagent-driven-development`
+- On confirm (without `--strict`): invoke `superpowers:subagent-driven-development`
+- On confirm (with `--strict`): run the execution model recommendation preamble first (see below), then dispatch with overrides (see Step 5 Dispatch section).
 - **Dependency:** Assumes the implementation skill updates plan checkboxes `- [ ]` to `- [x]` in-place as tasks complete.
 - **Note:** If all checkboxes are already `[x]`, Step 5 does not trigger — state detection routes directly to Step 6.
+
+**When `--strict` is active**, do NOT immediately dispatch. Run the execution model recommendation preamble first:
+
+#### Execution Model Recommendation (--strict only)
+
+**Inputs:**
+1. Plan file (count tasks, scan for "Files" sections)
+2. Context estimate: `estimated_used = number_of_user_messages_in_conversation × 2_000`. Apply floor: `estimated_used = max(estimated_used, 10_000)`.
+3. Task coupling from "Files" sections (see algorithm below)
+
+**Coupling assessment:**
+```
+Scan each task's "Files" section for paths listed.
+If no tasks have a "Files" section → MEDIUM (conservative default).
+If fewer than half of tasks have a "Files" section → MEDIUM (insufficient data).
+Otherwise, only tasks with "Files" sections participate:
+  Count how many participating tasks share at least one file path.
+  >40% share → HIGH | 20-40% → MEDIUM | <20% → LOW
+```
+
+**Recommendation algorithm:**
+```
+remaining = 200_000 - estimated_used
+implementation_estimate = task_count × 12_000
+
+If implementation_estimate > remaining × 0.8 → subagent-per-task
+Else if coupling == HIGH → single-agent
+Else if task_count > 8 AND coupling == LOW → subagent-per-task
+Else → single-agent
+```
+
+**Present to user:**
+```
+── Step 5: Implementation ──────────────────────
+Plan: <N> tasks, <coupling assessment>
+Context: ~<used>K / 200K used, ~<remaining>K remaining
+Estimated cost: ~<estimate>K tokens
+
+Recommendation: <Single-agent | Subagent-per-task>
+  Reason: <one-line explanation>
+
+Alternatives:
+  [1] Single-agent <(recommended) if applicable>
+  [2] Subagent-per-task <(recommended) if applicable>
+  [3] Clear context + single-agent
+
+Proceed with [N]?
+```
+
+Any input other than 1, 2, or 3 re-presents the options.
+
+**Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate --strict` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit. The `--strict` flag is not persisted across sessions — the exit message includes the full command as a reminder.
 
 ### Step 6: CODE REVIEW
 
