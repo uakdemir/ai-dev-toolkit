@@ -23,15 +23,33 @@ Otherwise, only tasks with "Files" sections participate:
   >40% share → HIGH | 20-40% → MEDIUM | <20% → LOW
 ```
 
+**Parallelism yield check** (runs when task_count >= 4 AND coupling != HIGH):
+```
+Scan tasks in plan order. For each unassigned task, find the next
+unassigned task with no dependency on it or vice versa. If found,
+pair them into a parallel phase. Continue until all tasks are
+assigned or no more pairs can be formed.
+
+P = number of parallel pairs
+parallelism_ratio = P / task_count
+
+If parallelism_ratio >= 0.30 → option [4] is eligible
+If parallelism_ratio < 0.30  → not eligible, fall through to single-agent
+```
+
+Note: `parallelism_ratio` is a proxy for time savings (fraction of parallelisable tasks), not a wall-clock measurement.
+
 **Recommendation algorithm:**
 ```
 remaining = 200_000 - estimated_used
 implementation_estimate = task_count × 12_000
+parallelism_ratio = 0  # default; overwritten if yield check runs
 
 If implementation_estimate > remaining × 0.8 → subagent-per-task
   (also include in Reason line: "Consider clearing context first for single-agent (Option [3])")
 Else if coupling == HIGH → single-agent
 Else if task_count > 8 AND coupling == LOW → subagent-per-task
+Else if task_count >= 4 AND coupling != HIGH AND parallelism_ratio >= 0.30 → single-agent + parallel helper
 Else → single-agent
 ```
 
