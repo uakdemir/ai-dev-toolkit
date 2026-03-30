@@ -7,13 +7,26 @@ description: "Use when the user wants to start a development cycle, continue whe
 orchestrate — Manage your full development cycle
 
 USAGE
-  /orchestrate
+  /orchestrate [--strict]
+
+FLAGS
+  --strict    Enable quality discipline: TDD enforcement, verification
+              gates, per-task spec compliance review, intelligent execution
+              model selection, and structured completion options.
+              Recommended for features where correctness matters more
+              than speed.
 
 EXAMPLES
   /orchestrate                       Detect state and suggest next step
+  /orchestrate --strict              Detect state with quality discipline
 </help-text>
 
-If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+Parse arguments: if `--help` is present, output ONLY the text inside <help-text> tags above verbatim and exit. If `--strict` is present, set strict mode active for this invocation. Both flags can coexist with `--help` taking priority.
+
+**Strict mode banner:** When `--strict` is active, print before any state detection:
+```
+Mode: strict (TDD + verification + spec compliance + structured completion)
+```
 
 # orchestrate
 
