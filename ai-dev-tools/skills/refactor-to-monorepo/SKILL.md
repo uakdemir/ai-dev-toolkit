@@ -377,6 +377,8 @@ Use the template from `references/module-spec-template.md`. Generate one file pe
 
 Each spec covers: purpose, file inventory, public API surface, dependencies, data ownership, and extraction prerequisites.
 
+Each spec now includes a 9th section: "Extraction Hazards". During artifact generation, filter accumulated observations where the tagged file path(s) belong to that module's Owned Files list. Populate section 9 with matching entries. Omit the section entirely if no observations match. Observations tagged to files not owned by any module are added to the universal checklist instead (see Checklist Crystallization).
+
 ### 5. `monorepo-tooling.md` — Tooling Recommendation
 
 Stack-specific tooling recommendation sourced from the matching section in `references/tech-stacks.md`. Covers:
@@ -407,6 +409,20 @@ Structure:
   - Do not proceed to Phase N+1 until Phase N's checkpoint passes.
 
 > Note: This plan describes what to do. Actual code changes are a separate effort and not executed by this skill.
+
+- **Checklists** — reference section pointing to relevant checklist files. Placed after the phase listing:
+
+  ```markdown
+  ## Checklists
+
+  Before each extraction phase, consult:
+  - `tmp/checklists/monorepo-extraction.md` — universal extraction pitfalls
+  - `tmp/checklists/<stack>-extraction.md` — stack-specific hazards
+
+  Per-module hazards are noted in each module's spec under "Extraction Hazards".
+  ```
+
+  Omit the stack-specific line if "Other" was selected or if zero stack-specific observations were accumulated.
 
 ---
 
