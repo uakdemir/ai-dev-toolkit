@@ -53,3 +53,9 @@ _Single sentence: what this module does._
 
 <!-- simple = clean seam | moderate = needs interface design | complex = heavy refactor required -->
 **simple** | **moderate** | **complex** — _one-line rationale_
+
+### 9. Extraction Hazards
+
+<!-- Non-obvious hazards specific to this module. Omit this section if none detected. -->
+
+- **<hazard type>:** `<file or pattern>` — <what goes wrong and what to do>
