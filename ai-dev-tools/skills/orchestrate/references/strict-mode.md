@@ -59,19 +59,23 @@ Else → single-agent
 Plan: <N> tasks, <coupling assessment>
 Context: ~<used>K / 200K used, ~<remaining>K remaining
 Estimated cost: ~<estimate>K tokens
+Parallelism yield: <P> pairs, ratio <parallelism_ratio>%
 
-Recommendation: <Single-agent | Subagent-per-task>
+Recommendation: <Single-agent | Subagent-per-task | Single-agent + parallel helper>
   Reason: <one-line explanation>
 
 Alternatives:
   [1] Single-agent <(recommended) if applicable>
   [2] Subagent-per-task <(recommended) if applicable>
   [3] Clear context + single-agent
+  [4] Single-agent + one parallel helper <(recommended) if applicable>
 
 Proceed with [N]?
 ```
 
-Any input other than 1, 2, or 3 re-presents the options.
+The "Parallelism yield" line is shown only when the yield check ran (task_count >= 4 and coupling != HIGH). When [4] is not eligible (ratio < 0.30), it still appears as an alternative but the recommendation does not point to it.
+
+Any input other than 1, 2, 3, or 4 re-presents the options.
 
 **Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate --strict` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit. The `--strict` flag is not persisted across sessions — the exit message includes the full command as a reminder.
 
@@ -136,6 +140,43 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
    BLOCKED and continue to the next task. Report all blocked tasks
    when execution completes.
 ```
+
+**If user selected [4] Single-agent + parallel helper**, dispatch to `superpowers:executing-plans` with this preamble prepended:
+
+```
+IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
+
+1. TDD ENFORCEMENT: You MUST use red-green-refactor for every task.
+   Write a failing test first, watch it fail, write minimal code to
+   pass, watch it pass, then refactor. No production code without a
+   failing test. This is non-negotiable.
+
+2. VERIFICATION GATE: After completing each task, run the project's
+   test/build commands and confirm they pass BEFORE proceeding to the
+   next task. Do not skip this step.
+
+3. SPEC COMPLIANCE CHECK: After each task, verify: "Did I build
+   exactly what the plan specified? Nothing more, nothing less?"
+   If you detect drift, fix before proceeding.
+
+4. RETRY ON FAILURE: If tests fail for a task, you have 2 retry
+   attempts to fix. If still failing after 2 retries, mark the task
+   as BLOCKED and continue to the next task. Report all blocked
+   tasks when execution completes.
+
+5. PARALLEL HELPER: Spawn one background helper agent on the first
+   parallelizable task. Reuse it via SendMessage for all subsequent
+   parallel tasks. Never spawn more than one helper. For serial or
+   coupled tasks, work directly — helper idles. Before each task,
+   check the remaining tasks for one with no dependency on the
+   current task. If found, send it to the helper. Wait for the
+   helper to complete before starting the next phase. If the helper
+   has not returned output after the main agent completes its own
+   task, proceed without the helper's result and take ownership of
+   the helper's task.
+```
+
+Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip. The parallel helper override (5) is unique to option [4]; option [1] does not include it.
 
 **Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure mode is benign: the agent may occasionally dispatch the code-quality-reviewer (wasting tokens), skip TDD enforcement, or skip verification (all caught by review-code at Step 6 and the Step 8 verification gate). No destructive failure path exists.
 
