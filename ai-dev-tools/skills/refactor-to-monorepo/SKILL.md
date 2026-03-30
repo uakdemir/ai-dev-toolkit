@@ -106,7 +106,7 @@ Each seed is a `{ name: string, paths: string[] }` pair. Repeat until the user s
 
 Four phases, each building on the previous. Present findings at each user checkpoint before proceeding to the next phase.
 
-### Observation Accumulation (All Phases)
+### Observation Accumulation (Phases 1-3)
 
 While executing phases 1-3, the agent watches for non-obvious extraction hazards in parallel with the phase's primary analysis goal. These observations feed into checklist generation after Phase 4.
 
@@ -284,7 +284,8 @@ Entries are appended, never reordered.
 1. Read `index.md` to check if a matching file already exists.
 2. If matching file exists, append entries. Do not create duplicates.
 3. After creating a new file, add a row to `index.md`.
-4. If `tmp/checklists/` does not exist, create it and `index.md` together.
+4. After appending to an existing file, do not modify `index.md` (the row already exists).
+5. If `tmp/checklists/` does not exist, create it and `index.md` together.
 
 #### Crystallization Sequence
 
