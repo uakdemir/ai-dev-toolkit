@@ -260,30 +260,30 @@ When the loop completes (final gate passes or max iterations exhausted):
 
 **Trigger:** Status is "Approved with suggestions" (high/medium issues remain, zero criticals).
 
-After printing the terminal output, present each remaining issue from `tmp/review.json` (sorted by severity descending, then confidence descending) and ask the user to categorize:
+After printing the terminal output, auto-triage each remaining issue from `tmp/review.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
+
+**Auto-triage rules (per issue):**
+- **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly to the document — surgical edits only.
+- **Defer:** The fix requires information the agent doesn't have, depends on future work, or is explicitly a future concern.
+- **Push back:** The finding is incorrect, irrelevant, or based on a misunderstanding of the document/spec. Record the agent's reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected.
+
+**Escalation (rare):** Only ask the user if an issue is both **critical severity** AND the agent genuinely cannot determine the correct action. This should be exceptional — for high/medium issues, always decide autonomously.
+
+After auto-triage, print a summary and commit applied fixes:
 
 ```
 ── Remaining Issues ────────────────────────────
-N issues to address (H high, M medium).
+N issues triaged (H high, M medium).
 
-For each issue:
-  [A] Apply — fix this issue now
-  [D] Defer — skip, record reason
-  [P] Push back — dispute finding, record reason
-  [S] Skip all remaining — defer all without individual review
+  [Applied]     #1 high: <title>
+  [Applied]     #2 medium: <title>
+  [Pushed back] #3 medium: <title> — <one-line reason>
+  [Deferred]    #4 medium: <title> — <one-line reason>
 
-Issue 1/N: [severity] [category] at [location]
-  Problem: <problem text>
-  Suggested fix: <fix text>
-
-  [A/D/P/S]?
+Applied: N | Deferred: N | Pushed back: N
 ```
 
-**Behavior per choice:**
-- **[A] Apply:** Apply the suggested fix directly to the document. Keep changes minimal — surgical edits only.
-- **[D] Defer:** Record to `tmp/response_analysis.md` with reason (prompt: "Reason for deferring?"). Update `tmp/review_summary.md` status to "deferred — {reason}".
-- **[P] Push back:** Record to `tmp/response_analysis.md` with reason (prompt: "Reason for pushing back?"). Update `tmp/review_summary.md` status to "pushed back — {reason}".
-- **[S] Skip all:** Defer all remaining issues with reason "Batch deferred by user". Record each to `tmp/response_analysis.md`.
+If any fixes were applied, commit with: `fix(review-doc): apply N review suggestions`.
 
 After all issues are processed, update `tmp/review_summary.md` with final dispositions and reprint the terminal output with updated counts.
 
@@ -299,10 +299,10 @@ After all issues are processed, update `tmp/review_summary.md` with final dispos
 Change: what was changed and where — file:section
 
 **[If Deferred]**
-Reason: user's reason
+Reason: <agent's reasoning>
 
 **[If Pushed back]**
-Reason: user's reason
+Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 
 ---
 ```
