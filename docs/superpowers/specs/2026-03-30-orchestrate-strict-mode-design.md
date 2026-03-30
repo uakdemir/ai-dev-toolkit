@@ -1,7 +1,7 @@
 # orchestrate --strict — Design Spec
 
 **Date:** 2026-03-30
-**Status:** Draft
+**Status:** Approved
 **Plugin:** ai-dev-tools
 **Skill:** orchestrate (enhancement)
 **Type:** Feature flag adding quality discipline to the orchestrate development loop
