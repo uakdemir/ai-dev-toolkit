@@ -190,11 +190,12 @@ If validation contradicts hint, advance to next logical step (don't full-scan).
 ## Conditional Loading
 
 If hint file is missing or validation fails:
-  -> Read references/full-scan.md, execute Full Scan Fallback.
+  -> Strict mode active: First-Run User Prompt (see above), then full scan only if unresolved.
+  -> Standard mode: Read references/full-scan.md, execute Full Scan Fallback.
 
 If --strict is active at Step 5 onset:
   -> Read references/strict-mode.md for execution model recommendation
-    and override dispatch (single-agent + subagent blocks).
+    and override dispatch (single-agent, subagent, and parallel helper blocks).
 
 If --strict is active at Step 8:
   -> Read references/strict-mode.md (if not already loaded) for
@@ -227,7 +228,7 @@ Execute in order. First matching trigger wins.
 
 | Scenario | Behavior |
 |---|---|
-| Hint file missing or YAML malformed | Full scan fallback. Write hint after detection. |
+| Hint file missing or YAML malformed | Strict: First-Run User Prompt → fallback to full scan if unresolved. Standard: Full scan fallback. Write hint after detection. |
 | Unknown step/feature or head not in history | Full scan fallback. Overwrite hint. |
 | Hint says finalized but spec deleted | Full scan -> clean slate -> Step 1. |
 | Hint validation contradicts hint step | Advance to next logical step (don't full-scan). |

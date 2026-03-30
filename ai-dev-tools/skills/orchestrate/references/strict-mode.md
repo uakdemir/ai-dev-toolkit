@@ -81,7 +81,7 @@ Any input other than 1, 2, 3, or 4 re-presents the options.
 
 ## Override Dispatch (--strict only)
 
-After user selects [1] or [2], dispatch to the chosen superpowers skill with a behavioral override block prepended to the dispatch prompt.
+After user selects [1], [2], or [4], dispatch to the chosen superpowers skill with a behavioral override block prepended to the dispatch prompt.
 
 **If user selected [1] Single-agent**, dispatch to `superpowers:executing-plans` with this preamble prepended:
 
@@ -164,7 +164,7 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
    as BLOCKED and continue to the next task. Report all blocked
    tasks when execution completes.
 
-5. PARALLEL HELPER: Spawn one background helper agent on the first
+6. PARALLEL HELPER: Spawn one background helper agent on the first
    parallelizable task. Reuse it via SendMessage for all subsequent
    parallel tasks. Never spawn more than one helper. For serial or
    coupled tasks, work directly — helper idles. Before each task,
@@ -176,7 +176,7 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
    the helper's task.
 ```
 
-Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip. The parallel helper override (5) is unique to option [4]; option [1] does not include it.
+Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip. The parallel helper override (6) is unique to option [4]; option [1] does not include it.
 
 **Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure mode is benign: the agent may occasionally dispatch the code-quality-reviewer (wasting tokens), skip TDD enforcement, or skip verification (all caught by review-code at Step 6 and the Step 8 verification gate). No destructive failure path exists.
 
