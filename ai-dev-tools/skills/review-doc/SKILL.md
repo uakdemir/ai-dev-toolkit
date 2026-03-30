@@ -287,7 +287,7 @@ Issue 1/N: [severity] [category] at [location]
 
 After all issues are processed, update `tmp/review_summary.md` with final dispositions and reprint the terminal output with updated counts.
 
-**Response analysis format:** Append to `tmp/response_analysis.md`:
+**Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first):
 
 ```markdown
 ## Review-Doc Response — <date>
