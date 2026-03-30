@@ -471,6 +471,11 @@ Handle each scenario gracefully. Never crash or leave the user without options.
 | Plan partially completed | Present progress: "{N}/{M} tasks done. Resume?" Show which tasks remain. |
 | No roadmap to update at Step 8 | Skip roadmap update, proceed to quality gate check. |
 | tmp/review_summary.md has stale data from different feature | Cross-check commit hashes in findings against current feature's commits via `git log --grep`. If mismatch, ignore and treat as "no review yet." |
+| Verification gate fails at Step 8 (--strict) | Offer to fix failing tests inline and re-run verification, or proceed with warning |
+| All tasks BLOCKED at Step 5 (--strict) | Report blocked list, skip to Step 6 (review-code reviews what was committed) |
+| No test/build command discoverable (--strict) | Discovery algorithm: (1) check CLAUDE.md for test/build commands, (2) check package.json scripts (test, build), (3) check for Makefile (test target), (4) probe for pytest/jest/cargo test. If none found, skip verification gate with: "No verification command found. Configure test commands in CLAUDE.md." |
+| Base-branch unknown at Step 8 (--strict) | Prompt user: "Which branch should this merge into?" |
+| Override ignored by superpowers (--strict) | Benign — redundant quality review wastes tokens, caught by review-code at Step 6 |
 
 ---
 
@@ -506,4 +511,4 @@ Orchestrate is a **dispatcher** — it invokes these skills (one per `/orchestra
 
 ---
 
-**Design constraint:** Orchestrate never modifies or extends the skills it dispatches. Each skill operates independently with its own SKILL.md. Orchestrate only detects state, presents context, and invokes — it does not alter skill behavior.
+**Design constraint:** Orchestrate never modifies the SKILL.md files of skills it dispatches. Each skill operates independently with its own definition. In standard mode, orchestrate only detects state, presents context, and invokes. With `--strict`, orchestrate may prepend behavioral override blocks to dispatch prompts — this is composition (prompt-level hints), not modification (file changes). Dispatched skills may ignore these overrides; the failure mode is benign.
