@@ -89,8 +89,8 @@ After Step 0 completes:
         ├── Same HEAD → trust hint, skip to step-specific validation
         └── Different HEAD → lightweight validation:
              git log --oneline <hint_head>..HEAD
-             ├── 0 commits → full scan fallback (rebase/amend/force-push/reset)
-             ├── Commits match feature name → advance step (see validation table below)
+             ├── 0 commits or git log errors → full scan fallback (rebase/amend/force-push/reset/gc)
+             ├── Commits match feature name (git log --grep='{feature_name}') → advance step (see validation table below)
              └── Commits don't match feature → Read references/full-scan.md
 
 2. If step == "finalized" (skip if item 1 already triggered full scan):
@@ -100,11 +100,11 @@ After Step 0 completes:
         For each commit, check against feature names extracted from
         docs/superpowers/specs/ filenames (strip YYYY-MM-DD- prefix
         and -design suffix).
-        ├── Exactly one feature matches → set as current, validate from step 2 forward
+        ├── Exactly one feature matches all new commits → set as current, validate from step 2 forward
         └── Multiple or none match → Read references/full-scan.md
 ```
 
-**Step-specific validation** (1 tool call each): 1: spec not exist (if exists → 2). 2: spec Status header. 3: check review_summary Reviewed field matches hint spec AND read Critical/High counts — Critical>0: stay at 3; Critical=0 + High>0: advance to 4 (present info message first); Critical=0 + High=0: advance to 4; Reviewed mismatch: stale, route to 2. 4: plan exists. 5: plan checkboxes. 6: commits since plan_hash (`git log <plan_hash>..HEAD`; if plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}`). 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
+**Step-specific validation** (1 tool call each): 1: spec not exist (if exists → 2). 2: spec Status header. 3: check review_summary Reviewed field matches hint spec AND read Critical/High counts — Critical>0: stay at 3; Critical=0 + High>0: advance to 4 (present info message first); Critical=0 + High=0: advance to 4; Reviewed mismatch: stale, route to 2. 4: plan exists. 5: plan checkboxes. 6: commits since plan_hash (`git log <plan_hash>..HEAD`; if plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}`; if still empty, full scan fallback). 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
 
 If validation contradicts hint, advance to next logical step (don't full-scan).
 
