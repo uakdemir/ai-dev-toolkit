@@ -23,7 +23,32 @@ EXAMPLES
 
 Parse arguments: if `--help` is present, output ONLY the text inside <help-text> tags above verbatim and exit. If `--strict` is present, set strict mode active for this invocation. Both flags can coexist with `--help` taking priority.
 
-**Strict mode banner:** When `--strict` is active, print before any state detection:
+## Mode Selection (before Step 0)
+
+**Trigger:** `/orchestrate` invoked without `--strict` flag AND no persisted `mode` field in `tmp/orchestrate-state.md` (file missing, or file exists but has no `mode` key).
+
+When triggered, present before anything else (before Step 0):
+
+```
+Orchestrate mode:
+  [1] Standard (relaxed)
+  [2] Strict — full workflow orchestration, TDD, verification gates
+      (recommended if you're experienced with orchestrate)
+
+Proceed with?
+```
+
+**Behavior:**
+- User picks `[1]` → create or update hint file with only `mode: standard` in YAML frontmatter (do not include `feature`, `step`, `spec`, `plan`, `plan_hash`, `head`, or `updated` — their absence signals no valid cycle state) → continue as standard. Never ask again.
+- User picks `[2]` → create or update hint file with only `mode: strict` in YAML frontmatter → print the strict-mode banner immediately → continue with strict active. Future no-flag invocations auto-activate strict. Never ask again.
+- `--strict` flag present → skip this prompt entirely, always strict.
+- Any other input → re-present the prompt once. If the second response is also invalid, default to `[1]` (standard) and print: "Unrecognised input — defaulting to Standard mode."
+
+**Mode resolution order:** (1) `--strict` flag → strict. (2) Hint file `mode` field → use persisted value. (3) Neither → show prompt.
+
+**After mode resolved:** If strict is active (by any path), print the strict-mode banner, then proceed to Step 0. If standard, proceed to Step 0 directly.
+
+**Strict mode banner:** When strict mode is active (via `--strict` flag, persisted `mode: strict`, or user selecting `[2]` at the mode prompt), print before Step 0:
 ```
 Mode: strict (TDD + verification + spec compliance + structured completion)
 ```
