@@ -37,23 +37,44 @@ No tech stack selection, no scope detection, no parallel agents, no reference fi
 
 ### Git Analysis (Factual Backbone)
 
-**Preflight:** Run `git rev-parse --is-inside-work-tree` first. If it fails, skip all git commands and proceed to Conversation Analysis. Warn: "No git repo — handoff will be conversation-based only." Use non-git frontmatter defaults (see Error Handling).
+**Preflight:** Check if `gitStatus` is present in the conversation context (injected by Claude Code at session start).
 
-If inside a git repo, check for commits: `git rev-parse --verify HEAD`. If HEAD is invalid (empty repo with no commits), skip `git log` and `git diff --stat HEAD` — use `session_commits: 0` and collect only branch name and `git status`.
+**If `gitStatus` is present (typical case):**
 
-Run these commands to collect the factual state:
+Extract from `gitStatus`:
+- **Branch name:** from "Current branch:" line
+- **Starting HEAD:** the first commit SHA listed in the "Recent commits:" field (gitStatus lists commits most-recent-first) — this is HEAD at session start since gitStatus is injected before any work begins
+- **Git repo:** confirmed by `gitStatus` presence
 
-1. `git branch --show-current` — current branch name. If empty (detached HEAD), use `git rev-parse --short HEAD` to get the commit hash.
-2. `git status --short` — list of uncommitted changes (staged + unstaged)
-3. `git log --oneline -20` — recent commits for session detection (skip if no HEAD)
-4. `git diff --stat HEAD` — all uncommitted changes summary (skip if no HEAD)
+Run exactly 2 commands:
+1. `git status --short` — current uncommitted state (may differ from session start)
+2. `git log --oneline <start_head>..HEAD` — exact session commits (commits made between session start and now)
 
-**Session commit detection:** Distinguish this session's commits using this fallback chain:
+`git diff --stat HEAD` is dropped. `git status --short` is sufficient for the Git State section body (file paths with status codes replace the line-count format from `git diff --stat HEAD`).
+
+If `git log` returns nothing (no new commits this session), `session_commits: 0`.
+
+If `git log` fails for any reason — including ambiguous SHA, rebase, or force-push — fall back to `git log --oneline --since="midnight" -20`.
+
+**If `gitStatus` is absent (non-standard invocation):**
+
+Fall back to the full git analysis below. This covers edge cases like: session started without `gitStatus` injection, skill invoked outside Claude Code, or context was compressed and `gitStatus` is no longer visible.
+
+**Full git analysis fallback (when `gitStatus` is absent):**
+
+1. `git rev-parse --is-inside-work-tree` — preflight. If fails, skip all git commands and proceed to Conversation Analysis. Warn: "No git repo — handoff will be conversation-based only." Use non-git frontmatter defaults (see Error Handling).
+2. If inside a git repo, check for commits: `git rev-parse --verify HEAD`. If HEAD is invalid (empty repo), skip `git log` and `git diff --stat HEAD` — use `session_commits: 0`.
+3. `git branch --show-current` — current branch name. If empty (detached HEAD), use `git rev-parse --short HEAD`.
+4. `git status --short` — list of uncommitted changes (staged + unstaged)
+5. `git log --oneline -20` — recent commits for session detection (skip if no HEAD)
+6. `git diff --stat HEAD` — all uncommitted changes summary (skip if no HEAD)
+
+**Session commit detection (fallback only):**
 1. `git log --oneline --since="midnight" -20` on the current branch — today's commits (capped at 20)
 2. If no commits found or on a shared branch (main/master), fall back to last 10 commits on the current branch
 3. Note "session boundary estimated" if using the fallback
 
-Known limitation: sessions spanning midnight will miss pre-midnight commits. On shared branches, today's commits may include other authors' work — acceptable since the handoff captures observable state, not attribution.
+> **Non-normative implementation note:** The agent has witnessed every commit it made during the session via tool call results. The `git log <start_head>..HEAD` output serves as the authoritative commit list, but the agent may cross-reference with its own memory of commits for richer Done item descriptions.
 
 ### Conversation Analysis (Context Layer)
 
