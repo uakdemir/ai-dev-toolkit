@@ -109,7 +109,9 @@ After Step 0 completes:
 
 ```
 1. Read tmp/orchestrate-state.md
-   ├── Not found → Read references/full-scan.md → execute Full Scan Fallback
+   ├── Not found or no valid cycle state (missing/empty `feature` field) →
+   │    ├── Strict mode active → First-Run User Prompt (below)
+   │    └── Standard mode → Read references/full-scan.md → execute Full Scan Fallback
    └── Found → compare head field to current git rev-parse HEAD
         ├── Same HEAD → trust hint, skip to step-specific validation
         └── Different HEAD → lightweight validation:
@@ -134,6 +136,54 @@ After Step 0 completes:
 If validation contradicts hint, advance to next logical step (don't full-scan).
 
 **YELLOW gate:** After detection, if YELLOW and next step is heavy (5/6/7), auto-handoff. If moderate/light (1/2/3/4/8), warn and proceed.
+
+---
+
+## First-Run User Prompt (--strict only)
+
+**Trigger:** No valid cycle state in hint file (missing file, malformed YAML, or empty/missing `feature` field) AND strict mode is active.
+
+```
+1. Print: "No previous state found."
+   Ask:  "What are you working on and where did you leave off?"
+
+2. Parse response for:
+   - Feature name: case-insensitive substring match against
+     docs/superpowers/specs/ filenames (strip YYYY-MM-DD- prefix
+     and -design suffix). Exactly one match → resolved.
+     Zero or multiple matches → ambiguous (go to step 4).
+   - Step: map natural language to step number:
+       "just started" / "haven't done anything yet" → step 1
+       "brainstormed" / "wrote spec"                → step 2
+       "spec in review" / "waiting on spec review"  → step 3
+       "spec reviewed" / "spec approved"            → step 4
+       "wrote plan" / "finished planning"           → step 5
+       "implementing" / "in the middle of code"     → step 5
+       "done implementing"                          → step 6
+       "code review in progress" / "reviewing code" → step 7
+       "code review done" / "review clean"          → step 8
+     For phrases not listed above, treat the step as ambiguous
+     and proceed to step 4. Prefer the most-specific match when
+     phrases overlap (e.g., "code review done" → step 8, not 7).
+
+3. If BOTH resolved (exactly one spec match, exactly one step match):
+   → Run one targeted step-specific validation check
+     (same as fast-path validation table above).
+   → If validation contradicts the stated step: print
+     "The project state doesn't match step <N> — let me scan
+     to determine the correct step." Fall back to full scan.
+   → Otherwise, write hint file (with mode, feature, step, spec,
+     plan if exists, head, updated), proceed to detected step.
+
+4. If EITHER is ambiguous:
+   → Ask a follow-up question. Max 2-3 rounds total.
+     "Did you mean `convention-enforcer` or `consolidate-learn`?"
+     "You said review — spec review (step 2-3) or code review (step 6-7)?"
+
+5. If still unclear after 2-3 rounds:
+   → Print: "Let me scan the project to figure it out."
+   → Fall back to full scan (read references/full-scan.md).
+```
 
 ---
 
@@ -188,6 +238,7 @@ Execute in order. First matching trigger wins.
 | Invoked skill fails | Report failure, offer: Retry / Skip / Exit. |
 | Context pressure (YELLOW/RED) | Handled by Step 0 + YELLOW gate. Resume via artifacts on next invocation. |
 | No test/build command discoverable (--strict) | Discovery: (1) check CLAUDE.md, (2) package.json scripts, (3) Makefile test target, (4) probe pytest/jest/cargo test. None found → skip verification gate: "No verification command found. Configure in CLAUDE.md." |
+| No valid cycle state + strict mode | First-Run User Prompt → targeted validation → hint write. Fallback to full scan after 2-3 rounds. |
 
 ---
 
