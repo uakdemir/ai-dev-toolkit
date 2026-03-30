@@ -147,7 +147,8 @@ This check matches both "Approved" and "Approved with suggestions" as passing �
 **Trigger:** Plan file exists, not all checkboxes are `[x]`.
 
 **Behavior:**
-- Present: "Plan at `{path}` -- {N} tasks, {M} completed. Continue implementation? I'll use subagent-driven-development."
+- Present (without `--strict`): "Plan at `{path}` -- {N} tasks, {M} completed. Continue implementation? I'll use subagent-driven-development."
+- Present (with `--strict`): "Plan at `{path}` -- {N} tasks, {M} completed. Continue implementation? I'll recommend an execution model."
 - On confirm (without `--strict`): invoke `superpowers:subagent-driven-development`
 - On confirm (with `--strict`): run the execution model recommendation preamble first (see below), then dispatch with overrides (see Step 5 Dispatch section).
 - **Dependency:** Assumes the implementation skill updates plan checkboxes `- [ ]` to `- [x]` in-place as tasks complete.
@@ -178,6 +179,7 @@ remaining = 200_000 - estimated_used
 implementation_estimate = task_count × 12_000
 
 If implementation_estimate > remaining × 0.8 → subagent-per-task
+  (also include in Reason line: "Consider clearing context first for single-agent (Option [3])")
 Else if coupling == HIGH → single-agent
 Else if task_count > 8 AND coupling == LOW → subagent-per-task
 Else → single-agent
@@ -476,6 +478,8 @@ Handle each scenario gracefully. Never crash or leave the user without options.
 | No test/build command discoverable (--strict) | Discovery algorithm: (1) check CLAUDE.md for test/build commands, (2) check package.json scripts (test, build), (3) check for Makefile (test target), (4) probe for pytest/jest/cargo test. If none found, skip verification gate with: "No verification command found. Configure test commands in CLAUDE.md." |
 | Base-branch unknown at Step 8 (--strict) | Prompt user: "Which branch should this merge into?" |
 | Override ignored by superpowers (--strict) | Benign — redundant quality review wastes tokens, caught by review-code at Step 6 |
+| --strict with --max-iterations 0 on review-code (Step 6) | Allowed — --strict does not force review-code iterations |
+| Context pressure during Step 5 (--strict) | Execution model recommendation already accounts for this; if single-agent was chosen and pressure builds mid-execution, the agent continues (superpowers handles context naturally) |
 
 ---
 
@@ -489,7 +493,8 @@ Orchestrate is a **dispatcher** — it invokes these skills (one per `/orchestra
 | /review-doc | Step 2 (spec review) | User-level `/` skill |
 | /respond-to-review | Step 3 (fix spec review findings) | User-level `/` skill |
 | superpowers:writing-plans | Step 4 (write plan) | `superpowers:` plugin skill |
-| superpowers:subagent-driven-development | Step 5 (implement) | `superpowers:` plugin skill |
+| superpowers:subagent-driven-development | Step 5 (implement, default + --strict subagent) | `superpowers:` plugin skill |
+| superpowers:executing-plans | Step 5 (implement, --strict single-agent) | `superpowers:` plugin skill |
 | /review-code | Step 6 (code review) | User-level `/` skill |
 | /session-handoff | Error handling (context pressure) | ai-dev-tools plugin skill |
 
