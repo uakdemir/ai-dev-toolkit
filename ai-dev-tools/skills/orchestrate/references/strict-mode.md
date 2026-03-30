@@ -6,7 +6,7 @@ This file is loaded by orchestrate when `--strict` is active.
 
 ---
 
-## Execution Model Recommendation
+## Execution Model Recommendation (--strict only)
 
 **Inputs:**
 1. Plan file (count tasks, scan for "Files" sections)
@@ -57,7 +57,7 @@ Any input other than 1, 2, or 3 re-presents the options.
 
 **Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate --strict` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit. The `--strict` flag is not persisted across sessions — the exit message includes the full command as a reminder.
 
-## Override Dispatch
+## Override Dispatch (--strict only)
 
 After user selects [1] or [2], dispatch to the chosen superpowers skill with a behavioral override block prepended to the dispatch prompt.
 
@@ -121,14 +121,14 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate --strict):
 
 **Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure mode is benign: the agent may occasionally dispatch the code-quality-reviewer (wasting tokens), skip TDD enforcement, or skip verification (all caught by review-code at Step 6 and the Step 8 verification gate). No destructive failure path exists.
 
-## Verification Gate
+## Verification Gate (--strict only)
 
 Discover and run the project's test/build commands fresh (see Error Handling: test/build command discovery algorithm). If failing:
 - "Verification failed. Fix before completing?"
 - → Yes: fix failing tests inline, then re-run verification
 - → No: proceed with warning in completion output
 
-## Structured Finishing
+## Structured Finishing (--strict only)
 
 After quality gate recommendations, present:
 
