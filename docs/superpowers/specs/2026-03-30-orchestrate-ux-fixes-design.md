@@ -1,7 +1,7 @@
 # Orchestrate UX Fixes — Design Spec
 
 **Date:** 2026-03-30
-**Status:** Draft
+**Status:** Approved
 **Plugin:** ai-dev-tools
 **Scope:** Three targeted changes to the orchestrate skill's `--strict` mode and first-run experience.
 
