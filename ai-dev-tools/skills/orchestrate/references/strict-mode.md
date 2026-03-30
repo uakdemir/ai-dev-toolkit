@@ -154,3 +154,14 @@ Proceed with?
 - [3] Dispatch `/session-handoff`.
 
 **Blocked task reporting:** If any tasks were marked BLOCKED during Step 5, include them in the Status field: e.g., "Status: Approved with 2 blocked tasks".
+
+---
+
+## Error Handling (--strict only)
+
+| Scenario | Behavior |
+|---|---|
+| Verification gate fails at Step 8 | Offer to fix failing tests inline and re-run verification, or proceed with warning. |
+| All tasks BLOCKED at Step 5 | Report blocked list, skip to Step 6 (review-code reviews what was committed). |
+| Base-branch unknown at Step 8 | Prompt user: "Which branch should this merge into?" |
+| Override ignored by superpowers | Benign — redundant quality review wastes tokens, caught by review-code at Step 6. |

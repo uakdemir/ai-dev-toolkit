@@ -7,7 +7,7 @@ It contains the complete state detection algorithm.
 
 ## State Detection
 
-Orchestrate detects the current cycle position by scanning artifacts and git history. State detection runs on every invocation — there is no persistent state file. The artifact files and git log ARE the state.
+Orchestrate detects the current cycle position by scanning artifacts and git history. This full scan runs when the hint file (`tmp/orchestrate-state.md`) is missing or invalid. After detection, the hint file is written so subsequent invocations can use the fast path.
 
 Evaluate the state table top-to-bottom. The first matching trigger determines which step to present:
 

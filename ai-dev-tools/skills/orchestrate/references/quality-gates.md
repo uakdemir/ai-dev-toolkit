@@ -45,3 +45,12 @@ What's next?
 - Priority order: convention-enforcer > api-contract-guard > test-audit > document-for-ai > consolidate > refactor-to-layers > session-handoff.
 - User can always choose "something else" — never locked into recommendations.
 - "What's next?" always offers 3 options: next feature, run a recommendation, or something else.
+
+---
+
+## Error Handling
+
+| Scenario | Behavior |
+|---|---|
+| Quality gate git commands fail | Skip that gate, warn: "Could not compute baseline for {gate}." Continue with remaining gates. |
+| No baseline commit found for a gate | Treat as "never run" — always recommend. |

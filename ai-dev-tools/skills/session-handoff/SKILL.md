@@ -46,6 +46,8 @@ Extract from `gitStatus`:
 - **Starting HEAD:** the first commit SHA listed in the "Recent commits:" field (gitStatus lists commits most-recent-first) — this is HEAD at session start since gitStatus is injected before any work begins
 - **Git repo:** confirmed by `gitStatus` presence
 
+If `gitStatus` is present but "Recent commits:" is missing or empty, extract branch name from `gitStatus`, then fall back to `git log --oneline --since="midnight" -20` for session commits.
+
 Run exactly 2 commands:
 1. `git status --short` — current uncommitted state (may differ from session start)
 2. `git log --oneline <start_head>..HEAD` — exact session commits (commits made between session start and now)
@@ -74,7 +76,7 @@ Fall back to the full git analysis below. This covers edge cases like: session s
 2. If no commits found or on a shared branch (main/master), fall back to last 10 commits on the current branch
 3. Note "session boundary estimated" if using the fallback
 
-> **Non-normative implementation note:** The agent has witnessed every commit it made during the session via tool call results. The `git log <start_head>..HEAD` output serves as the authoritative commit list, but the agent may cross-reference with its own memory of commits for richer Done item descriptions.
+> **Non-normative implementation note:** The agent has witnessed every commit it made during the session via tool call results. The `git log <start_head>..HEAD` output serves as the authoritative commit list, but the agent should cross-reference with its own memory of commits for richer Done item descriptions (commit messages alone may lack context the agent observed).
 
 ### Conversation Analysis (Context Layer)
 

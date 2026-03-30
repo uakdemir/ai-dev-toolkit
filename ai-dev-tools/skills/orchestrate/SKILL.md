@@ -93,7 +93,7 @@ After Step 0 completes:
              ├── Commits match feature name → advance step (see validation table below)
              └── Commits don't match feature → Read references/full-scan.md
 
-2. If step == "finalized":
+2. If step == "finalized" (skip if item 1 already triggered full scan):
    ├── Same HEAD → write hint (step: 1, clear all fields per write rules) → route to Step 1
    └── Different HEAD →
         git log --oneline <hint_head>..HEAD
@@ -136,7 +136,7 @@ Execute in order. First matching trigger wins.
 
 **Step 1 — Brainstorm:** No spec in `docs/superpowers/specs/` for current feature. Check `tmp/current-roadmap.md` for next item. Invoke `superpowers:brainstorming`. Edge: superpowers plugin missing -> warn, offer manual spec creation.
 **Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Invoke `/review-doc {spec_path}`. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
-**Step 3 — Respond to Review:** review_summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}`. Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
+**Step 3 — Respond to Review:** review_summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
 **Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
 **Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. Default: invoke `superpowers:subagent-driven-development`. --strict: Read references/strict-mode.md, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
 **Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Invoke `/review-code {N} {spec_path}`. Edge: >50% non-feature commits interleaved -> warn.
