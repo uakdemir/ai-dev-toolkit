@@ -61,7 +61,7 @@ usage_percent = estimated_used / 200_000 × 100
 
 `tmp/orchestrate-state.md` — YAML frontmatter persisting detected state between invocations.
 
-**Fields:** `feature` (from spec filename), `step` (number or `finalized`), `spec` (path, `""` if none), `plan` (path, `""` if none), `plan_hash` (40-char SHA of plan commit, `""` if none), `head` (40-char SHA of HEAD when written), `updated` (ISO timestamp).
+**Fields:** `feature` (from spec filename), `step` (number or `finalized`), `spec` (path, `""` if none), `plan` (path, `""` if none), `plan_hash` (40-char SHA of plan commit, `""` if none; populate via `git log --format=%H -1 -- {plan_path}` when first writing hint at step 5+), `head` (40-char SHA of HEAD when written), `updated` (ISO timestamp).
 
 **Write rules:** Written at end of every orchestrate invocation. Step-specific behavior:
 
@@ -94,7 +94,7 @@ After Step 0 completes:
              └── Commits don't match feature → Read references/full-scan.md
 
 2. If step == "finalized":
-   ├── Same HEAD → route to Step 1 (brainstorm)
+   ├── Same HEAD → write hint (step: 1, clear all fields per write rules) → route to Step 1
    └── Different HEAD →
         git log --oneline <hint_head>..HEAD
         For each commit, check against feature names extracted from
