@@ -61,7 +61,7 @@ usage_percent = estimated_used / 200_000 × 100
 
 `tmp/orchestrate-state.md` — YAML frontmatter persisting detected state between invocations.
 
-**Fields:** `feature` (from spec filename), `step` (number or `finalized`), `spec` (path, `""` if none), `plan` (path, `""` if none), `plan_hash` (40-char SHA of plan commit, `""` if none; populate via `git log --format=%H -1 -- {plan_path}` when first writing hint at step 5+), `head` (40-char SHA of HEAD when written), `updated` (ISO timestamp).
+**Fields:** `mode` (`standard` or `strict`, persisted user preference; preserved across resets), `feature` (from spec filename), `step` (number or `finalized`), `spec` (path, `""` if none), `plan` (path, `""` if none), `plan_hash` (40-char SHA of plan commit, `""` if none; populate via `git log --format=%H -1 -- {plan_path}` when first writing hint at step 5+), `head` (40-char SHA of HEAD when written), `updated` (ISO timestamp).
 
 **Write rules:** Written at end of every orchestrate invocation. Step-specific behavior:
 
@@ -72,7 +72,7 @@ usage_percent = estimated_used / 200_000 × 100
 | Step 8 finalize confirmed | `finalized` |
 | User overrides or exits | The detected step |
 
-Write `step: finalized` immediately after user confirms finalize — before running quality gates. When routing to Step 1 from `finalized`, write hint with `feature: ""`, `spec: ""`, `plan: ""`, `plan_hash: ""`, `step: 1`. The hint file is never deleted. `finalized` is a valid state.
+Write `step: finalized` immediately after user confirms finalize — before running quality gates. When routing to Step 1 from `finalized`, write hint with `feature: ""`, `spec: ""`, `plan: ""`, `plan_hash: ""`, `step: 1` — preserve the existing `mode` field unchanged. The hint file is never deleted. `finalized` is a valid state.
 
 **Validation:** Read hint -> compare `head` to `git rev-parse HEAD` -> run step-specific check (Section below).
 
