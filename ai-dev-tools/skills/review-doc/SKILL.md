@@ -67,9 +67,10 @@ Examples:
 1. Tokens before the first flag (`--*`) are input paths.
 2. If no input paths are provided: print `"Error: no input paths provided."` and exit.
 3. If a path is a directory: expand to all `*.md` files inside it (recursive, sorted alphabetically, max 20 files). If more than 20 `.md` files are found: print `"Error: directory contains more than 20 .md files. Use explicit paths to select a subset."` and exit. If zero `.md` files: print `"Error: directory contains no .md files."` and exit.
-4. All explicit file paths are validated for existence. If any are missing: print `"Error: file not found: <path>"` for each and exit.
-5. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
-6. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
+4. When a mix of directories and explicit files is provided, expand directories first, then merge with explicit paths. Deduplicate any paths that appear in both. The 20-file cap applies to the final merged list.
+5. All explicit file paths are validated for existence. If any are missing: print `"Error: file not found: <path>"` for each and exit.
+6. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
+7. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
 
 ## Edge Case: `--max-iterations 0`
 
@@ -87,8 +88,8 @@ For single file, keep `Reviewed: <doc-path>` (no count suffix).
 
 Single-pass mode (default). Three agents dispatched sequentially at max-model:
 
-1. **Reviewer** — reads the document, applies the combined checklist, writes `tmp/review.json` directly.
-2. **Fixer** — reads `tmp/review.json`, applies fixes to the document, writes `tmp/fix-report.json` with dispositions. Hash verification before/after: if hash is unchanged after fixer, print `Warning: document was not modified. Proceeding to next review.` and continue.
+1. **Reviewer** — reads each document, applies the combined checklist, writes `tmp/review.json` directly.
+2. **Fixer** — reads `tmp/review.json`, applies fixes to the documents, writes `tmp/fix-report.json` with dispositions. Hash verification before/after: if all hashes are unchanged after fixer, print `Warning: document was not modified. Proceeding to next step.` and continue.
 3. **Fact-checker** — reads `tmp/review.json`, appends fact-check issues, rewrites the file.
 
 Then jump to Final Report. In single-pass mode, the Final Report step reads `tmp/fix-report.json` to populate aggregate counts, same as in iterative mode.
@@ -188,7 +189,7 @@ The orchestrator reads `tmp/review.json`, extracts all issues grouped by severit
   For single file, use the same list format with one entry.
 - Reference document path (if `--against` provided)
 
-The fixer reads the document content using the Read tool (not passed via dispatch context). Edits the document using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/fix-report.json`).
+The fixer reads each document's content using the Read tool (not passed via dispatch context). Edits documents using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/fix-report.json`).
 
 Produces `tmp/fix-report.json` with dispositions for every issue:
 - `fixed` -- issue resolved
@@ -216,7 +217,7 @@ The fact-checker:
 Before fix phase: compute `sha256sum '<path>' | cut -d' ' -f1` via Bash for each document path.
 After fix phase: same commands, compare values per file.
 
-If all files unchanged: print `Warning: document was not modified. Proceeding to next review.`
+If all files unchanged: print `Warning: no documents were modified. Proceeding to next step.`
 
 ## Output Artifacts
 

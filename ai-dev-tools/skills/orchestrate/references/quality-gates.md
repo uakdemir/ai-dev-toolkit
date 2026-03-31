@@ -29,7 +29,7 @@ Recommendations (check all, collect matches):
   session-handoff:      [Info] (not git-based, see below)
 ```
 
-Threshold rationale: original thresholds were file-based (e.g., convention-enforcer at >20 files). Using ~3 files per commit, commit thresholds = file thresholds / 3, rounded.
+Threshold rationale: file-based gates converted using ~3 files per commit (convention-enforcer 20/3≈7, document-for-ai 15/3=5). Commit-based gates (test-audit >10, consolidate >40) kept their original thresholds.
 
 ### Session-Handoff Detection
 
