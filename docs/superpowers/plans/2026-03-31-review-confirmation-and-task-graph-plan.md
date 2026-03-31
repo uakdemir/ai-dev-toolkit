@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `ai-dev-tools/skills/orchestrate/SKILL.md:64-79`
 
-- [ ] **Step 1: Update the estimation formula multiplier**
+- [x] **Step 1: Update the estimation formula multiplier**
 
 In `SKILL.md`, replace the estimation block (lines 65-68):
 
@@ -33,7 +33,7 @@ estimated_used = max(estimated_used, 10_000)
 usage_percent = estimated_used / 200_000 × 100
 ```
 
-- [ ] **Step 2: Add step-based floor rule**
+- [x] **Step 2: Add step-based floor rule**
 
 After the estimation block (after line 68), before the "Compression signal boost" paragraph, add:
 
@@ -41,7 +41,7 @@ After the estimation block (after line 68), before the "Compression signal boost
 **Step-based floor:** If the hint file exists and `step >= 5`, the zone is at minimum YELLOW regardless of message count. This floor raises the minimum zone but cannot override RED (triggered by compression signal or >80% threshold).
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add ai-dev-tools/skills/orchestrate/SKILL.md
@@ -55,7 +55,7 @@ git commit -m "feat(orchestrate): update context health heuristic to ×5000 and 
 **Files:**
 - Modify: `ai-dev-tools/skills/orchestrate/SKILL.md:214-219`
 
-- [ ] **Step 1: Update Step 2 trigger line**
+- [x] **Step 1: Update Step 2 trigger line**
 
 In `SKILL.md` line 214, replace:
 
@@ -69,7 +69,7 @@ With:
 **Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 3` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
 ```
 
-- [ ] **Step 2: Update Step 6 trigger line**
+- [x] **Step 2: Update Step 6 trigger line**
 
 In `SKILL.md` line 218, replace:
 
@@ -83,7 +83,7 @@ With:
 **Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Present confirmation prompt with N and spec_path, then invoke `/review-code {N} --against {spec_path} --max-iterations 3` or user override. Edge: >50% non-feature commits interleaved -> warn.
 ```
 
-- [ ] **Step 3: Add confirmation prompt details after Steps 1-8 section**
+- [x] **Step 3: Add confirmation prompt details after Steps 1-8 section**
 
 After the Steps 1-8 section (after line 223, before the Error Handling section), add a new section:
 
@@ -125,7 +125,7 @@ Continue? or specify a different command.
 **Step 7 re-runs:** Step 7's internal re-run of `/review-code` within the same invocation skips the prompt. The Step 6 confirmation prompt appears on every orchestrate invocation that detects Step 6, including after Step 7 fixes.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add ai-dev-tools/skills/orchestrate/SKILL.md
@@ -139,7 +139,7 @@ git commit -m "feat(orchestrate): add review confirmation prompts to Steps 2 and
 **Files:**
 - Modify: `ai-dev-tools/skills/orchestrate/SKILL.md:13-17,33-39,196-198,217`
 
-- [ ] **Step 1: Update Step 5 trigger line**
+- [x] **Step 1: Update Step 5 trigger line**
 
 In `SKILL.md` line 217, replace:
 
@@ -153,7 +153,7 @@ With:
 **Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. Read references/implementation-step.md: generate task graph, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
 ```
 
-- [ ] **Step 2: Update Conditional Loading section**
+- [x] **Step 2: Update Conditional Loading section**
 
 In `SKILL.md` lines 196-198, replace:
 
@@ -171,7 +171,7 @@ At Step 5 onset (all paths including First-Run User Prompt):
     execution model recommendation, and override dispatch.
 ```
 
-- [ ] **Step 3: Update Mode Selection prompt**
+- [x] **Step 3: Update Mode Selection prompt**
 
 In `SKILL.md` lines 35-37, replace:
 
@@ -189,7 +189,7 @@ With:
       (recommended if you're experienced with orchestrate)
 ```
 
-- [ ] **Step 4: Update help text FLAGS section**
+- [x] **Step 4: Update help text FLAGS section**
 
 In `SKILL.md` lines 13-17, replace:
 
@@ -210,7 +210,7 @@ With:
               correctness matters more than speed.
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ai-dev-tools/skills/orchestrate/SKILL.md
@@ -224,7 +224,7 @@ git commit -m "feat(orchestrate): unify Step 5, update mode selection and help t
 **Files:**
 - Create: `ai-dev-tools/skills/orchestrate/references/task-graph.md`
 
-- [ ] **Step 1: Write the task graph reference file**
+- [x] **Step 1: Write the task graph reference file**
 
 Create `ai-dev-tools/skills/orchestrate/references/task-graph.md` with:
 
@@ -275,7 +275,7 @@ Total: ~34 min sequential, ~21 min with parallelism
 ```
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add ai-dev-tools/skills/orchestrate/references/task-graph.md
@@ -290,7 +290,7 @@ git commit -m "feat(orchestrate): add task graph visualization reference"
 - Create: `ai-dev-tools/skills/orchestrate/references/implementation-step.md`
 - Read (for content to move): `ai-dev-tools/skills/orchestrate/references/strict-mode.md`
 
-- [ ] **Step 1: Write the implementation step reference file**
+- [x] **Step 1: Write the implementation step reference file**
 
 Create `ai-dev-tools/skills/orchestrate/references/implementation-step.md`. This file combines the task graph instruction with the execution model logic moved from strict-mode.md. The content below is the complete file:
 
@@ -484,7 +484,7 @@ Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans`
 **Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure mode is benign: the agent may occasionally dispatch the code-quality-reviewer (wasting tokens), skip TDD enforcement, or skip verification (all caught by review-code at Step 6 and the Step 8 verification gate). No destructive failure path exists.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add ai-dev-tools/skills/orchestrate/references/implementation-step.md
@@ -498,7 +498,7 @@ git commit -m "feat(orchestrate): add implementation step reference with task gr
 **Files:**
 - Modify: `ai-dev-tools/skills/orchestrate/references/strict-mode.md`
 
-- [ ] **Step 1: Update the header**
+- [x] **Step 1: Update the header**
 
 In `strict-mode.md`, replace lines 1-7:
 
@@ -522,15 +522,15 @@ This file is loaded by orchestrate when --strict is active at Step 8 for verific
 ---
 ```
 
-- [ ] **Step 2: Remove the Execution Model Recommendation section**
+- [x] **Step 2: Remove the Execution Model Recommendation section**
 
 Delete the entire "## Execution Model Recommendation (--strict only)" section (lines 9-81 in current file, from the section heading through the Option [3] behavior paragraph, ending before "## Override Dispatch").
 
-- [ ] **Step 3: Remove the Override Dispatch section**
+- [x] **Step 3: Remove the Override Dispatch section**
 
 Delete the entire "## Override Dispatch (--strict only)" section (lines 82-181, from the section heading through the "Override reliability" paragraph, ending before "## Verification Gate").
 
-- [ ] **Step 4: Verify remaining content**
+- [x] **Step 4: Verify remaining content**
 
 The file should now contain only:
 1. Header (updated)
@@ -539,7 +539,7 @@ The file should now contain only:
 4. `## Structured Finishing (--strict only)` section
 5. `## Error Handling (--strict only)` section
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ai-dev-tools/skills/orchestrate/references/strict-mode.md
