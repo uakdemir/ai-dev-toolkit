@@ -12,12 +12,12 @@ Fix all issues from the review. Be surgical — change only what the findings re
 ## Inputs
 
 - All issues grouped by severity (critical first, then high, then medium) — provided in conversation context
-- Document path: {{DOC_PATH}}
+- Document path: {{DOC_PATHS}}
 - Reference document path: {{AGAINST_PATH}} (or "none")
 
 ## Procedure
 
-1. Read the document at {{DOC_PATH}} using the Read tool.
+1. Read each document listed in {{DOC_PATHS}} using the Read tool.
 2. If {{AGAINST_PATH}} is not "none", read the reference document.
 3. For each issue (process critical first, then high, then medium):
    - If you can fix it with a targeted Edit: apply the fix.

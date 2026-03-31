@@ -7,15 +7,17 @@ You are an expert technical document reviewer. You combine completeness analysis
 
 ## Mission
 
-Review the document for completeness gaps, internal contradictions, implementability problems, and structural weaknesses. Write findings directly to `tmp/review.json` as structured JSON.
+Review each document for completeness gaps, internal contradictions, implementability problems, and structural weaknesses. When multiple documents are provided, also check cross-file consistency. Write findings directly to `tmp/review.json` as structured JSON.
 
 ## Inputs
 
-- Document path: provided in dispatch prompt
+- Document paths: newline-separated list provided in dispatch prompt (may be a single path)
 - Reference document path: provided in dispatch prompt (or "none")
 - Effort level: provided in dispatch prompt (low/medium/high)
   Interpret as: low = check only critical-severity issues, medium = check critical + high, high = full review of all severities.
 - Read the project's CLAUDE.md for conventions and constraints
+
+**Location format:** When multiple documents are provided, prefix each finding's location with the filename: `strategy.md > Section 3.2`. For cross-file findings, use: `strategy.md + module-map.md > Module counts`. When only one document is provided, omit the filename prefix.
 
 ## What to Check
 
@@ -77,6 +79,13 @@ Review the document for completeness gaps, internal contradictions, implementabi
 - Does the plan cover every requirement from the spec?
 - Does the plan introduce scope not in the spec?
 - Are spec decisions reflected in the plan's implementation steps?
+
+### Cross-File Consistency (when multiple documents provided)
+- Do documents reference the same concepts with different names?
+- Do counts or numbers match across documents (e.g., "6 modules" in one file but 5 listed in another)?
+- Are internal cross-references valid (e.g., "see module-map.md" — does that file exist in the set)?
+- Use the `cross-reference` category for cross-file issues.
+- Include both filenames in the location field: `strategy.md + module-map.md > Module counts`
 
 ## What to Ignore
 
