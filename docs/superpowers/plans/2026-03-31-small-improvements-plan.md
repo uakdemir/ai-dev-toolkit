@@ -1,6 +1,6 @@
 # Small Improvements Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Four independent prompt-engineering improvements: multi-file review-doc, quality gates simplification, help version removal, and single-pass fixer.
 
@@ -17,7 +17,7 @@
 **Files:**
 - Modify: `ai-dev-tools/skills/help/SKILL.md`
 
-- [ ] **Step 1: Remove the plugin.json read instruction**
+- [x] **Step 1: Remove the plugin.json read instruction**
 
 Replace the entire instruction block at the top of the file (lines 6-9):
 
@@ -31,7 +31,7 @@ With:
 Output the following text, then stop:
 ```
 
-- [ ] **Step 2: Remove version from header line**
+- [x] **Step 2: Remove version from header line**
 
 In the `<help-output>` block, change:
 
@@ -45,7 +45,7 @@ To:
 ai-dev-tools — AI-native development automation
 ```
 
-- [ ] **Step 3: Update review-doc usage line for Part 1**
+- [x] **Step 3: Update review-doc usage line for Part 1**
 
 In the COMMANDS (ORCHESTRATE FLOW) section, change:
 
@@ -59,7 +59,7 @@ To:
   /review-doc <path> [...]  Review specs and design documents
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```
 git add ai-dev-tools/skills/help/SKILL.md
@@ -73,7 +73,7 @@ git commit -m "fix(help): remove version read, update review-doc usage line"
 **Files:**
 - Modify: `ai-dev-tools/skills/orchestrate/references/quality-gates.md`
 
-- [ ] **Step 1: Replace the entire file content**
+- [x] **Step 1: Replace the entire file content**
 
 Rewrite `ai-dev-tools/skills/orchestrate/references/quality-gates.md` with:
 
@@ -158,7 +158,7 @@ What's next?
 | plan_hash empty | Skip all quality gates (nothing was implemented). |
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```
 git add ai-dev-tools/skills/orchestrate/references/quality-gates.md
@@ -172,7 +172,7 @@ git commit -m "feat(orchestrate): simplify quality gates to single commit-count 
 **Files:**
 - Modify: `ai-dev-tools/skills/review-doc/SKILL.md`
 
-- [ ] **Step 1: Update the --max-iterations 1 edge case**
+- [x] **Step 1: Update the --max-iterations 1 edge case**
 
 Replace the `## Edge Case: --max-iterations 1` section content (line 77):
 
@@ -192,7 +192,7 @@ Single-pass mode (default). Three agents dispatched sequentially at max-model:
 Then jump to Final Report. In single-pass mode, the Final Report step reads `tmp/fix-report.json` to populate aggregate counts, same as in iterative mode.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```
 git add ai-dev-tools/skills/review-doc/SKILL.md
@@ -206,7 +206,7 @@ git commit -m "feat(review-doc): add fixer to single-pass mode"
 **Files:**
 - Modify: `ai-dev-tools/skills/review-doc/SKILL.md`
 
-- [ ] **Step 1: Update the argument parsing table**
+- [x] **Step 1: Update the argument parsing table**
 
 Change the description frontmatter (line 2):
 
@@ -220,7 +220,7 @@ To:
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles with model tiering. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ```
 
-- [ ] **Step 2: Update argument parsing syntax**
+- [x] **Step 2: Update argument parsing syntax**
 
 Change the argument parsing code block (line 17):
 
@@ -235,7 +235,7 @@ To:
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
 
-- [ ] **Step 3: Update --help output block**
+- [x] **Step 3: Update --help output block**
 
 Replace the entire `--help` output block with the spec's updated version:
 
@@ -265,7 +265,7 @@ Examples:
   /review-doc docs/spec.md --min-model haiku             Faster early rounds (lower quality)
 ```
 
-- [ ] **Step 4: Update Pre-Flight Checks for multi-file**
+- [x] **Step 4: Update Pre-Flight Checks for multi-file**
 
 Replace the Pre-Flight Checks section with:
 
@@ -280,7 +280,7 @@ Replace the Pre-Flight Checks section with:
 6. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
 ```
 
-- [ ] **Step 5: Update --max-iterations 0 edge case output**
+- [x] **Step 5: Update --max-iterations 0 edge case output**
 
 Change `Reviewed: <doc-path>` in the `--max-iterations 0` output to:
 
@@ -290,7 +290,7 @@ Change `Reviewed: <doc-path>` in the `--max-iterations 0` output to:
 
 For single file, keep `Reviewed: <doc-path>` (no count suffix).
 
-- [ ] **Step 6: Update Agent Dispatch sections**
+- [x] **Step 6: Update Agent Dispatch sections**
 
 In all Agent Dispatch sections, change references from 'the document path' to 'the document paths list'. Update dispatch prompt format to use:
 
@@ -302,7 +302,7 @@ Documents to review:
 
 For single file, use the same list format with one entry.
 
-- [ ] **Step 7: Update Review Summary Format**
+- [x] **Step 7: Update Review Summary Format**
 
 Change the `**Reviewed:**` line in the Review Summary Format from:
 
@@ -318,7 +318,7 @@ To:
 
 Single file: show just the path (no count suffix).
 
-- [ ] **Step 8: Update Terminal Output**
+- [x] **Step 8: Update Terminal Output**
 
 Change the `Reviewed:` line in Terminal Output from:
 
@@ -331,7 +331,7 @@ To support three formats:
 - Directory: `Reviewed: <directory/> (N files)`
 - Explicit multi-file: `Reviewed: <a.md, b.md, c.md> (N files)`
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```
 git add ai-dev-tools/skills/review-doc/SKILL.md
@@ -347,7 +347,7 @@ git commit -m "feat(review-doc): add multi-file argument parsing and output form
 - Modify: `ai-dev-tools/skills/review-doc/prompts/coder.md`
 - Modify: `ai-dev-tools/skills/review-doc/agents/codebase-fact-checker.md`
 
-- [ ] **Step 1: Update reviewer.md Mission section**
+- [x] **Step 1: Update reviewer.md Mission section**
 
 Change:
 
@@ -361,7 +361,7 @@ To:
 Review each document for completeness gaps, internal contradictions, implementability problems, and structural weaknesses. When multiple documents are provided, also check cross-file consistency. Write findings directly to `tmp/review.json` as structured JSON.
 ```
 
-- [ ] **Step 2: Update reviewer.md Inputs section**
+- [x] **Step 2: Update reviewer.md Inputs section**
 
 Change:
 
@@ -375,7 +375,7 @@ To:
 - Document paths: newline-separated list provided in dispatch prompt (may be a single path)
 ```
 
-- [ ] **Step 3: Add cross-file consistency check to reviewer.md**
+- [x] **Step 3: Add cross-file consistency check to reviewer.md**
 
 Add a new subsection under `## What to Check`, after the existing subsections:
 
@@ -388,7 +388,7 @@ Add a new subsection under `## What to Check`, after the existing subsections:
 - Include both filenames in the location field: `strategy.md + module-map.md > Module counts`
 ```
 
-- [ ] **Step 4: Add location field note to reviewer.md**
+- [x] **Step 4: Add location field note to reviewer.md**
 
 Add after the Inputs section:
 
@@ -396,11 +396,11 @@ Add after the Inputs section:
 **Location format:** When multiple documents are provided, prefix each finding's location with the filename: `strategy.md > Section 3.2`. For cross-file findings, use: `strategy.md + module-map.md > Module counts`. When only one document is provided, omit the filename prefix.
 ```
 
-- [ ] **Step 5: Update coder.md placeholders**
+- [x] **Step 5: Update coder.md placeholders**
 
 In `ai-dev-tools/skills/review-doc/prompts/coder.md`, replace all occurrences of `{{DOC_PATH}}` with `{{DOC_PATHS}}` (3 occurrences: lines 15, 20, and the Inputs description). Update the Procedure step 1 from "Read the document at {{DOC_PATHS}}" to "Read each document listed in {{DOC_PATHS}}".
 
-- [ ] **Step 6: Update codebase-fact-checker.md Mission**
+- [x] **Step 6: Update codebase-fact-checker.md Mission**
 
 Change:
 
@@ -414,7 +414,7 @@ To:
 Fact-check every verifiable claim in each document against the actual source code. When multiple documents are provided, verify cross-document references as well. Find stale references, wrong line numbers, incorrect function signatures, and architectural claims that don't match reality.
 ```
 
-- [ ] **Step 7: Update codebase-fact-checker.md Inputs**
+- [x] **Step 7: Update codebase-fact-checker.md Inputs**
 
 Change:
 
@@ -428,7 +428,7 @@ To:
 - Documents to review (newline-separated list of paths provided in dispatch prompt; may be a single path)
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```
 git add ai-dev-tools/skills/review-doc/prompts/reviewer.md ai-dev-tools/skills/review-doc/prompts/coder.md ai-dev-tools/skills/review-doc/agents/codebase-fact-checker.md
