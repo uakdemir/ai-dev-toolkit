@@ -213,16 +213,52 @@ At Step 8, after user confirms finalize:
 Execute in order. First matching trigger wins.
 
 **Step 1 — Brainstorm:** No spec in `docs/superpowers/specs/` for current feature. Check `tmp/current-roadmap.md` for next item. Invoke `superpowers:brainstorming`. Edge: superpowers plugin missing -> warn, offer manual spec creation.
-**Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Invoke `/review-doc {spec_path}`. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
+**Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 3` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
 **Step 3 — Respond to Review:** review_summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
 **Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
 **Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. Default: invoke `superpowers:subagent-driven-development`. --strict: Read references/strict-mode.md, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
-**Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Invoke `/review-code {N} {spec_path}`. Edge: >50% non-feature commits interleaved -> warn.
+**Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Present confirmation prompt with N and spec_path, then invoke `/review-code {N} --against {spec_path} --max-iterations 3` or user override. Edge: >50% non-feature commits interleaved -> warn.
 **Step 7 — Fix Findings:** review_summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
 - **Phase 1 (pre-confirmation):** Present `── Step 8: Complete ──` with Feature name, Status (Approved/Approved with suggestions), and "Ready to finalize?" No git baselines.
 - **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> recommendations -> "What's next?"
 - **--strict Phase 2:** Update hint to `finalized` -> Read references/strict-mode.md (verification gate) -> Read references/quality-gates.md (baselines) -> roadmap -> structured finishing.
+
+---
+
+## Review Confirmation Prompts
+
+Steps 2 and 6 present a confirmation prompt before invoking the review skill. The prompt shows the full command with `--max-iterations 3` as default.
+
+**Step 2 prompt:**
+```
+── Step 2: Spec Review ──────────────────────────
+Feature: <feature-name>
+Spec: <spec_path>
+
+Will run:
+  /review-doc <spec_path> --max-iterations 3
+
+Continue? or specify a different command.
+```
+
+**Step 6 prompt:**
+```
+── Step 6: Code Review ──────────────────────────
+Feature: <feature-name>
+Commits since plan: <N>
+
+Will run:
+  /review-code <N> --against <spec_path> --max-iterations 3
+
+Continue? or specify a different command.
+```
+
+**Input handling:** Any affirmative response (yes, y, continue, go, or pressing Enter) invokes the shown command. Any other non-empty input is treated as an alternative command to invoke verbatim.
+
+**N derivation (Step 6):** Computed via `git log {plan_hash}..HEAD --oneline | wc -l`. If plan_hash is empty, attempt to populate via `git log --format=%H -1 -- {plan_path}`; if still empty, fall back to full scan per existing Step 6 behavior and show `Commits since plan: unknown (plan hash not found)`.
+
+**Step 7 re-runs:** Step 7's internal re-run of `/review-code` within the same invocation skips the prompt. The Step 6 confirmation prompt appears on every orchestrate invocation that detects Step 6, including after Step 7 fixes.
 
 ---
 
