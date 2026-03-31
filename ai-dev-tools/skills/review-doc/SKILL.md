@@ -1,6 +1,6 @@
 ---
 name: review-doc
-description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles with model tiering. Invoke with /review-doc <doc-path>."
+description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles with model tiering. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
 # Review Doc
@@ -14,7 +14,8 @@ Iterative document review with model tiering. Dispatches a single merged reviewe
 Parse arguments after `/review-doc`:
 
 ```
-/review-doc <doc-path> [--against <ref-path>] [--max-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>] [--help]
+/review-doc <path1> [path2 ...] [--against <ref-path>] [--max-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>] [--help]
+/review-doc <directory/>       [--against <ref-path>] [...]
 ```
 
 | Flag | Default | Values | Purpose |
@@ -31,11 +32,13 @@ Parse arguments after `/review-doc`:
 When `--help` is passed, print the following and exit (no review runs):
 
 ```
-Usage: /review-doc <doc-path> [flags]
+Usage: /review-doc <path1> [path2 ...] [flags]
+       /review-doc <directory/> [flags]
 
 Iterative document review with model tiering. Dispatches a single merged
 reviewer for completeness, consistency, and implementability. Fixes issues
 automatically between rounds. Fact-checker runs sequentially in the final round.
+Accepts multiple files or a directory of .md files for cross-file review.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
@@ -46,10 +49,12 @@ Flags:
   --help                  Print this help and exit
 
 Examples:
-  /review-doc docs/spec.md                          Single-pass review (default)
-  /review-doc docs/spec.md --max-iterations 3       Iterative review, up to 3 rounds
-  /review-doc docs/spec.md --against docs/plan.md   Review against reference document
-  /review-doc docs/spec.md --min-model haiku        Faster early rounds (lower quality)
+  /review-doc docs/spec.md                               Single-pass review (default)
+  /review-doc docs/a.md docs/b.md docs/c.md              Review specific files as a set
+  /review-doc docs/monorepo-strategy/                    Review all .md files in directory
+  /review-doc docs/spec.md --max-iterations 3            Iterative review, up to 3 rounds
+  /review-doc docs/spec.md --against docs/plan.md        Review against reference document
+  /review-doc docs/spec.md --min-model haiku             Faster early rounds (lower quality)
 ```
 
 ## Setup
@@ -59,8 +64,12 @@ Examples:
 
 ## Pre-Flight Checks
 
-1. Validate `<doc-path>` exists. If not: `"Error: document not found: <doc-path>"`
-2. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
+1. Tokens before the first flag (`--*`) are input paths.
+2. If no input paths are provided: print `"Error: no input paths provided."` and exit.
+3. If a path is a directory: expand to all `*.md` files inside it (recursive, sorted alphabetically, max 20 files). If more than 20 `.md` files are found: print `"Error: directory contains more than 20 .md files. Use explicit paths to select a subset."` and exit. If zero `.md` files: print `"Error: directory contains no .md files."` and exit.
+4. All explicit file paths are validated for existence. If any are missing: print `"Error: file not found: <path>"` for each and exit.
+5. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
+6. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
 
 ## Edge Case: `--max-iterations 0`
 
@@ -68,9 +77,11 @@ Skip the loop entirely. Do not create any files (no review.json, no iteration lo
 
 ```
 Review Doc Skipped
-  Reviewed: <doc-path>
+  Reviewed: <doc-paths comma-separated> (<N> files)
   No iterations run. Document was not reviewed.
 ```
+
+For single file, keep `Reviewed: <doc-path>` (no count suffix).
 
 ## Edge Case: `--max-iterations 1`
 
@@ -135,7 +146,13 @@ Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using th
 
 The dispatch prompt must include:
 - The effort level (`--effort` value)
-- The document path to review
+- The document paths list:
+  ```
+  Documents to review:
+  - path1.md
+  - path2.md
+  ```
+  For single file, use the same list format with one entry.
 - The `--against` reference path (if provided)
 
 No fact-checker in early rounds. Early rounds focus on structural/completeness issues that Sonnet handles well. Fact-checking on a noisy early draft wastes time.
@@ -162,7 +179,13 @@ Read `prompts/coder.md` for complete dispatch instructions.
 
 The orchestrator reads `tmp/review.json`, extracts all issues grouped by severity (critical first, then high, then medium), and includes them in the Agent dispatch prompt as conversation context. The dispatch prompt must include:
 - All issues grouped by severity
-- The document path
+- The document paths list:
+  ```
+  Documents to review:
+  - path1.md
+  - path2.md
+  ```
+  For single file, use the same list format with one entry.
 - Reference document path (if `--against` provided)
 
 The fixer reads the document content using the Read tool (not passed via dispatch context). Edits the document using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/fix-report.json`).
@@ -212,7 +235,7 @@ The orchestrator generates `tmp/review_summary.md` directly during the Final Rep
 # Review Summary
 
 **Date:** YYYY-MM-DD HH:MM
-**Reviewed:** <doc-path>
+**Reviewed:** <file1.md, file2.md, ...> (N files)
 **Against:** <ref-path or "standalone">
 **Status:** Approved | Approved with suggestions | Issues Found
 **Iterations:** N/M
@@ -235,6 +258,8 @@ X/Y verifiable claims accurate (Z%)
 [... up to 10 items]
 ```
 
+Single file: show just the path (no count suffix).
+
 ## Terminal Output
 
 After saving the summary, print:
@@ -251,6 +276,11 @@ Review Doc Complete
   Summary: tmp/review_summary.md
   Full review: tmp/review.json
 ```
+
+The `Reviewed:` line supports three formats:
+- Single file: `Reviewed: <doc-path>` (unchanged)
+- Directory: `Reviewed: <directory/> (N files)`
+- Explicit multi-file: `Reviewed: <a.md, b.md, c.md> (N files)`
 
 ## Final Report
 
