@@ -11,10 +11,9 @@ USAGE
 
 FLAGS
   --strict    Enable quality discipline: TDD enforcement, verification
-              gates, per-task spec compliance review, intelligent execution
-              model selection, and structured completion options.
-              Recommended for features where correctness matters more
-              than speed.
+              gates, per-task spec compliance review, and structured
+              completion options. Recommended for features where
+              correctness matters more than speed.
 
 EXAMPLES
   /orchestrate                       Detect state and suggest next step
@@ -31,8 +30,8 @@ When triggered, present before anything else (before Step 0):
 
 ```
 Orchestrate mode:
-  [1] Standard (relaxed)
-  [2] Strict — full workflow orchestration, TDD, verification gates
+  [1] Standard — TDD, execution model selection, dispatch with overrides
+  [2] Strict — TDD, verification gates, spec compliance, structured completion
       (recommended if you're experienced with orchestrate)
 
 Proceed with?
@@ -195,9 +194,9 @@ If hint file is missing or validation fails:
   -> Strict mode active: First-Run User Prompt (see above), then full scan only if unresolved.
   -> Standard mode: Read references/full-scan.md, execute Full Scan Fallback.
 
-If --strict is active at Step 5 onset:
-  -> Read references/strict-mode.md for execution model recommendation
-    and override dispatch (single-agent, subagent, and parallel helper blocks).
+At Step 5 onset (all paths including First-Run User Prompt):
+  -> Read references/implementation-step.md for task graph visualization,
+    execution model recommendation, and override dispatch.
 
 If --strict is active at Step 8:
   -> Read references/strict-mode.md (if not already loaded) for
@@ -216,7 +215,7 @@ Execute in order. First matching trigger wins.
 **Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 3` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
 **Step 3 — Respond to Review:** review_summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
 **Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
-**Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. Default: invoke `superpowers:subagent-driven-development`. --strict: Read references/strict-mode.md, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
+**Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. Read references/implementation-step.md: generate task graph, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
 **Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Present confirmation prompt with N and spec_path, then invoke `/review-code {N} --against {spec_path} --max-iterations 3` or user override. Edge: >50% non-feature commits interleaved -> warn.
 **Step 7 — Fix Findings:** review_summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
