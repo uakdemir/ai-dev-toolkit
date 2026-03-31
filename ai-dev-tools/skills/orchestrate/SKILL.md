@@ -63,10 +63,12 @@ Runs on every invocation (both standard and `--strict`), before state detection.
 
 **Estimation:**
 ```
-estimated_used = number_of_user_messages_in_conversation × 2_000
+estimated_used = number_of_user_messages_in_conversation × 5_000
 estimated_used = max(estimated_used, 10_000)
 usage_percent = estimated_used / 200_000 × 100
 ```
+
+**Step-based floor:** If the hint file exists and `step >= 5`, the zone is at minimum YELLOW regardless of message count. This floor raises the minimum zone but cannot override RED (triggered by compression signal or >80% threshold).
 
 **Compression signal boost:** If the conversation contains a system-generated summary of prior context (indicating the system has already compressed messages), override to RED regardless of message count. This is a strong signal that context is critically low.
 
