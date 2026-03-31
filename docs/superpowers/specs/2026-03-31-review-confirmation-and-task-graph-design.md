@@ -38,7 +38,7 @@ The step-based floor raises the minimum zone to YELLOW but cannot override RED.
 
 Update the duplicated context estimate formula from `× 2_000` to `× 5_000`.
 
-Note: this line in strict-mode.md will be moved to `implementation-step.md` as part of Part 3, but the value change applies regardless.
+Note: this line in strict-mode.md will be moved to `implementation-step.md` as part of Part 3, but the value change applies regardless. If implementing all three parts together, the formula update to strict-mode.md can be skipped — those sections are removed by Part 3.
 
 ## Part 2: Review Confirmation Prompt
 
@@ -70,9 +70,9 @@ Will run:
 Continue? or specify a different command.
 ```
 
-N is computed via `git log {plan_hash}..HEAD --oneline | wc -l` (same as current Step 6 logic). If plan_hash is empty or not found in git history, use `HEAD~10` as fallback and note this in the prompt. Continue runs as shown, user can override by providing any alternative verbatim as typed. Edge case unchanged: >50% non-feature commits interleaved → warn.
+N is computed via `git log {plan_hash}..HEAD --oneline | wc -l` (same as current Step 6 logic). If plan_hash is empty, attempt to populate via `git log --format=%H -1 -- {plan_path}`; if still empty after that, fall back to full scan per existing Step 6 behavior and show 'Commits since plan: unknown (plan hash not found)' in the prompt. Continue runs as shown, user can override by providing any alternative verbatim as typed. Edge case unchanged: >50% non-feature commits interleaved → warn.
 
-**Step 7 — Fix Findings** remains unchanged. Re-runs `/review-code` automatically within the fix loop (no prompt on re-runs).
+**Step 7 — Fix Findings** remains unchanged. Re-runs `/review-code` automatically within the fix loop (no prompt on re-runs). The Step 6 confirmation prompt appears on every orchestrate invocation that detects Step 6, including after Step 7 fixes. Only Step 7's internal re-run of review-code within the same invocation skips the prompt.
 
 ## Part 3: Task Graph Visualization + Unified Step 5
 
@@ -112,9 +112,9 @@ Task 7: Shim Cleanup + Verify          🟢 ~3 min  (rm + grep checks)
 
 ### New file: `references/implementation-step.md`
 
-Loaded at Step 5 onset (both modes). Contains:
+Loaded at Step 5 onset (both modes, including the First-Run User Prompt path). Contains:
 
-1. **Task graph instruction:** Read `references/task-graph.md`, analyze the plan, generate ASCII dependency graph, present to user.
+1. **Task graph instruction:** Read `references/task-graph.md`, analyze the plan, generate ASCII dependency graph. Present the task graph and execution model recommendation together in the same response (no intermediate user acknowledgment required between them).
 
 2. **Execution model recommendation** (moved from `strict-mode.md`):
    - Inputs: task count, "Files" sections, context estimate (`messages × 5_000`, floor 10K)
@@ -123,11 +123,11 @@ Loaded at Step 5 onset (both modes). Contains:
    - Recommendation algorithm (subagent-per-task / single-agent / single-agent + parallel helper)
    - Present to user block with [1]-[4] selection
 
-3. **Override dispatch preambles** (moved from `strict-mode.md`):
+3. **Override dispatch preambles** (moved from `strict-mode.md`; TDD applies to both modes — preamble headers updated from 'from orchestrate --strict' to 'from orchestrate'):
    - Option [1] → `superpowers:executing-plans` with TDD, verification gate, spec compliance, retry overrides
    - Option [2] → `superpowers:subagent-driven-development` with TDD, coordinator verification, skip code-quality-reviewer, keep spec-reviewer, retry overrides
    - Option [3] → exit with message: 'Start a new conversation and run /orchestrate to continue with a fresh context window. Your plan is saved and will be picked up automatically.' (says `/orchestrate`, not `--strict`, since mode is persisted in hint file; if mode was activated via `--strict` flag only and no hint file exists, the new session will prompt for mode selection again — this is acceptable)
-   - Option [4] → `superpowers:executing-plans` with option [1] overrides + parallel helper override
+   - Option [4] → `superpowers:executing-plans` with option [1] overrides + parallel helper override (Note: in implementation-step.md the PARALLEL HELPER preamble item should be numbered 5, not 6, to avoid a numbering gap after removing the --strict-only item)
 
 ### Changes to `SKILL.md`
 
@@ -140,6 +140,18 @@ Step 5 — Implement: Plan exists, not all checkboxes [x].
 ```
 
 Note: standard mode previously dispatched automatically to `superpowers:subagent-driven-development` at Step 5. That default is removed. Both modes now perform the full execution model selection prompt via `implementation-step.md`.
+
+**Step 2** trigger line updated:
+
+Before:
+```
+Step 2 — Spec Review: spec exists, Status != Approved. Invoke /review-doc {spec_path}. Edge: clean review (zero criticals) → update spec Status to Approved immediately.
+```
+
+After:
+```
+Step 2 — Spec Review: spec exists, Status != Approved. Present confirmation prompt with spec_path, then invoke /review-doc {spec_path} or user override. Edge: clean review (zero criticals) → update spec Status to Approved immediately.
+```
 
 **Step 6** trigger line updated:
 
@@ -186,6 +198,16 @@ After:
 ```
 
 **Help text** updated — FLAGS section for `--strict` removes "intelligent execution model selection" from the list.
+
+Before:
+```
+--strict    Enable strict mode: TDD enforcement, intelligent execution model selection, verification gates, structured completion
+```
+
+After:
+```
+--strict    Enable strict mode: verification gates, structured completion
+```
 
 ### Changes to `references/strict-mode.md`
 
