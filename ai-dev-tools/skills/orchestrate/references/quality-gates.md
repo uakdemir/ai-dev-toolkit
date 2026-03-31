@@ -5,25 +5,47 @@ It contains the quality gate baseline computation logic.
 
 ---
 
-## Quality Gate Triggers
+## Unified Commit-Count Heuristic
 
-Checked after Step 8 (cycle completion) and presented as recommendations. Quality gates are recommended, not invoked — the user decides when to run them.
+All commit-based gates use a single git command with the plan hash as baseline.
 
-| Gate | Trigger | Detection | Recommendation |
-|---|---|---|---|
-| convention-enforcer | >20 files changed since last run | `git diff --name-only {baseline}..HEAD` where baseline = last commit with `convention-enforcer` in message | "Warning: {N} files changed since last convention-enforcer. Run `/convention-enforcer`" |
-| api-contract-guard | New module directory created OR >15 files added | `git log --diff-filter=A --name-only {baseline}..HEAD` for new top-level directories or bulk additions | "Warning: New module `{name}` created. Run `/api-contract-guard`" |
-| test-audit | >10 commits since last run | `git log --oneline {baseline}..HEAD` where baseline = last commit with `test-audit` in message | "Warning: {N} commits since last test-audit. Run `/test-audit`" |
-| document-for-ai | >15 files changed since last run | `git diff --name-only {baseline}..HEAD` where baseline = last commit with `document-for-ai` in message. **Fallback:** If no commit message contains `document-for-ai`, check `git log -- docs/architecture/adrs/ docs/architecture/adrs.md AI_INDEX.md` for the most recent commit touching any ADR artifact. No baseline from either = "never run," always recommend. | "Warning: {N} files changed since last doc update. Run `/document-for-ai`" |
-| consolidate | >40 commits since last run | Same pattern with `consolidate` baseline | "Info: {N} commits since last consolidate. Run `/consolidate`" |
-| refactor-to-layers | Module exceeds ~30K lines | Scan directories containing source files, `wc -l` (directory detection is project-dependent — scan for directories containing source files) | "Warning: Module `{name}` at {N}K lines. Consider `/refactor-to-layers`" |
-| session-handoff | Long conversation (>50 exchanges) or user mentions context pressure | Superseded by Step 0/Step 2 context health check for mid-cycle detection. This quality gate trigger remains for post-cycle recommendation only (between features). | "Info: Long conversation. Consider `/session-handoff` before next feature" |
+### Algorithm
 
-## Detection of "Last Run"
+```
+plan_hash = read from tmp/orchestrate-state.md
+if plan_hash is empty → skip quality gates entirely (nothing was implemented)
 
-Scan `git log --oneline` for commits whose messages contain the skill name as a substring. This matches both `feat(convention-enforcer):` parenthetical format and `convention-enforcer: ...` prefix format. Most recent such commit = baseline. No such commit = "never run" and always recommend on first trigger check.
+Run `git log --oneline {plan_hash}..HEAD` and count the number of returned
+lines as `commit_count` (count in the orchestrator, not via shell pipe).
 
-For each gate, compute the baseline independently. The baseline is the most recent commit whose message contains the gate's skill name. If no baseline exists, use the repository root (all history counts).
+If the git log command fails → skip quality gates entirely and warn:
+"Could not compute commit count from plan hash. Quality gates skipped."
+
+Recommendations (check all, collect matches):
+  convention-enforcer:  commit_count > 7   [Warning]
+  test-audit:           commit_count > 10  [Warning]
+  document-for-ai:      commit_count > 5   [Warning]
+  consolidate:          commit_count > 40  [Info]
+  session-handoff:      [Info] (not git-based, see below)
+```
+
+Threshold rationale: original thresholds were file-based (e.g., convention-enforcer at >20 files). Using ~3 files per commit, commit thresholds = file thresholds / 3, rounded.
+
+### Session-Handoff Detection
+
+The session-handoff gate is not git-based and is unaffected by the commit count heuristic. It triggers when the conversation exceeds ~50 exchanges or the user mentions context pressure. This is a subjective heuristic the orchestrating LLM evaluates based on conversation length.
+
+### Recommendation Messages
+
+Each gate uses commit count in its message:
+
+| Gate | Message |
+|---|---|
+| convention-enforcer | "{N} commits since plan → run /convention-enforcer (recommended)" |
+| test-audit | "{N} commits since plan → run /test-audit" |
+| document-for-ai | "{N} commits since plan → run /document-for-ai" |
+| consolidate | "{N} commits since plan → run /consolidate" |
+| session-handoff | "Long conversation. Consider /session-handoff before next feature" |
 
 ## Presentation Format
 
@@ -31,8 +53,8 @@ For each gate, compute the baseline independently. The baseline is the most rece
 Feature "{name}" complete.
 
 Recommendations:
-  [Warning] 23 files changed since last convention-enforcer -> run /convention-enforcer
-  [Info] Long conversation -- consider /session-handoff before next feature
+  [Warning] 7 commits since plan → run /convention-enforcer (recommended)
+  [Warning] 12 commits since plan → run /test-audit
 
 What's next?
   > Next feature (continue with /orchestrate)
@@ -42,7 +64,7 @@ What's next?
 
 - Warnings first, info second.
 - Max 3 recommendations at a time. If more than 3 gates trigger, show the top 3 by priority.
-- Priority order: convention-enforcer > api-contract-guard > test-audit > document-for-ai > consolidate > refactor-to-layers > session-handoff.
+- Priority order: convention-enforcer > test-audit > document-for-ai > consolidate > session-handoff.
 - User can always choose "something else" — never locked into recommendations.
 - "What's next?" always offers 3 options: next feature, run a recommendation, or something else.
 
@@ -52,5 +74,5 @@ What's next?
 
 | Scenario | Behavior |
 |---|---|
-| Quality gate git commands fail | Skip that gate, warn: "Could not compute baseline for {gate}." Continue with remaining gates. |
-| No baseline commit found for a gate | Treat as "never run" — always recommend. |
+| `git log` command fails | Skip all quality gates, warn: "Could not compute commit count from plan hash. Quality gates skipped." |
+| plan_hash empty | Skip all quality gates (nothing was implemented). |
