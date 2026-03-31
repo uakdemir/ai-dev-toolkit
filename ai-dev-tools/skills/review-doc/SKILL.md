@@ -213,10 +213,10 @@ The fact-checker:
 
 ## Hash Verification
 
-Before fix phase: compute `sha256sum '<doc-path>' | cut -d' ' -f1` via Bash.
-After fix phase: same command, compare values.
+Before fix phase: compute `sha256sum '<path>' | cut -d' ' -f1` via Bash for each document path.
+After fix phase: same commands, compare values per file.
 
-If unchanged: print `Warning: document was not modified. Proceeding to next review.`
+If all files unchanged: print `Warning: document was not modified. Proceeding to next review.`
 
 ## Output Artifacts
 

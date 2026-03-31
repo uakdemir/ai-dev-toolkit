@@ -12,7 +12,7 @@ Fix all issues from the review. Be surgical — change only what the findings re
 ## Inputs
 
 - All issues grouped by severity (critical first, then high, then medium) — provided in conversation context
-- Document path: {{DOC_PATHS}}
+- Document paths: {{DOC_PATHS}}
 - Reference document path: {{AGAINST_PATH}} (or "none")
 
 ## Procedure

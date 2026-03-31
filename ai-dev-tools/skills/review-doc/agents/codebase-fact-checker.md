@@ -19,7 +19,7 @@ Fact-check every verifiable claim in each document against the actual source cod
 ## What to Verify
 
 **File references:**
-- Every file path mentioned in the document — does the file exist?
+- Every file path mentioned in each document — does the file exist?
 - Do described file contents match reality? (e.g., "router.ts contains route definitions" — does it?)
 
 **Line number accuracy:**
