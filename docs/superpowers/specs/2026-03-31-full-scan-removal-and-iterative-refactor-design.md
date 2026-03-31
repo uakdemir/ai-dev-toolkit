@@ -38,7 +38,9 @@ Replace the current algorithm (lines 109-133) with:
 2. If step == "finalized":
    ├── Same HEAD → write hint (step: 1, clear all fields per write rules) → route to Step 1
    └── Different HEAD → User Prompt (same unified prompt as above — "What are you working on
-        and where did you leave off?" naturally covers both new and continuing work)
+        and where did you leave off?" naturally covers both new and continuing work).
+        Write hint after resolution. This replaces the existing spec-filename scanning at
+        SKILL.md lines 126-132 (docs/superpowers/specs/ filename scan and full scan fallback).
 ```
 
 Every path that previously said "full scan fallback" or "Read references/full-scan.md" now routes to "User Prompt."
@@ -150,6 +152,20 @@ if still empty, show `Commits since plan: unknown (plan hash not found)` in the 
 
 In the step-specific validation table, the Step 6 entry currently ends with "if still empty, full scan fallback." Replace that trailing clause with the same resolution: show `Commits since plan: unknown (plan hash not found)` and allow user override. The full-scan fallback is removed from this table entry as well.
 
+#### Step 6 inline validation sentence (SKILL.md line 135)
+
+The compressed inline step-specific validation sentence at SKILL.md line 135 contains a separate "if still empty, full scan fallback" clause for Step 6. This is a third location that must be updated independently of the table entry and the N derivation text.
+
+Before (partial, Step 6 clause within the inline sentence):
+```
+Step 6: ... if still empty, full scan fallback
+```
+
+After:
+```
+Step 6: ... if still empty, show `Commits since plan: unknown (plan hash not found)` and allow user override
+```
+
 #### Error Handling table
 
 | Row | Before | After |
@@ -242,18 +258,15 @@ Refactor skills produce a **roadmap** (ordered unit list) and a **single-unit sp
 
 ### 2.3 Serena — Removed from refactor skills
 
-**refactor-to-monorepo/SKILL.md:**
-- Remove all references to Serena, `find_referencing_symbols`, `rename_symbol`, `replace_content`
-
-**refactor-to-layers/SKILL.md:**
-- Same removals
+**refactor-to-monorepo/SKILL.md** and **refactor-to-layers/SKILL.md:**
+- Verify: grep each file for `Serena`, `find_referencing_symbols`, `rename_symbol`, `replace_content` — expect zero matches. No changes needed.
 
 Note: Serena was only present in implement-plan, which is being deleted entirely. Neither refactor-to-monorepo nor refactor-to-layers contain Serena code paths. The useful patterns from implement-plan's execution-patterns.md are extracted into the new orchestrate reference file.
 
 **Checklist template update:** The checklist crystallization template is embedded in `refactor-to-monorepo/SKILL.md` (not in `tmp/checklists/index.md`, which is generated output). Three lines in that template reference implement-plan and must be updated:
 
-1. **Recommended Skill column value** (currently `refactor-to-monorepo, implement-plan`): remove `implement-plan` from the value, leaving only the relevant refactor skill (e.g., `orchestrate` or `refactor-to-monorepo`).
-2. **Phase column definition** (currently `coding = implement-plan phases 1-N`): the coding phase loses its only consumer after implement-plan deletion. Update this definition to reference `orchestrate` as the driver for the coding phase.
+1. **Recommended Skill column value** (currently `refactor-to-monorepo, implement-plan`): remove `implement-plan` from the value, leaving only the relevant refactor skill (e.g., `orchestrate` or `refactor-to-monorepo`). Also update the example index.md row embedded in the template (currently `| [monorepo-extraction.md] | Universal extraction pitfalls | both | refactor-to-monorepo, implement-plan |`) to: `| [monorepo-extraction.md](monorepo-extraction.md) | Universal extraction pitfalls | both | refactor-to-monorepo |`.
+2. **Phase column definition** (currently `coding = implement-plan phases 1-N`): the coding phase loses its only consumer after implement-plan deletion. Replace with: `coding = orchestrate Step 5 implementation`.
 3. **Write protocol note** (currently `Write protocol (for append operations by implement-plan — NOT used during crystallization)`): remove the implement-plan attribution. Rewrite as a general append-protocol note not tied to any specific skill.
 
 ### 2.4 Refactor Skills — Roadmap + Single-Unit Output
@@ -264,7 +277,7 @@ Note: Serena was only present in implement-plan, which is being deleted entirely
 
 Before: produces a complete migration plan (`docs/monorepo-strategy/migration-plan.md`) with all modules, all phases (0-N), all file moves, all import rewrites.
 
-After: produces two artifacts. `docs/monorepo-strategy/migration-plan.md` is no longer generated. The Step 4 Output Artifacts section of SKILL.md currently contains a `### 6. migration-plan.md — Phased Migration Plan` entry (with an embedded `## Checklists` template referencing `tmp/checklists/`); remove this entire artifact section. Any other SKILL.md references to migration-plan.md must also be removed or updated to reference the roadmap file. The `## Checklists` content from migration-plan.md is not migrated to the new roadmap.md — the checklist template is handled separately via the checklist template update in section 2.3.
+After: produces two artifacts. `docs/monorepo-strategy/migration-plan.md` is no longer generated. The Step 4 Output Artifacts section of SKILL.md currently contains a `### 6. migration-plan.md — Phased Migration Plan` entry (with an embedded `## Checklists` template referencing `tmp/checklists/`); remove this entire artifact section. Any other SKILL.md references to migration-plan.md must also be removed or updated to reference the roadmap file. Also remove from the Progressive Disclosure Schedule table the row for `Artifact generation: migration plan` (the row referencing `references/migration-patterns.md`), since migration-plan.md is no longer generated. The `## Checklists` content from migration-plan.md is not migrated to the new roadmap.md — the checklist template is handled separately via the checklist template update in section 2.3.
 
 1. **Unit roadmap** at `docs/monorepo-strategy/roadmap.md`:
    ```markdown
@@ -285,7 +298,7 @@ After: produces two artifacts. `docs/monorepo-strategy/migration-plan.md` is no 
 
 Trigger: invoked when a unit roadmap exists with unchecked items and the previous unit is finalized. Behavior:
 1. Read the roadmap, identify next unchecked unit
-2. Read the immediately prior extraction spec only (the most recently completed unit's spec — not all prior specs) for context on what was learned
+2. Read the immediately prior extraction spec only (the most recently completed unit's spec — not all prior specs) for context on what was learned. The prior spec is the last checked item (`[x]`) immediately before the next unchecked item (`[ ]`) in roadmap checkbox order. Match to `docs/superpowers/specs/` by unit name substring in filename.
 3. Run a lightweight dependency scan limited to the next unit's file set and its direct imports. Re-read the dependency matrix (`docs/monorepo-strategy/dependency-matrix.md`) for the next unit. Do NOT re-run the full 4-phase analysis.
 4. Produce a single-unit spec for the next module
 
@@ -308,9 +321,11 @@ Skips the full 4-phase analysis — uses existing strategy docs as context. The 
 - `docs/layer-architecture/roadmap.md` — new output. Checkbox-formatted ordered list of layers (bottom-up: Types, Config, Data, Service, Providers, API, UI), each entry listing the layer name and a one-line rationale.
 - First layer single-unit spec at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md` with **Status: Draft**. Contains: layer boundary definition, files belonging to this layer, dependency violations to resolve (imports that cross layer boundaries downward), provider interfaces to introduce, expected import rewrites.
 
+Note: SCAFFOLD mode output is unchanged — roadmap.md and single-unit spec are only produced in ANALYZE mode Phase 3. SCAFFOLD mode generates folder structure + structural tests + strategy spec only.
+
 **`--next-unit` behavior:**
 1. Read `docs/layer-architecture/roadmap.md`, identify next unchecked layer
-2. Read the immediately prior layer spec only (the most recently completed layer's spec — not all prior specs) for context
+2. Read the immediately prior layer spec only (the most recently completed layer's spec — not all prior specs) for context. The prior spec is the last checked item (`[x]`) immediately before the next unchecked item (`[ ]`) in roadmap checkbox order. Match to `docs/superpowers/specs/` by layer name substring in filename.
 3. Run a lightweight dependency scan limited to the next layer's file set and its direct cross-layer imports. Re-read `docs/layer-architecture/strategy.md` for the next layer's boundary. Do NOT re-run the full analysis.
 4. Produce a single-unit spec at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md` for the next layer
 
@@ -356,6 +371,9 @@ If a refactor roadmap exists (`docs/monorepo-strategy/roadmap.md` or
 `docs/layer-architecture/roadmap.md`) with unchecked items and no active spec
 for the next unit, suggest: "Next unit: `<name>`. Start brainstorming?"
 If user confirms, invoke the originating refactor skill with --next-unit.
+Derive which skill to invoke from roadmap path:
+  docs/monorepo-strategy/roadmap.md → refactor-to-monorepo
+  docs/layer-architecture/roadmap.md → refactor-to-layers
 ```
 
 Note: The existing Step 1 logic uses `tmp/current-roadmap.md` for general feature tracking. Refactor roadmaps (`docs/monorepo-strategy/roadmap.md`, `docs/layer-architecture/roadmap.md`) are separate files checked in addition to `tmp/current-roadmap.md`. Refactor roadmap checks take priority — if a refactor roadmap has unchecked items, surface that suggestion before general feature prompts.
@@ -366,15 +384,26 @@ Add to the Conditional Loading section:
 ```
 At Step 5 onset, if a refactor roadmap exists and the current feature
 name appears in that roadmap (case-insensitive substring match of the
-feature name against roadmap item labels):
+feature name against roadmap item labels — match against the bold
+module/layer name only, i.e., text between ** markers in the checkbox
+line, not the full rationale text):
   → Read references/refactor-execution.md for file operation, import rewrite,
     and verification patterns.
 ```
 
 **Step 8 Phase 2 change:**
 
-After the current "What's next?" logic, add:
+Locate the Step 8 description in SKILL.md that ends with `recommendations → "What's next?"`. Insert the following block immediately after that sentence (after the closing `"What's next?"` text):
+
+Before (existing Step 8 text, identifying the insertion point):
 ```
+... cross-step synthesis, retrospective, improvement recommendations → "What's next?"
+```
+
+After (same existing text, plus the new block appended):
+```
+... cross-step synthesis, retrospective, improvement recommendations → "What's next?"
+
 If a refactor roadmap exists with unchecked items:
   → Check roadmaps in this order: docs/monorepo-strategy/roadmap.md first,
     then docs/layer-architecture/roadmap.md. For each roadmap, attempt a
@@ -382,7 +411,11 @@ If a refactor roadmap exists with unchecked items:
     roadmap item labels. Stop at the first roadmap where exactly one match
     is found — do not check the second roadmap if the first matches.
     If the first roadmap checked yields zero or multiple matches, check
-    the second roadmap. If neither roadmap yields exactly one match,
+    the second roadmap. If both roadmaps each yield exactly one match,
+    use docs/monorepo-strategy/roadmap.md as the default and warn:
+    "Feature matched entries in both roadmaps — defaulting to monorepo
+    roadmap. Mark the layer roadmap entry manually if needed."
+    If neither roadmap yields exactly one match,
     skip auto-mark and print: "Could not match feature to roadmap entry —
     mark it complete manually."
   → Mark the completed unit [x] in the matched roadmap file.
@@ -433,14 +466,16 @@ Update the refactor skill descriptions to mention iterative unit-at-a-time:
 
 ## Files Changed
 
+**Ordering constraint:** Create `orchestrate/references/refactor-execution.md` (extracting regex strings from `implement-plan/references/execution-patterns.md`) before deleting any implement-plan files. The implement-plan Delete rows must come after the Create row in execution order.
+
 | File | Action |
 |---|---|
 | `orchestrate/references/full-scan.md` | Delete |
 | `orchestrate/SKILL.md` | Edit: remove all full-scan refs, unify User Prompt for both modes, update fast-path, error handling, conditional loading, step 6 N derivation, inline cross-check, add refactor iteration awareness (Steps 1/5/8) |
-| `orchestrate/references/refactor-execution.md` | Create: distilled file-op + verification patterns from implement-plan |
+| `orchestrate/references/refactor-execution.md` | Create: distilled file-op + verification patterns from implement-plan — **do this before deleting implement-plan files** |
 | `session-handoff/SKILL.md` | Edit: replace full git fallback with ask-first pattern, remove implement-plan artifact references (the "Unfinished implement-plan tasks" block that parses [DONE] markers from strategy specs and references tmp/execution-report.md — both are implement-plan artifacts that no longer exist after deletion) |
-| `implement-plan/SKILL.md` | Delete |
-| `implement-plan/references/execution-patterns.md` | Delete |
+| `implement-plan/SKILL.md` | Delete — **only after refactor-execution.md is created** |
+| `implement-plan/references/execution-patterns.md` | Delete — **only after refactor-execution.md is created** |
 | `implement-plan/references/verification-patterns.md` | Delete |
 | `refactor-to-monorepo/SKILL.md` | Edit: remove Serena, change Phase 4 output to roadmap + single-unit spec, add --next-unit mode, add --next-unit to help-text USAGE/EXAMPLES, remove migration-plan.md artifact section from Step 4 Output Artifacts, update checklist crystallization template (remove implement-plan from Recommended Skill column, Phase definition, and Write protocol note) |
 | `refactor-to-layers/SKILL.md` | Edit: remove Serena, change output to roadmap + single-unit spec, add --next-unit mode, add --next-unit to help-text USAGE/EXAMPLES |
