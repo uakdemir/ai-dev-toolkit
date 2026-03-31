@@ -56,7 +56,7 @@ Will run:
 Continue? or specify a different command.
 ```
 
-User says continue → invoke as shown. User provides alternative → invoke that instead verbatim as typed. Edge cases unchanged: clean review (zero criticals) → update spec Status to "Approved" immediately.
+Any affirmative response (yes, y, continue, go, or pressing Enter) invokes the shown command. Any other non-empty input is treated as an alternative command verbatim. Edge cases unchanged: clean review (zero criticals) → update spec Status to "Approved" immediately.
 
 **Step 6 — Code Review** stops auto-invoking. Instead presents:
 ```
@@ -108,6 +108,8 @@ Dead Pipeline  Contracts+    Move Tests
   └──────────────┴──────────────┘
   │
 Task 7: Shim Cleanup + Verify          🟢 ~3 min  (rm + grep checks)
+
+Total: ~34 min sequential, ~21 min with parallelism
 ```
 
 ### New file: `references/implementation-step.md`
@@ -132,6 +134,13 @@ Loaded at Step 5 onset (both modes, including the First-Run User Prompt path). C
 ### Changes to `SKILL.md`
 
 **Step 5** unified (no standard/strict split):
+
+Before:
+```
+Step 5 — Implement: Plan exists, not all checkboxes [x]. Default: invoke superpowers:subagent-driven-development. --strict: Read references/strict-mode.md, execution model recommendation, dispatch with overrides. Edge: all [x] → skip to Step 6.
+```
+
+After:
 ```
 Step 5 — Implement: Plan exists, not all checkboxes [x].
   Read references/implementation-step.md: generate task graph,
@@ -145,12 +154,12 @@ Note: standard mode previously dispatched automatically to `superpowers:subagent
 
 Before:
 ```
-Step 2 — Spec Review: spec exists, Status != Approved. Invoke /review-doc {spec_path}. Edge: clean review (zero criticals) → update spec Status to Approved immediately.
+Step 2 — Spec Review: spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Invoke /review-doc {spec_path}. Edge: clean review (zero criticals) → update spec Status to Approved immediately.
 ```
 
 After:
 ```
-Step 2 — Spec Review: spec exists, Status != Approved. Present confirmation prompt with spec_path, then invoke /review-doc {spec_path} or user override. Edge: clean review (zero criticals) → update spec Status to Approved immediately.
+Step 2 — Spec Review: spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke /review-doc {spec_path} --max-iterations 3 or user override. Edge: clean review (zero criticals) → update spec Status to Approved immediately.
 ```
 
 **Step 6** trigger line updated:
@@ -162,14 +171,15 @@ Step 6 — Code Review: Commits after plan hash (git log {plan_hash}..HEAD). Inv
 
 After:
 ```
-Step 6 — Code Review: Commits after plan hash (git log {plan_hash}..HEAD). Present confirmation prompt with N and spec_path, then invoke /review-code {N} {spec_path} or user override. Edge: >50% non-feature commits interleaved -> warn.
+Step 6 — Code Review: Commits after plan hash (git log {plan_hash}..HEAD). Present confirmation prompt with N and spec_path, then invoke /review-code {N} --against {spec_path} --max-iterations 3 or user override. Edge: >50% non-feature commits interleaved -> warn.
 ```
 
 **Conditional Loading section** updated (full before/after):
 
 Before:
 ```
-If --strict is active at Step 5 onset → Read references/strict-mode.md for execution model recommendation and override dispatch
+If --strict is active at Step 5 onset → Read references/strict-mode.md for execution model recommendation
+  and override dispatch (single-agent, subagent, and parallel helper blocks).
 If --strict is active at Step 8 onset → Read references/strict-mode.md for verification gate and structured finishing
 ```
 
@@ -201,12 +211,19 @@ After:
 
 Before:
 ```
---strict    Enable strict mode: TDD enforcement, intelligent execution model selection, verification gates, structured completion
+--strict    Enable quality discipline: TDD enforcement, verification
+            gates, per-task spec compliance review, intelligent execution
+            model selection, and structured completion options.
+            Recommended for features where correctness matters more
+            than speed.
 ```
 
 After:
 ```
---strict    Enable strict mode: verification gates, structured completion
+--strict    Enable quality discipline: TDD enforcement, verification
+            gates, per-task spec compliance review, and structured
+            completion options. Recommended for features where
+            correctness matters more than speed.
 ```
 
 ### Changes to `references/strict-mode.md`
@@ -225,9 +242,9 @@ Updated header (full before/after):
 
 Before (lines 3-5 of strict-mode.md):
 ```
-This file is loaded by orchestrate when --strict is active:
-  - At Step 5 onset: for execution model recommendation and override dispatch
-  - At Step 8 onset: for verification gate and structured finishing
+This file is loaded by orchestrate when `--strict` is active.
+- At Step 5 onset: for execution model recommendation and override dispatch.
+- At Step 8: for verification gate and structured finishing.
 ```
 
 After (lines 3 only; lines 4-5 removed entirely):
@@ -244,6 +261,8 @@ This file is loaded by orchestrate when --strict is active at Step 8 for verific
 - `references/strict-mode.md` header is updated to reference Step 8 only; Execution Model Recommendation and Override Dispatch sections are removed.
 - Conditional Loading in SKILL.md has exactly one Step 5 entry (implementation-step.md) and one Step 8 entry (strict-mode.md) unchanged.
 - Context health check uses `messages × 5_000` with floor 10K; step-based floor applies YELLOW at Step 5+ without overriding RED.
+- Mode Selection prompt descriptions updated: `[1]` says "Standard — TDD, execution model selection, dispatch with overrides" and `[2]` says "Strict — TDD, verification gates, spec compliance, structured completion".
+- `--strict` help text no longer lists "intelligent execution model selection" (now applies to both modes via `implementation-step.md`).
 
 ## Files Changed
 
