@@ -74,7 +74,13 @@ Review Doc Skipped
 
 ## Edge Case: `--max-iterations 1`
 
-Single-pass mode (default). Dispatch 1 reviewer at max-model — the reviewer reads the document, applies the combined checklist, and writes `tmp/review.json` directly. Then dispatch 1 fact-checker at max-model sequentially — it reads `tmp/review.json`, appends fact-check issues, and rewrites the file. No fixer. Jump directly to Final Report.
+Single-pass mode (default). Three agents dispatched sequentially at max-model:
+
+1. **Reviewer** — reads the document, applies the combined checklist, writes `tmp/review.json` directly.
+2. **Fixer** — reads `tmp/review.json`, applies fixes to the document, writes `tmp/fix-report.json` with dispositions. Hash verification before/after: if hash is unchanged after fixer, print `Warning: document was not modified. Proceeding to next review.` and continue.
+3. **Fact-checker** — reads `tmp/review.json`, appends fact-check issues, rewrites the file.
+
+Then jump to Final Report. In single-pass mode, the Final Report step reads `tmp/fix-report.json` to populate aggregate counts, same as in iterative mode.
 
 ## Iteration Flow
 
