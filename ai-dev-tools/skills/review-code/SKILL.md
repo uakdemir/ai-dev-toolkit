@@ -208,6 +208,7 @@ Generate `tmp/review_summary.md` using this template:
 ## Aggregate
 X Critical fixed | Y High fixed | Z Medium fixed
 Remaining: A Critical | B High | C Medium
+Last round: X Critical fixed | Y High fixed | Z Medium fixed
 Deferred: D | Pushed back: P
 
 ## Verification
@@ -235,6 +236,7 @@ Review Code Complete
   Status: Approved with suggestions
   Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed
   Remaining: 0 Critical | 2 High | 1 Medium
+  Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed
   Verification: all passing
   Commits added: abc1234, def5678
   Summary: tmp/review_summary.md
@@ -308,6 +310,7 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 
 Orchestrator maintains running counters across iterations:
 - `total_fixed` (per-severity: critical, high, medium)
+- `last_round_fixed` (per-severity: critical, high, medium) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
 - `total_deferred` (flat count)
 - `total_pushed_back` (flat count)
 

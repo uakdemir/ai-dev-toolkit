@@ -244,6 +244,7 @@ The orchestrator generates `tmp/review_summary.md` directly during the Final Rep
 ## Aggregate
 X Critical fixed | Y High fixed | Z Medium fixed
 Remaining: A Critical | B High | C Medium
+Last round: X Critical fixed | Y High fixed | Z Medium fixed
 Deferred: D | Pushed back: P
 
 ## Fact-Check Accuracy
@@ -273,6 +274,7 @@ Review Doc Complete
   Status: Approved with suggestions
   Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed
   Remaining: 0 Critical | 2 High | 1 Medium
+  Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed
   Fact-check: X/Y claims accurate (Z%)
   Summary: tmp/review_summary.md
   Full review: tmp/review.json
@@ -355,10 +357,11 @@ review-doc does **NOT** write to `tmp/past-issues-backlog.md`. Document reviews 
 The orchestrator maintains the following state across the loop:
 
 - `total_fixed = {critical: 0, high: 0, medium: 0}` -- per-severity breakdown (populates "X Critical fixed | Y High fixed | Z Medium fixed")
+- `last_round_fixed = {critical: 0, high: 0, medium: 0}` -- per-severity breakdown for the most recent iteration only (populates "Last round:" line)
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 
-After each fix phase, parse `tmp/fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/review.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Update counters before the file is overwritten in the next iteration.
+After each fix phase, parse `tmp/fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/review.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
 
 ## Status Logic
 
