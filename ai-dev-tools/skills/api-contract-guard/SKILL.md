@@ -23,42 +23,26 @@ Detect modules, analyze barrel file state (present/missing/incomplete), scan cro
 
 Execute these steps in order. Each step feeds into the next:
 
-1. **Serena Check** — hard gate: check Serena MCP plugin availability. No analysis until user responds.
-2. **Tech Stack Detection** — auto-detect stack, sub-framework, linter config, test framework.
-3. **Scope Detection** — walk up from CWD to find project root, determine monorepo boundaries.
-4. **Previous Run Detection** — scan for existing api-contract-guard artifacts.
-5. **Module Detection** — identify modules (monorepo packages or top-level src/ dirs).
-6. **Barrel File Analysis** — categorize each module: complete / missing / incomplete barrel.
-7. **Cross-Module Import Analysis** — full scan of import statements across all source files.
-8. **Present Findings** — USER CHECKPOINT: summary table, then per-module detail in priority order.
-9. **Generate Artifacts** — barrel files, structural tests (one file per module), violations report.
-9a. **Validate Artifacts** — parse barrel files, syntax-check generated test files.
-10. **Review Checkpoint** — USER CHECKPOINT: accept all / revert selected / discard run.
+1. **Tech Stack Detection** — auto-detect stack, sub-framework, linter config, test framework.
+2. **Scope Detection** — walk up from CWD to find project root, determine monorepo boundaries.
+3. **Previous Run Detection** — scan for existing api-contract-guard artifacts.
+4. **Module Detection** — identify modules (monorepo packages or top-level src/ dirs).
+5. **Barrel File Analysis** — categorize each module: complete / missing / incomplete barrel.
+6. **Cross-Module Import Analysis** — full scan of import statements across all source files.
+7. **Present Findings** — USER CHECKPOINT: summary table, then per-module detail in priority order.
+8. **Generate Artifacts** — barrel files, structural tests (one file per module), violations report.
+8a. **Validate Artifacts** — parse barrel files, syntax-check generated test files.
+9. **Review Checkpoint** — USER CHECKPOINT: accept all / revert selected / discard run.
 
 Reference files used throughout (do not inline their content — read them at the indicated step):
 
 - `references/tech-stacks.md` — stack detection heuristics, barrel file conventions, import syntax, module detection heuristics per stack
-- `references/barrel-patterns.md` — barrel detection, export analysis (Serena + regex), incomplete barrel detection, import path resolution rules
+- `references/barrel-patterns.md` — barrel detection, export analysis, incomplete barrel detection, import path resolution rules
 - `references/contract-test-templates.md` — per-stack structural test templates with placeholders for import-through-barrel enforcement
 
 ---
 
-## Step 1: Serena Check
-
-Before any analysis, check for Serena MCP plugin availability. This is a hard gate — no analysis begins until the user responds.
-
-**Serena available:** Proceed. Serena provides precise symbol resolution via `get_symbols_overview`, `find_referencing_symbols`, and `find_symbol`.
-
-**Serena NOT available:** Stop and present two options:
-
-- **Install Serena and continue** — precise symbol resolution for exports, cross-module references, internal path usage.
-- **Proceed without Serena (regex fallback)** — scan import/require/from statements via regex, match import paths against module directory structure. Less precise for wildcard re-exports, aliased imports, dynamic imports, conditional exports. Warn about precision limitations at each ambiguous finding.
-
-The user must explicitly choose. No silent fallback.
-
----
-
-## Step 2: Tech Stack Detection
+## Step 1: Tech Stack Detection
 
 Read `references/tech-stacks.md` now.
 
@@ -72,7 +56,7 @@ Cross-check linter and test framework findings against detected stack — mismat
 
 ---
 
-## Step 3: Scope Detection
+## Step 2: Scope Detection
 
 Walk up from CWD to find the project root (directory containing the detected stack marker file).
 
@@ -83,7 +67,7 @@ Unlike convention-enforcer (CWD-only in monorepos), api-contract-guard must see 
 
 ---
 
-## Step 4: Previous Run Detection
+## Step 3: Previous Run Detection
 
 Scan for existing api-contract-guard artifacts:
 
@@ -94,12 +78,12 @@ Scan for existing api-contract-guard artifacts:
 If previous artifacts exist, present three options:
 
 - **Re-analyze all:** Full run. Overwrite test files by filename. Barrel files: if unmodified, overwrite; if user-modified, re-analyze as existing barrel (State 1/3).
-- **Skip already-guarded:** Extract module names from test filenames. Skip those modules in Steps 5-8.
+- **Skip already-guarded:** Extract module names from test filenames. Skip those modules in Steps 4-7.
 - **Start fresh:** Remove test files + violations report only. Barrel files are NOT removed (see Barrel Ownership). Then full analysis from scratch.
 
 ---
 
-## Step 5: Module Detection
+## Step 4: Module Detection
 
 **Monorepo:** Each workspace package is a module. Node.js: parse `workspaces` or tool configs. Python: directories with `pyproject.toml` or `__init__.py`. .NET: each `.csproj` in `.sln`.
 
@@ -116,7 +100,7 @@ If previous artifacts exist, present three options:
 
 ---
 
-## Step 6: Barrel File Analysis
+## Step 5: Barrel File Analysis
 
 Read `references/barrel-patterns.md` now.
 
@@ -128,7 +112,7 @@ Barrel exports symbols, all consumers import through barrel. Action: generate en
 
 ### State 2: No barrel file
 
-Empty `__init__.py` / empty `index.ts` = "no barrel." Analyze cross-module imports to determine de facto public API. With Serena: `find_referencing_symbols`. Without: regex scan for imports targeting module internals.
+Empty `__init__.py` / empty `index.ts` = "no barrel." Analyze cross-module imports to determine de facto public API. Regex scan for imports targeting module internals.
 
 Propose barrel re-exporting exactly those symbols. Present module status, consumed symbols with consumers, proposed barrel content, and three options: **Approve** | **Modify exports** | **Skip module**.
 
@@ -142,17 +126,15 @@ Barrel exists but consumers bypass it. Diff barrel exports against externally-co
 
 ### Wildcard re-exports
 
-Warn: "Wildcard re-export defeats explicit contract." Serena: resolve all symbols. Regex: one-level resolution; nested wildcards warn. Offer to replace with named exports.
+Warn: "Wildcard re-export defeats explicit contract." One-level resolution; nested wildcards warn. Offer to replace with named exports.
 
 ---
 
-## Step 7: Cross-Module Import Analysis
+## Step 6: Cross-Module Import Analysis
 
 Full scan of all source files — no sampling. Import path scanning reads statements only, scales linearly.
 
-**With Serena:** `get_symbols_overview` on barrels for export lists, `find_referencing_symbols` for consumers. Any consumer not importing through barrel path = violation.
-
-**Without Serena:** Scan import/require/from statements. Path resolution rules in `references/barrel-patterns.md`. `package.json` `exports` subpath entries are NOT violations. Path aliases: warn about false negatives.
+Scan import/require/from statements. Path resolution rules in `references/barrel-patterns.md`. `package.json` `exports` subpath entries are NOT violations. Path aliases: warn about false negatives.
 
 **Violation examples:**
 - `import { X } from '../auth/service'` — violation (bypasses barrel)
@@ -162,7 +144,7 @@ Full scan of all source files — no sampling. Import path scanning reads statem
 
 ---
 
-## Step 8: Present Findings (USER CHECKPOINT)
+## Step 7: Present Findings (USER CHECKPOINT)
 
 **Phase 1 — Summary table** (sorted by priority):
 
@@ -174,11 +156,11 @@ Full scan of all source files — no sampling. Import path scanning reads statem
 
 Batch operations: **Approve all** | **Review individually** | **Skip all (abort)**.
 
-**Phase 2 — Per-module detail** (in priority order): present State 1/2/3 detail from Step 6. User approves/modifies/skips each. Tests auto-generated for all approved modules.
+**Phase 2 — Per-module detail** (in priority order): present State 1/2/3 detail from Step 5. User approves/modifies/skips each. Tests auto-generated for all approved modules.
 
 ---
 
-## Step 9: Generate Artifacts
+## Step 8: Generate Artifacts
 
 Read `references/contract-test-templates.md` now.
 
@@ -192,7 +174,7 @@ Read `references/contract-test-templates.md` now.
 
 ---
 
-## Step 9a: Validate Artifacts
+## Step 8a: Validate Artifacts
 
 **Barrel files:** Node.js: `npx tsc --noEmit {barrel_file}`. Python: `python -c "import {module_name}"` (verifies re-exports in `__init__.py` resolve). .NET: N/A.
 
@@ -202,7 +184,7 @@ Read `references/contract-test-templates.md` now.
 
 ---
 
-## Step 10: Review Checkpoint (USER CHECKPOINT)
+## Step 9: Review Checkpoint (USER CHECKPOINT)
 
 Show `git diff` of all changes. Three outcomes:
 
@@ -230,7 +212,7 @@ Show `git diff` of all changes. Three outcomes:
 
 ## Module Analysis Format
 
-Steps 6-7 produce findings in this format, flowing into Steps 8 and 9:
+Steps 5-6 produce findings in this format, flowing into Steps 7 and 8:
 
 ```json
 {
@@ -267,17 +249,16 @@ Steps 6-7 produce findings in this format, flowing into Steps 8 and 9:
 | Empty barrel file (no exports) | Treat as "no barrel" — propose exports |
 | No cross-module consumers | "No external consumers. Skip?" |
 | Circular cross-module imports | Warn, detect cycles via DFS, generate barrels with warning comment, list in violations report |
-| Wildcard re-export in barrel | Warn, resolve (Serena: full; regex: one level), recommend named exports |
-| Serena unavailable | Hard gate — user must explicitly choose regex fallback |
+| Wildcard re-export in barrel | Warn, resolve (one-level resolution), recommend named exports |
 | User skips all modules | "No modules selected. No artifacts generated." |
 | Barrel file has syntax errors | Warn, skip module, continue with others |
-| Validation fails at Step 9a | Auto-fix common failures. If unfixable, skip with warning. |
-| Path aliases (`@auth/*`) | Serena: resolved. Without: warn about false negatives. |
+| Validation fails at Step 8a | Auto-fix common failures. If unfixable, skip with warning. |
+| Path aliases (`@auth/*`) | Warn about false negatives. |
 | `tests/structural/` missing | Create it. |
 | `docs/api-contract-guard/` missing | Create it. |
 | Python circular import risk | Warn: review generated `__init__.py` before committing |
 | Conditional `package.json` exports | Use `"."` entry. Warn: "Using default condition." |
-| User rejects at Step 10 | **Accept all:** commit. **Revert selected:** delete test files by name, remove appended barrel exports by marker. **Discard:** `git checkout` modified, delete new test files — barrel files kept per Barrel Ownership. |
+| User rejects at Step 9 | **Accept all:** commit. **Revert selected:** delete test files by name, remove appended barrel exports by marker. **Discard:** `git checkout` modified, delete new test files — barrel files kept per Barrel Ownership. |
 
 ---
 
@@ -321,6 +302,6 @@ Generated barrels say "Edit freely" — they become user's files after generatio
 
 | Step | Load |
 |------|------|
-| Step 2 (Tech Stack Detection) | `references/tech-stacks.md` |
-| Step 6 (Barrel File Analysis) | `references/barrel-patterns.md` |
-| Step 9 (Generate Artifacts) | `references/contract-test-templates.md` |
+| Step 1 (Tech Stack Detection) | `references/tech-stacks.md` |
+| Step 5 (Barrel File Analysis) | `references/barrel-patterns.md` |
+| Step 8 (Generate Artifacts) | `references/contract-test-templates.md` |
