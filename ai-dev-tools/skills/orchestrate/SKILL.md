@@ -110,49 +110,43 @@ After Step 0 completes:
 
 ```
 1. Read tmp/orchestrate-state.md
-   ├── Not found or no valid cycle state (missing/empty `feature` field) →
-   │    ├── Strict mode active → First-Run User Prompt (below)
-   │    └── Standard mode → Read references/full-scan.md → execute Full Scan Fallback
+   ├── Not found or no valid cycle state (missing/empty `feature` field)
+   │    → User Prompt (see below)
    └── Found → compare head field to current git rev-parse HEAD
         ├── Same HEAD → trust hint, skip to step-specific validation
         └── Different HEAD → lightweight validation:
              git log --oneline <hint_head>..HEAD
-             ├── 0 commits or git log errors → full scan fallback (rebase/amend/force-push/reset/gc)
-             ├── Commits match feature name (git log --grep='{feature_name}') → advance step (see validation table below)
-             └── Commits don't match feature → Read references/full-scan.md
+             ├── 0 commits or git log errors → User Prompt
+             ├── Commits match feature name (git log --grep) → advance step
+             └── Commits don't match feature → User Prompt
 
-2. If step == "finalized" (skip if item 1 already triggered full scan):
+2. If step == "finalized":
    ├── Same HEAD → write hint (step: 1, clear all fields per write rules) → route to Step 1
-   └── Different HEAD →
-        git log --oneline <hint_head>..HEAD
-        For each commit, check against feature names extracted from
-        docs/superpowers/specs/ filenames (strip YYYY-MM-DD- prefix
-        and -design suffix).
-        ├── Exactly one feature matches all new commits → set as current, validate from step 2 forward
-        └── Multiple or none match → Read references/full-scan.md
+   └── Different HEAD → User Prompt (same unified prompt as above — "What are you working on
+        and where did you leave off?" naturally covers both new and continuing work).
+        Write hint after resolution.
 ```
 
-**Step-specific validation** (1 tool call each): 1: spec not exist (if exists → 2). 2: spec Status header. 3: check review_summary Reviewed field matches hint spec AND read Critical/High counts — Critical>0: stay at 3; Critical=0 + High>0: advance to 4 (present info message first); Critical=0 + High=0: advance to 4; Reviewed mismatch: stale, route to 2. 4: plan exists. 5: plan checkboxes. 6: commits since plan_hash (`git log <plan_hash>..HEAD`; if plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}`; if still empty, full scan fallback). 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
+**Step-specific validation** (1 tool call each): 1: spec not exist (if exists → 2). 2: spec Status header. 3: check review_summary Reviewed field matches hint spec AND read Critical/High counts — Critical>0: stay at 3; Critical=0 + High>0: advance to 4 (present info message first); Critical=0 + High=0: advance to 4; Reviewed mismatch: stale, route to 2. 4: plan exists. 5: plan checkboxes. 6: commits since plan_hash (`git log <plan_hash>..HEAD`; if plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}`; if still empty, show `Commits since plan: unknown (plan hash not found)` in the confirmation prompt. The user can override with a specific count or command). 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
 
-If validation contradicts hint, advance to next logical step (don't full-scan).
+If validation contradicts hint, advance to next logical step (don't rescan).
 
 **YELLOW gate:** After detection, if YELLOW and next step is heavy (5/6/7), auto-handoff. If moderate/light (1/2/3/4/8), warn and proceed.
 
 ---
 
-## First-Run User Prompt (--strict only)
+## User Prompt
 
-**Trigger:** No valid cycle state in hint file (missing file, malformed YAML, or empty/missing `feature` field) AND strict mode is active.
+**Trigger:** No valid cycle state in hint file (missing file, malformed YAML, or empty/missing `feature` field), OR fast-path detection cannot resolve state.
 
 ```
 1. Print: "No previous state found."
    Ask:  "What are you working on and where did you leave off?"
 
 2. Parse response for:
-   - Feature name: case-insensitive substring match against
-     docs/superpowers/specs/ filenames (strip YYYY-MM-DD- prefix
-     and -design suffix). Exactly one match → resolved.
-     Zero or multiple matches → ambiguous (go to step 4).
+   - Feature name: extract from user response directly.
+     If the user names a feature, accept it as-is.
+     If ambiguous, ask for clarification (step 4).
    - Step: map natural language to step number:
        "just started" / "haven't done anything yet" → step 1
        "brainstormed" / "wrote spec"                → step 2
@@ -171,8 +165,8 @@ If validation contradicts hint, advance to next logical step (don't full-scan).
    → Run one targeted step-specific validation check
      (same as fast-path validation table above).
    → If validation contradicts the stated step: print
-     "The project state doesn't match step <N> — let me scan
-     to determine the correct step." Fall back to full scan.
+     "That doesn't match what I see — can you clarify?"
+     Continue within the 2-3 round limit.
    → Otherwise, write hint file (with mode, feature, step, spec,
      plan if exists, head, updated), proceed to detected step.
 
@@ -181,9 +175,14 @@ If validation contradicts hint, advance to next logical step (don't full-scan).
      "Did you mean `convention-enforcer` or `consolidate-learn`?"
      "You said review — spec review (step 2-3) or code review (step 6-7)?"
 
+**Spec field population (hint write):** After accepting the feature name from the user, do a lightweight filename scan of `docs/superpowers/specs/` to find files containing the feature name as a case-insensitive substring in the filename. This is filename matching only — no file content is read. If exactly one file matches, set `spec` to that file path in the written hint. If zero or multiple files match, set `spec` to `''`. This scan is limited to step 3 hint-write and does not affect state resolution or the feature name itself. Downstream step 3 validation (Reviewed vs hint spec) is skipped when `spec` is `''`.
+
 5. If still unclear after 2-3 rounds:
-   → Print: "Let me scan the project to figure it out."
-   → Fall back to full scan (read references/full-scan.md).
+   → Print: "I can't determine the state automatically.
+     Please describe your current step more specifically,
+     or check tmp/orchestrate-state.md and update it manually."
+   → Write hint with whatever was resolved (feature if known,
+     step 1 as default). Proceed to the resolved or default step.
 ```
 
 ---
@@ -191,8 +190,7 @@ If validation contradicts hint, advance to next logical step (don't full-scan).
 ## Conditional Loading
 
 If hint file is missing or validation fails:
-  -> Strict mode active: First-Run User Prompt (see above), then full scan only if unresolved.
-  -> Standard mode: Read references/full-scan.md, execute Full Scan Fallback.
+  → User Prompt (both modes). Write hint after resolution.
 
 At Step 5 onset (all paths including First-Run User Prompt):
   -> Read references/implementation-step.md for task graph visualization,
@@ -255,7 +253,7 @@ Continue? or specify a different command.
 
 **Input handling:** Any affirmative response (yes, y, continue, go, or pressing Enter) invokes the shown command. Any other non-empty input is treated as an alternative command to invoke verbatim.
 
-**N derivation (Step 6):** Computed via `git log {plan_hash}..HEAD --oneline | wc -l`. If plan_hash is empty, attempt to populate via `git log --format=%H -1 -- {plan_path}`; if still empty, fall back to full scan per existing Step 6 behavior and show `Commits since plan: unknown (plan hash not found)`.
+**N derivation (Step 6):** Computed via `git log {plan_hash}..HEAD --oneline | wc -l`. If plan_hash is empty, attempt to populate via `git log --format=%H -1 -- {plan_path}`; if still empty, show `Commits since plan: unknown (plan hash not found)` in the confirmation prompt. The user can override with a specific count or command.
 
 **Step 7 re-runs:** Step 7's internal re-run of `/review-code` within the same invocation skips the prompt. The Step 6 confirmation prompt appears on every orchestrate invocation that detects Step 6, including after Step 7 fixes.
 
@@ -265,10 +263,10 @@ Continue? or specify a different command.
 
 | Scenario | Behavior |
 |---|---|
-| Hint file missing or YAML malformed | Strict: First-Run User Prompt → fallback to full scan if unresolved. Standard: Full scan fallback. Write hint after detection. |
-| Unknown step/feature or head not in history | Full scan fallback. Overwrite hint. |
-| Hint says finalized but spec deleted | Full scan -> clean slate -> Step 1. |
-| Hint validation contradicts hint step | Advance to next logical step (don't full-scan). |
+| Hint file missing or YAML malformed | User Prompt (both modes). Write hint after resolution. |
+| Unknown step/feature or head not in history | User Prompt. Write hint after resolution. |
+| Hint says finalized but spec deleted | Write hint (step: 1, clear fields) → route to Step 1. |
+| Hint validation contradicts hint step | Advance to next logical step (don't rescan). |
 | Quality gate git commands fail | Skip that gate, warn. |
 | references/ file missing | Error: "orchestrate reference file missing: {path}. Re-install the ai-dev-tools plugin." |
 | Multiple features in-progress | Present list, ask user to pick. Update hint. |
@@ -276,7 +274,7 @@ Continue? or specify a different command.
 | Invoked skill fails | Report failure, offer: Retry / Skip / Exit. |
 | Context pressure (YELLOW/RED) | Handled by Step 0 + YELLOW gate. Resume via artifacts on next invocation. |
 | No test/build command discoverable (--strict) | Discovery: (1) check CLAUDE.md, (2) package.json scripts, (3) Makefile test target, (4) probe pytest/jest/cargo test. None found → skip verification gate: "No verification command found. Configure in CLAUDE.md." |
-| No valid cycle state + strict mode | First-Run User Prompt → targeted validation → hint write. Fallback to full scan after 2-3 rounds. |
+| No valid cycle state + strict mode | User Prompt → targeted validation → hint write. If unresolved after 2-3 rounds, default to step 1 with whatever was resolved. |
 
 ---
 
@@ -285,5 +283,3 @@ Continue? or specify a different command.
 For fast-path validation of tmp/ files:
 - **Doc review:** Verify review_summary.md `**Reviewed:**` field matches the hint's `spec` field. Mismatch = stale, ignore.
 - **Code review:** Verify commit hashes in review findings appear in `git log --grep='{feature_name}'`. Mismatch = stale, ignore.
-
-Full cross-check algorithm (scope header overlap, response_analysis.md counting, clean-review attribution) is in references/full-scan.md.
