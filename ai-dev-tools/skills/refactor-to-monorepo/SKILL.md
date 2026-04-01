@@ -295,7 +295,7 @@ Entries are appended, never reordered.
 
 > **Note:** Crystallization is the initial population event and is exempt from the append-only write protocol above. On re-run, delete existing contents before proceeding.
 
-1. If `tmp/checklists/` already exists (re-run), delete all contents (files and subdirectories), including any entries appended by `implement-plan` during a prior lifecycle. Create `tmp/checklists/` if it does not exist.
+1. If `tmp/checklists/` already exists (re-run), delete all contents (files and subdirectories), including any entries appended by external skills during a prior lifecycle. Create `tmp/checklists/` if it does not exist.
 2. Generate a **universal checklist** (`tmp/checklists/monorepo-extraction.md`). Always emitted. Include:
    - Entries from accumulated observations matching universal categories: singleton state, shared DB patterns, circular dependencies, `.gitignore` blanket pattern traps
    - **Always-included entries** (regardless of observations):

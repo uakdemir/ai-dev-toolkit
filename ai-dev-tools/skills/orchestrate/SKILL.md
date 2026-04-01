@@ -192,7 +192,7 @@ If validation contradicts hint, advance to next logical step (don't rescan).
 If hint file is missing or validation fails:
   → User Prompt (both modes). Write hint after resolution.
 
-At Step 5 onset (all paths including First-Run User Prompt):
+At Step 5 onset (all paths including User Prompt):
   -> Read references/implementation-step.md for task graph visualization,
     execution model recommendation, and override dispatch.
 
