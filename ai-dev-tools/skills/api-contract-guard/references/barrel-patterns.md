@@ -1,7 +1,7 @@
 # Barrel Patterns Reference — api-contract-guard
 
 Loaded at Step 6 (Barrel File Analysis). Contains barrel detection algorithms,
-export analysis (Serena + regex dual-mode), incomplete barrel detection, cross-module
+export analysis, incomplete barrel detection, cross-module
 import scanning with path resolution rules, wildcard re-export resolution, barrel
 generation rules, and `package.json` `exports` field handling.
 
@@ -45,34 +45,9 @@ visibility instead.
 
 ---
 
-## Export Analysis — Serena Mode
+## Export Analysis
 
-When Serena is available, use `get_symbols_overview` on the barrel file to get the
-complete export list.
-
-**Procedure:**
-1. Call `get_symbols_overview` on the barrel file (e.g., `src/auth/index.ts`)
-2. Each symbol in the result represents an exported entity
-3. For each symbol, record:
-   - `symbol` — the exported name
-   - `source_file` — the file the export originates from (follow re-export to source)
-   - `export_kind` — classify as `named`, `default`, or `type`
-
-**Export kind classification with Serena:**
-- Symbol is a re-export with a named binding → `named`
-- Symbol is re-exported as `default` → `default`
-- Symbol is a type alias, interface, or type-only export → `type`
-
-**For Python barrels:**
-1. Call `get_symbols_overview` on `__init__.py`
-2. Imported symbols (via `from .x import Y`) are the exports
-3. `__all__` list, if present, is the authoritative export set
-
----
-
-## Export Analysis — Regex Fallback
-
-When Serena is not available, extract exports from barrel files using pattern matching.
+Extract exports from barrel files using pattern matching.
 
 ### Node.js Patterns
 
@@ -154,17 +129,6 @@ public static class X
 
 Detects barrels that exist but do not cover all externally-consumed symbols.
 
-### Serena Mode
-
-1. **Get barrel exports:** Call `get_symbols_overview` on the barrel file → export set
-2. **Get consumed symbols:** Use `find_referencing_symbols` across the repo for each file
-   in the module → collect all symbols consumed by files outside the module → consumed set
-3. **Compute discrepancies:** consumed set minus export set = symbols consumed externally
-   but not exported through the barrel
-4. Each discrepancy records: `{ symbol, source_file, consumers: [external files] }`
-
-### Regex Fallback
-
 1. **Extract barrel exports:** Use regex patterns from the Export Analysis section above
    → export set (list of symbol names)
 2. **Scan external files:** Scan all source files outside the module for import statements
@@ -187,15 +151,6 @@ For each discrepancy, present two options to the user:
 
 Full scan of all source files. Import path scanning reads import statements only,
 not file contents, so it scales linearly with import count, not LOC.
-
-### Serena Mode
-
-1. For each module's barrel, call `get_symbols_overview` → export list
-2. For each exported symbol, call `find_referencing_symbols` → consumer map
-3. Cross-reference: any consumer that imports a symbol from this module but NOT through
-   the barrel path is a violation
-
-### Regex Fallback
 
 Scan all source files for import/require/from statements and resolve paths.
 
@@ -254,9 +209,8 @@ using static Namespace.ClassName;
 
 **Path aliases (tsconfig `paths`, webpack aliases, Python namespace packages):**
 - These create alternative names for internal paths
-- Without Serena, aliases cannot be reliably resolved
 - Warn: "Path alias detected (`{alias}`). Some internal imports via aliases may not be
-  caught. Consider installing Serena for precise alias resolution."
+  caught."
 
 ### Violation Determination
 
@@ -290,21 +244,10 @@ using App.Auth;                                    # OK — public namespace
 Wildcard re-exports (`export * from`) leak internal symbols and defeat explicit contracts.
 Always warn when detected.
 
-### Serena Mode
-
-1. Call `get_symbols_overview` on the target file of the wildcard export
-2. All symbols from the target are part of the barrel's export set
-3. Present the resolved list to the user for review
-4. If the target itself uses wildcard re-exports, Serena resolves transitively — full
-   resolution is available at any depth
-
-### Regex Fallback
-
 1. Read the target file of the wildcard export
 2. Extract all `export` statements from the target file → one level of resolution
 3. If the target itself has `export * from '...'`, warn:
-   "Nested wildcard re-exports detected. Cannot fully resolve without Serena.
-   Recommend installing Serena or replacing with named exports."
+   "Nested wildcard re-exports detected. Recommend replacing with named exports."
 4. Present what was resolved (one level) and note the limitation
 
 ### Recommendation
@@ -329,10 +272,7 @@ When generating a new barrel file or updating an existing one, follow these rule
 
 ### Determine Export Kind
 
-**Serena:** Call `get_symbols_overview` on each source file to determine whether each
-symbol is a named export, default export, or type export.
-
-**Regex:** Match patterns in the source file:
+Match patterns in the source file:
 - `export default class/function/const X` → default export
 - `export class/function/const X` → named export
 - `export type X` / `export interface X` → type export
