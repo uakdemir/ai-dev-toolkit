@@ -58,7 +58,7 @@ Runs on every invocation, before Step 0.
    - Compare the `generated` field to the currentDate provided in the system-reminder context. If currentDate is unavailable, run `date +%Y-%m-%d` via Bash. Note: currentDate is date-only (YYYY-MM-DD) while generated is datetime (YYYY-MM-DDTHH:MM). Use only the date portion of generated for comparison. If the date portion of generated differs from currentDate by more than 1 calendar day, treat as stale. Same day or previous day = recent.
    - If stale → print "Stale session handoff (>24h), ignoring." → proceed to Step 0.
    - If recent → parse content:
-     a. Extract feature name from Done/Pending sections. Strategy: look for file paths matching spec filename patterns (arguments after /review-doc or /writing-plans). If multiple candidates, prefer the one appearing in both Done and Pending. If no clear name, set feature to empty and let User Prompt fallback clarify.
+     a. Extract feature name from Done/Pending sections. Strategy: look for file paths matching spec filename patterns (arguments after /review-doc or /writing-plans), and also scan for spec file path patterns (`docs/superpowers/specs/*.md` or `docs/*/specs/*.md`) anywhere in the content — session-handoff may summarize commands rather than preserving them verbatim. If multiple candidates, prefer the one appearing in both Done and Pending. If no clear name, set feature to empty and let User Prompt fallback clarify.
      b. Determine step number by scanning Pending items for skill references and file paths:
         - Pending mentions spec review or /review-doc → step 2
         - Pending mentions respond to review → step 3
@@ -67,12 +67,12 @@ Runs on every invocation, before Step 0.
         - Pending mentions code review or /review-code → step 6
         - Pending mentions fix findings → step 7
         - Pending mentions finalize or complete → step 8
-        - No match: if Pending is empty, scan Done for highest step keyword. Done mentions finalize/complete → step finalized. Done mentions code review → step 8. Done also empty → step 1. Otherwise → step 1 (start fresh)
+        - No match: if Pending is empty, scan Done for highest step keyword. Done mentions finalize/complete → step finalized. Done mentions fix findings → step 8. Done mentions code review → step 7 or 8. Done mentions implementation/execution → step 6. Done mentions write plan → step 5. Done mentions respond to review → step 3 or 4. Done mentions spec review → step 3. Done also empty → step 1. Otherwise → step 1 (start fresh). Note: this fallback is intentionally conservative — the User Prompt acts as a safety net if the mapping is ambiguous.
         If Pending matches multiple step keywords, use the lowest-numbered
         unfinished step (the earliest pending work). Cross-reference with
         Done items: steps mentioned in Done are considered complete.
      c. Extract spec and plan paths from file path references in the content.
-     d. Write `./tmp/orchestrate-state.md` with extracted data. Preserve existing `mode` field
+     d. Write `tmp/orchestrate-state.md` with extracted data. Preserve existing `mode` field
         if hint file already exists. Set `head` to current `git rev-parse HEAD`. Note: `head`
         reflects HEAD at orchestrate invocation time. Fast-Path Detection comparing this to
         current HEAD will correctly detect any commits made during this session.
@@ -80,7 +80,7 @@ Runs on every invocation, before Step 0.
 4. Proceed to Step 0 (Fast-Path Detection finds the newly written or updated hint file).
 ```
 
-**Integration:** Session Bootstrap runs after Mode Selection completes. Mode is already resolved when step 3d writes the hint file. If creating a new hint file, include the resolved mode value. If the hint file already has valid cycle state (non-empty `feature`), Session Bootstrap is a no-op — Fast-Path Detection handles it. Session Bootstrap only fires when the hint file is missing or has no valid cycle state AND a recent session-handoff.md exists.
+**Integration:** Session Bootstrap runs after Mode Selection completes. Mode is already resolved when step 3d writes the hint file. If creating a new hint file, include the resolved mode value. If the hint file already has valid cycle state (non-empty `feature`), Session Bootstrap is a no-op — Fast-Path Detection handles it. This is intentional — Fast-Path Detection's git-based validation is more reliable than handoff file parsing for mid-cycle state. Session Bootstrap only fires when the hint file is missing or has no valid cycle state AND a recent session-handoff.md exists.
 
 When session-handoff is auto-triggered by orchestrate RED, the hint file already contains valid cycle state. Session Bootstrap's no-op condition handles this — the hint file has a non-empty feature field, so Bootstrap exits immediately without reading session-handoff.md.
 
@@ -150,6 +150,7 @@ Note: The full initialization sequence still runs on receipt of a wrapped comman
 - Plain `/orchestrate` (no parens) — normal flow, detect state from hint file.
 - User modifies the inner command before pasting — orchestrate dispatches whatever is in the parens verbatim.
 - Inner command fails — existing error handling (Retry/Skip/Exit).
+- Receiving a wrapped command targeting a step beyond the current hint step is treated as implicit confirmation of all prior steps. Update step appropriately after inner command completes.
 
 ### 1D. Remove Plan Checkboxes (Improvement #8)
 
@@ -161,7 +162,7 @@ Note: The full initialization sequence still runs on receipt of a wrapped comman
 
 **0-commits override:** User explicit confirmation always overrides the commit signal. If the user states implementation is done with 0 commits, advance to Step 6 with warning: "No commits since plan_hash — proceeding to code review at your confirmation."
 
-**Step-specific validation update:** Step 5 validation changes from "plan checkboxes" to "commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)" — same mechanism already used by Step 6. Also update the Fast-Path Detection Algorithm step-specific validation entry for step 5: replace "5: plan checkboxes" with "5: commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Add `ai-dev-tools/skills/orchestrate/SKILL.md` to the Files Modified table for this validation update (it is already listed, but the Fast-Path Detection Algorithm table within it is now also modified).
+**Step-specific validation update:** Step 5 validation changes from "plan checkboxes" to "commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Step 5 and Step 6 share the same git signal but differ in interpretation: Step 5 treats commits as evidence to stay (in progress); Step 6 treats commits as prerequisite to proceed (enough to review). The hint file step field determines which interpretation applies. Also update the Fast-Path Detection Algorithm step-specific validation entry for step 5: replace "5: plan checkboxes" with "5: commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Add `ai-dev-tools/skills/orchestrate/SKILL.md` to the Files Modified table for this validation update (it is already listed, but the Fast-Path Detection Algorithm table within it is now also modified).
 
 ---
 
@@ -226,7 +227,7 @@ If tasks exist:
 3. If tasks are numbered sequentially, preserve ordering and terminology.
    Skill identification is not required — task order and subject are sufficient.
 
-If TaskList returns no tasks or all tasks are completed: fall back to user-message scanning as sole source. Completed tasks may supplement the Done section.
+If TaskList tool is unavailable or returns an error, skip In-Progress Skill Detection and rely on user-message scanning only. If TaskList returns no tasks or all tasks are completed: fall back to user-message scanning as sole source. Completed tasks may supplement the Done section.
 
 Task list items take priority over conversation-derived items when they
 conflict. Conversation scanning fills gaps (decisions, gotchas) that
@@ -273,7 +274,7 @@ references/edge-cases.md for the fallback flow.
 ## Error Handling
 See references/edge-cases.md for non-standard scenarios (no git repo, no commits, detached HEAD, nothing to hand off).
 ```
-Only the two most common scenarios remain inline in SKILL.md: (1) tmp/ doesn't exist: create it; (2) Previous handoff exists: overwrite.
+All rows in the Error Handling table move to edge-cases.md except (1) tmp/ doesn't exist and (2) Previous handoff exists. Only those two most common scenarios remain inline in SKILL.md.
 
 **Keep in SKILL.md:** Happy path only — gitStatus present, git repo confirmed, normal gather/compose/write flow. Estimated size reduction: ~40%.
 
