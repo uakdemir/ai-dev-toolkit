@@ -55,9 +55,7 @@ For each matched bucket:
    - **TOML:** Key-level.
    - **YAML:** Key-level.
 
-3. **For `.serena/*.yml`:** Match by filename against `learnings/common-ai/configs/.serena/`. Exclude `.local.yml` files. Unmatched filenames in the project are classified as New.
-
-4. **If the bucket does not exist** — mark as "new bucket — all configs are initial entries."
+3. **If the bucket does not exist** — mark as "new bucket — all configs are initial entries."
 
 ## Step 8: Classify Items
 

@@ -70,17 +70,6 @@ Applies to: `.codex/config.toml`
 
 ---
 
-## Serena/YAML Configs -- Key-Level
-
-Applies to: `.serena/*.yml` files (exclude `.local.yml` -- machine-specific).
-
-1. **File matching:** list `.yml` files per project's `.serena/` directory. Match by filename across projects (e.g., `project.yml` in A matches `project.yml` in B). Unmatched filenames are Unique at the file level.
-2. **Local markers:** same as TOML -- `# consolidate:local` / `# /consolidate:local`. Scan raw text before parsing.
-3. **Parse** each YAML file to a flat key-value map. Resolve anchors and aliases before comparing (diff resolved values, not YAML syntax). Normalize multi-line strings (trim trailing whitespace per line, normalize line endings).
-4. Compare non-local values by filename, then by key path. Classify.
-
----
-
 ## After Diffing
 
 Collect all classification results across all config types. Pass to Phase 3 (Report) via `prompts/ai-report.md`.

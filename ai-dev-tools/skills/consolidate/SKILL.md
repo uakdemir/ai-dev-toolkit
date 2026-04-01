@@ -74,7 +74,7 @@ Execute these prompt files in sequence, completing each phase before the next:
 
 ### Phase 1 -- Discovery
 Read `prompts/ai-discover.md` and follow its instructions.
-- Scan the monorepo for projects containing AI config files (CLAUDE.md, .claude/settings.json, .serena/*.yml, .codex/config.toml, .mcp.json).
+- Scan the monorepo for projects containing AI config files (CLAUDE.md, .claude/settings.json, .codex/config.toml, .mcp.json).
 - Present a discovery summary to the user showing which projects have which configs.
 - If no projects found or only one project found, report and exit.
 

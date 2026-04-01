@@ -10,7 +10,6 @@ A directory qualifies as a "project" if it contains **any** of:
 |------|-------|
 | `CLAUDE.md` | Top-level or inside `.claude/` |
 | `.claude/settings.json` | Shared settings. **`.claude/settings.local.json` does NOT qualify** -- machine-specific, ignored. |
-| `.serena/*.yml` | Any `.yml` in `.serena/` (exclude `.local.yml` files) |
 | `.codex/config.toml` | Codex configuration |
 | `.mcp.json` | MCP server configuration |
 
@@ -31,11 +30,10 @@ Present using the `[consolidate]` prefix:
 ```
 [consolidate] Scanned monorepo. Found AI configs in:
   root/          CLAUDE.md, .claude/settings.json, .mcp.json
-  packages/api/  CLAUDE.md, .serena/
   packages/web/  CLAUDE.md, .claude/settings.json, .codex/config.toml
   packages/lib/  CLAUDE.md
 
-Config types found: CLAUDE.md (4), .claude/settings (2), .serena (1), .codex (1), .mcp.json (1)
+Config types found: CLAUDE.md (4), .claude/settings (2), .codex (1), .mcp.json (1)
 ```
 
 List config files per project (comma-separated), then a summary line with counts per config type.

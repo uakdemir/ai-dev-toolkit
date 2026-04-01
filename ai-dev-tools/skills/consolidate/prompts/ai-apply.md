@@ -87,13 +87,9 @@ Read file, apply decided key values, preserve keys in `.consolidate.json` sideca
 
 Read as raw text. Apply changes via **targeted string replacement** (find key's line, replace value). For multi-line values (arrays, inline tables), skip with warning: `[consolidate] Warning: cannot auto-merge multi-line TOML value for key '<key>'. Please merge manually.` Preserve `# consolidate:local` blocks and original formatting.
 
-### Serena/YAML Merge
-
-Use YAML-aware writing preserving comments. Preserve `# consolidate:local` blocks. Never write `.local.yml` files. When propagating to a project without `.serena/`, create the directory and write decided content (no `.local.yml`). Write anchors/aliases as plain resolved values.
-
 ### New Files
 
-Create files with decided content, creating parent directories as needed (`.codex/`, `.serena/`).
+Create files with decided content, creating parent directories as needed (`.codex/`).
 
 ## Phase 6: Summary
 

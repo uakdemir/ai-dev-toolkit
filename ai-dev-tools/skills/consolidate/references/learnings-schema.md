@@ -31,7 +31,7 @@ learnings/
 ```
 
 - Create buckets on first encounter. Do not pre-populate empty buckets.
-- `configs/` holds the "best known" canonical config files. Preserve their relative path from the project root (e.g., `configs/CLAUDE.md`, `configs/.claude/settings.json`, `configs/.serena/default.yml`, `configs/.eslintrc.json`).
+- `configs/` holds the "best known" canonical config files. Preserve their relative path from the project root (e.g., `configs/CLAUDE.md`, `configs/.claude/settings.json`, `configs/.eslintrc.json`).
 - `learnings.md` holds per-rule rationale entries with source project name and date.
 
 ---
@@ -93,7 +93,7 @@ Group entries under `##` headers within `learnings.md`:
   - Examples: `## ESLint`, `## TypeScript (tsconfig)`, `## Prettier`, `## Ruff`, `## MyPy`, `## EditorConfig`
 
 - **`common-ai` bucket**: Group under `## <config-type>` headers.
-  - Examples: `## CLAUDE.md`, `## .claude/settings.json`, `## .mcp.json`, `## .codex/config.toml`, `## .serena/`
+  - Examples: `## CLAUDE.md`, `## .claude/settings.json`, `## .mcp.json`, `## .codex/config.toml`
 
 ---
 

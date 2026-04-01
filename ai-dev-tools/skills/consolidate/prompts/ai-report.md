@@ -15,7 +15,6 @@ Group by config type. Each type gets a `##` header with project count:
 ## CLAUDE.md (N projects)
 ## .claude/settings.json (N projects)
 ## .codex/config.toml (N projects)
-## .serena/ (N projects)
 ## .mcp.json (N projects)
 ```
 
