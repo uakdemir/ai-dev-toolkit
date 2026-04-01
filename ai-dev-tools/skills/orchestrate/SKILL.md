@@ -175,8 +175,6 @@ If validation contradicts hint, advance to next logical step (don't rescan).
      "Did you mean `convention-enforcer` or `consolidate-learn`?"
      "You said review — spec review (step 2-3) or code review (step 6-7)?"
 
-**Spec field population (hint write):** After accepting the feature name from the user, do a lightweight filename scan of `docs/superpowers/specs/` to find files containing the feature name as a case-insensitive substring in the filename. This is filename matching only — no file content is read. If exactly one file matches, set `spec` to that file path in the written hint. If zero or multiple files match, set `spec` to `''`. This scan is limited to step 3 hint-write and does not affect state resolution or the feature name itself. Downstream step 3 validation (Reviewed vs hint spec) is skipped when `spec` is `''`.
-
 5. If still unclear after 2-3 rounds:
    → Print: "I can't determine the state automatically.
      Please describe your current step more specifically,
@@ -184,6 +182,8 @@ If validation contradicts hint, advance to next logical step (don't rescan).
    → Write hint with whatever was resolved (feature if known,
      step 1 as default). Proceed to the resolved or default step.
 ```
+
+**Spec field population (hint write):** After accepting the feature name from the user, do a lightweight filename scan of `docs/superpowers/specs/` to find files containing the feature name as a case-insensitive substring in the filename. This is filename matching only — no file content is read. If exactly one file matches, set `spec` to that file path in the written hint. If zero or multiple files match, set `spec` to `''`. This scan is limited to step 3 hint-write and does not affect state resolution or the feature name itself. Downstream step 3 validation (Reviewed vs hint spec) is skipped when `spec` is `''`.
 
 ---
 
