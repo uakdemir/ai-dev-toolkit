@@ -39,7 +39,7 @@ Additionally, two improvements are bundled:
 
 ## Change 1: Orchestrate Skill Updates
 
-Three modifications to `ai-dev-tools/skills/orchestrate/SKILL.md` plus one to `ai-dev-tools/skills/orchestrate/references/implementation-step.md`.
+Modifications to `ai-dev-tools/skills/orchestrate/SKILL.md`.
 
 ### 1A. Session Bootstrap Phase (Bug #3)
 
@@ -150,11 +150,11 @@ Note: The full initialization sequence still runs on receipt of a wrapped comman
 - Plain `/orchestrate` (no parens) — normal flow, detect state from hint file.
 - User modifies the inner command before pasting — orchestrate dispatches whatever is in the parens verbatim.
 - Inner command fails — existing error handling (Retry/Skip/Exit).
-- Receiving a wrapped command targeting a step beyond the current hint step is treated as implicit confirmation of all prior steps. Update step appropriately after inner command completes.
+- Receiving a wrapped command targeting a step beyond the current hint step is treated as implicit confirmation of all prior steps. This includes Step 5: receiving `/orchestrate (/review-code ...)` while at Step 5 satisfies the explicit-confirmation requirement from 1D. Update step appropriately after inner command completes.
 
 ### 1D. Remove Plan Checkboxes (Improvement #8)
 
-**Location:** `ai-dev-tools/skills/orchestrate/SKILL.md`, Step 5 description and `references/implementation-step.md`.
+**Location:** `ai-dev-tools/skills/orchestrate/SKILL.md`, Step 5 description and Fast-Path Detection Algorithm table.
 
 **Change:** Remove all references to plan checkbox tracking (`[x]`, `[ ]`). The hint file `step` field is the sole authority for progress. Step 5's completion condition changes from "all checkboxes `[x]`" to: Step 5 is considered complete (advance to Step 6) when the user explicitly states implementation is done. Commits since plan_hash serve as a signal that implementation has started (stay at Step 5 until user confirms completion). If 0 commits exist since plan_hash, orchestrate stays at Step 5 and presents the implementation dispatch.
 
@@ -162,7 +162,7 @@ Note: The full initialization sequence still runs on receipt of a wrapped comman
 
 **0-commits override:** User explicit confirmation always overrides the commit signal. If the user states implementation is done with 0 commits, advance to Step 6 with warning: "No commits since plan_hash — proceeding to code review at your confirmation."
 
-**Step-specific validation update:** Step 5 validation changes from "plan checkboxes" to "commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Step 5 and Step 6 share the same git signal but differ in interpretation: Step 5 treats commits as evidence to stay (in progress); Step 6 treats commits as prerequisite to proceed (enough to review). The hint file step field determines which interpretation applies. Also update the Fast-Path Detection Algorithm step-specific validation entry for step 5: replace "5: plan checkboxes" with "5: commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Add `ai-dev-tools/skills/orchestrate/SKILL.md` to the Files Modified table for this validation update (it is already listed, but the Fast-Path Detection Algorithm table within it is now also modified).
+**Step-specific validation update:** Step 5 validation changes from "plan checkboxes" to "commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Step 5 and Step 6 share the same git signal but differ in interpretation: Step 5 treats commits as evidence to stay (in progress); Step 6 treats commits as prerequisite to proceed (enough to review). The hint file step field determines which interpretation applies. Also update the Fast-Path Detection Algorithm step-specific validation entry for step 5: replace "5: plan checkboxes" with "5: commits since plan_hash (implementation started; hint step field determines stay-at-5 vs advance-to-6 interpretation)". Add `ai-dev-tools/skills/orchestrate/SKILL.md` to the Files Modified table for this validation update (it is already listed, but the Fast-Path Detection Algorithm table within it is now also modified).
 
 ---
 
@@ -276,7 +276,7 @@ See references/edge-cases.md for non-standard scenarios (no git repo, no commits
 ```
 All rows in the Error Handling table move to edge-cases.md except (1) tmp/ doesn't exist and (2) Previous handoff exists. Only those two most common scenarios remain inline in SKILL.md.
 
-**Keep in SKILL.md:** Happy path only — gitStatus present, git repo confirmed, normal gather/compose/write flow. Estimated size reduction: ~40%.
+**Keep in SKILL.md:** Happy path only — gitStatus present, git repo confirmed, normal gather/compose/write flow. Estimated gross size reduction: ~25%. New 2B-2D sections will partially offset this.
 
 **Dangling header cleanup:** After moving the gitStatus-absent block, remove the conditional header "If gitStatus is present (typical case):" — the happy path is now the only path in SKILL.md and no conditional header is needed.
 
@@ -286,8 +286,7 @@ All rows in the Error Handling table move to edge-cases.md except (1) tmp/ doesn
 
 | File | Changes |
 |---|---|
-| `ai-dev-tools/skills/orchestrate/SKILL.md` | Session Bootstrap phase, Step 4 dispatch guard, wrapped next-command output at every step exit, remove checkbox references |
-| `ai-dev-tools/skills/orchestrate/references/implementation-step.md` | Remove checkbox references from Step 5 validation |
+| `ai-dev-tools/skills/orchestrate/SKILL.md` | Session Bootstrap phase, Step 4 dispatch guard, wrapped next-command output at every step exit, remove checkbox references, update Fast-Path Detection validation table |
 | `ai-dev-tools/skills/session-handoff/SKILL.md` | Explicit `./tmp/` path, user-message scanning, skill state awareness, next-action validation, slim down |
 | `ai-dev-tools/skills/session-handoff/references/edge-cases.md` | New file — edge cases moved from SKILL.md |
 
