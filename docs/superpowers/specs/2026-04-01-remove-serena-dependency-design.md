@@ -20,11 +20,11 @@ Remove all Serena MCP tool references from the codebase. Serena's value (precise
 2. **Remove all dual-mode branches** — every "With Serena: ... / Without Serena: ..." block throughout the file. Promote the regex/grep path as the sole analysis mode.
 3. **Specific sections to edit:**
    - Step 6 (Barrel File Analysis): State 2 — remove "With Serena: `find_referencing_symbols`." Keep regex scan description.
-   - Step 6: Wildcard re-exports — remove "Serena: resolve all symbols." Keep "one-level resolution; nested wildcards warn." Remove recommendation to install Serena for nested wildcards.
+   - Step 6: Wildcard re-exports — replace the block with: `Warn: "Wildcard re-export defeats explicit contract." One-level resolution; nested wildcards warn. Offer to replace with named exports.`
    - Step 7 (Cross-Module Import Analysis): Delete the "With Serena" paragraph. Keep the "Without Serena" paragraph but remove the "Without Serena:" label — it becomes the only description.
-   - Error handling table: remove the "Serena unavailable" row. Remove "Serena: full; regex: one level" from wildcard row — just "one-level resolution, recommend named exports". Change path alias row from "Serena: resolved. Without: warn about false negatives." to "Warn about false negatives."
+   - Error handling table: remove the "Serena unavailable" row. Remove "Serena: full; regex: one level" from wildcard row — just "one-level resolution, recommend named exports". Change path alias row from "Serena: resolved. Without: warn about false negatives." to "Warn about false negatives." Update the "Wildcard re-export in barrel" row: change "Warn, resolve (Serena: full; regex: one level), recommend named exports" to "Warn, resolve (one-level), recommend named exports".
 4. **Update reference file description** on line 41: remove "(Serena + regex)" from barrel-patterns.md description.
-5. **Update workflow overview** on line 26: remove Step 1 from the numbered list, renumber.
+5. **Update workflow overview** (lines 28-36): delete line 27 (`1. **Serena Check**...`) and renumber the remaining steps so the list begins at Step 1.
 
 ### api-contract-guard/references/barrel-patterns.md
 
@@ -46,17 +46,17 @@ Remove all Serena MCP tool references from the codebase. Serena's value (precise
 
 All changes are removing `.serena/*.yml` from lists of scanned/supported AI config formats:
 
-1. **SKILL.md** (line 77): remove `.serena/*.yml` from the config file list.
-2. **prompts/ai-discover.md** (lines 13, 34, 38): remove `.serena/*.yml` from discovery rules and output examples.
-3. **prompts/ai-diff.md** (lines 75, 77): delete the `.serena/` YAML handling rules.
+1. **SKILL.md** (line 77): remove `.serena/*.yml` from the config file list. Also verify and update any Phase 2-4 summary descriptions that reference Serena YAML as a supported config type (e.g., Phase 2 "Compare each config type" description and any Phase 4 step cross-referencing Serena YAML merge).
+2. **prompts/ai-discover.md**: remove `.serena/*.yml` from the discovery rules list (line 13). On line 34 (output format example), remove the entire `.serena/` entry. On line 38 (config type summary), remove the `.serena (1)` token and its preceding comma-space; update the parenthetical total count from 5 to 4 config types.
+3. **prompts/ai-diff.md** (lines 73-80): delete the entire `## Serena/YAML Configs -- Key-Level` section from the heading through the end of that section. Verify nothing after line 80 references this section.
 4. **prompts/ai-report.md** (line 18): remove `.serena/` report section header.
-5. **prompts/ai-apply.md** (lines 92, 96): delete the Serena/YAML merge instructions.
-6. **prompts/learn-discover.md** (line 58): remove `.serena/*.yml` matching logic from learnings.
+5. **prompts/ai-apply.md**: (1) Delete the entire `### Serena/YAML Merge` section (lines 90-93), including the heading and its body. (2) In the `### New Files` section at line 96, strip `.serena/` from the parenthetical `(.codex/, .serena/)` — do not delete the section, as directory creation capability is still needed for other file types.
+6. **prompts/learn-discover.md** (line 58): delete the entire bullet point 3 in Step 7 — the full `.serena/*.yml` matching block from `3. **For \`.serena/*.yml\`:**` through the end of that logical entry (the complete multi-line bullet, not just the pattern reference on the first line).
 
 ### consolidate references (2 files)
 
-1. **references/learnings-schema.md** (lines 34, 96): remove `.serena/default.yml` path example and grouping header.
-2. **references/tech-buckets.md** (lines 24, 37, 51): remove `.serena/*.yml` from AI config file definitions.
+1. **references/learnings-schema.md** (lines 34, 96): remove `.serena/default.yml` path example and grouping header. This covers only the documentation references in this file. Actual learnings stored under `learnings/common-ai/configs/.serena/` are out of scope for this change.
+2. **references/tech-buckets.md**: At each of the three locations, remove `.serena/*.yml` (including the preceding `, ` separator) from the AI config file list. The resulting list at each location should read: `CLAUDE.md, .claude/settings.json, .codex/config.toml, .mcp.json` — no trailing comma or space after `.mcp.json`.
 
 ### .gitignore
 
@@ -66,7 +66,12 @@ All changes are removing `.serena/*.yml` from lists of scanned/supported AI conf
 
 - No Serena opt-in path preserved for future use.
 - No new tooling to replace Serena — existing grep/glob/read tools are sufficient.
-- convention-enforcer is already clean (no Serena references).
+- convention-enforcer is already clean (no Serena references). A full-codebase search for `serena` (case-insensitive) was performed across all skills; the 3 listed skills (api-contract-guard, consolidate, review-doc) plus `.gitignore` are the complete set of affected files. All other skills (refactor-to-layers, document-for-ai, orchestrate, refactor-to-monorepo, etc.) have no Serena references.
+
+## Verification
+
+1. After all changes, grep the codebase case-insensitively for `serena` across all affected files and confirm the only remaining hit is the `.gitignore` removal entry (i.e., no references remain in skill files, prompts, or references).
+2. Manually trace the regex-only path through each affected skill (api-contract-guard, consolidate, review-doc) to confirm no logic gaps — every step that previously offered a Serena branch must still produce complete output using only grep/glob/read.
 
 ## Constraints
 
