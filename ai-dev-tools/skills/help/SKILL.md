@@ -32,9 +32,8 @@ COMMANDS (INDEPENDENT QUALITY CHECKS)
   /convention-enforcer      Detect and enforce coding conventions
   /api-contract-guard       Enforce module API boundaries via barrel files
   /consolidate <ai|lint>    Unify AI configs or linting rules across monorepo
-  /refactor-to-monorepo     Analyze monolith for monorepo extraction
-  /refactor-to-layers       Enforce layered architecture within modules
-  /implement-plan           Execute a restructuring plan
+  /refactor-to-monorepo     Analyze monolith, produce unit extraction roadmap
+  /refactor-to-layers       Enforce layered architecture, produce unit roadmap
 
   Run any command with --help for usage details.
 
