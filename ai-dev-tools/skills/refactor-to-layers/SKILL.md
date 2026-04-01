@@ -4,16 +4,20 @@ description: "Use when the user wants to enforce architectural layers within a m
 ---
 
 <help-text>
-refactor-to-layers — Enforce layered architecture within modules
+refactor-to-layers — Enforce layered architecture, produce unit roadmap
 
 USAGE
-  /refactor-to-layers
+  /refactor-to-layers [--next-unit]
+
+FLAGS
+  --next-unit   Generate spec for next unchecked unit in roadmap
 
 EXAMPLES
   /refactor-to-layers                Analyze or scaffold layer structure
+  /refactor-to-layers --next-unit    Produce spec for next layer extraction unit
 </help-text>
 
-If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic. If user's arguments contain `--next-unit`, skip the main workflow and execute `--next-unit` behavior (see below).
 
 # refactor-to-layers
 
@@ -196,6 +200,26 @@ Generate artifacts after Phase 2 approval. Create the `docs/layer-architecture/`
 
 4. **Composition root** — detect the project's composition root using heuristics from `references/tech-stacks.md`. Exempt it from layer restrictions. The composition root is the only file allowed to import from all layers.
 
+5. **Roadmap** — write to `docs/layer-architecture/roadmap.md`. Checkbox-formatted ordered list of layers (bottom-up: Types, Config, Data, Service, Providers, API, UI), each entry listing the layer name and a one-line rationale.
+
+   ```markdown
+   # Layer Architecture Roadmap
+
+   Ordered bottom-up by layer hierarchy (extract lowest layers first).
+
+   - [ ] **types** — foundational type definitions, no dependencies
+   - [ ] **config** — configuration loading, depends only on types
+   - [ ] **data** — data access layer, depends on types + config
+   - [ ] **service** — business logic, depends on types + config + data
+   - [ ] **providers** — cross-cutting concern interfaces
+   - [ ] **api** — API endpoints, depends on service + providers
+   - [ ] **ui** — UI components, depends on api + providers
+   ```
+
+6. **Single-unit spec** — detailed analysis for the first unchecked layer. Contains: layer boundary definition, files belonging to this layer, dependency violations to resolve (imports that cross layer boundaries downward), provider interfaces to introduce, expected import rewrites. Written at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md` with **Status: Draft**.
+
+Note: Roadmap and single-unit spec are only produced in ANALYZE mode Phase 3. SCAFFOLD mode is unchanged.
+
 ### Phase 4: Review (User Checkpoint)
 
 1. **Human summary** — write to `docs/tmp/layer-summary.md` with header: `Generated from layer analysis on [date] — this is a one-time review document, not a source of truth.`
@@ -204,7 +228,7 @@ Generate artifacts after Phase 2 approval. Create the `docs/layer-architecture/`
    - Violation highlights with before/after examples.
    - Provider interfaces explained in context ("instead of importing JWT verification directly, your Service layer receives an `IAuthProvider`").
    - List of all generated files and what each does.
-2. Checkpoint prompt: "I've generated the layer architecture spec, structural tests, and provider interfaces. Review the summary at `docs/tmp/layer-summary.md`. Want to adjust anything before finalizing?"
+2. Checkpoint prompt: "I've generated the layer architecture spec, structural tests, provider interfaces, roadmap.md (ordered layer extraction list), and a single-unit spec for the first layer. Review the summary at `docs/tmp/layer-summary.md`. Want to adjust anything before finalizing?"
 3. **Recommended next steps** (printed to user, not written to a file):
    - Run the structural tests to see current violation count.
    - Consider running `/refactor-to-layers` on other modules.
@@ -246,6 +270,31 @@ For empty projects with zero source files:
 | Intentional violations | Allow user to add to allowlist in strategy spec. Exclude from test failures. |
 | Empty project detected mid-analysis | Switch to SCAFFOLD mode automatically. |
 | Partial failure | Complete all possible phases. Note failures in strategy spec under a Limitations section. |
+
+---
+
+## --next-unit Mode
+
+Trigger: invoked when a layer roadmap exists (`docs/layer-architecture/roadmap.md`) with unchecked items and the previous layer is finalized.
+
+**Behavior:**
+
+1. Read `docs/layer-architecture/roadmap.md`, identify next unchecked layer
+2. Read the immediately prior layer spec only (the most recently completed layer's spec — not all prior specs) for context. The prior spec is the last checked item (`[x]`) immediately before the next unchecked item (`[ ]`) in roadmap checkbox order. Match to `docs/superpowers/specs/` by layer name substring in filename.
+3. Run a lightweight dependency scan limited to the next layer's file set and its direct cross-layer imports. Re-read the file-to-layer mapping section of `docs/layer-architecture/strategy.md` to identify which files belong to the next layer, and read the violation allowlist section of that file for any permitted cross-boundary imports. Do NOT re-run the full analysis.
+4. Produce a single-unit spec at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md` for the next layer with **Status: Draft**.
+
+The layer hierarchy (Types > Config > Data > Service > Providers > API > UI) provides natural ordering — extract bottom-up. The roadmap is pre-ordered bottom-up at initial generation time. `--next-unit` always picks the next unchecked item in roadmap checkbox order; it does not re-derive order from the layer hierarchy at invocation time.
+
+**Error handling:**
+
+| Scenario | Behavior |
+|---|---|
+| No unchecked items in roadmap | Print "All units in the roadmap are complete. Nothing to extract." and exit. |
+| Missing roadmap file | Print "No roadmap found at the expected path. Run the full analysis first to generate a roadmap." and exit. |
+| Missing prior unit's spec/plan artifacts | Warn "Prior unit artifacts not found — proceeding without prior context." Continue with step 2 skipped. |
+| Spec already exists for next unit AND Status is not `finalized` | Print "A spec for `<next-unit>` already exists. Resume the orchestrate cycle for that unit instead of regenerating." and exit. |
+| Spec already exists for next unit AND Status IS `finalized` | Proceed normally (treat as not yet started for --next-unit purposes). |
 
 ---
 
