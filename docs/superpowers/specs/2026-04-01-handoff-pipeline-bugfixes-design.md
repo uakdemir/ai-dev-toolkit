@@ -55,10 +55,10 @@ Runs on every invocation, before Step 0.
 1. Check if `./tmp/session-handoff.md` exists.
 2. If not found → skip, proceed to Step 0.
 3. If found → read YAML frontmatter `generated` timestamp.
-   - Compare the `generated` field to the currentDate provided in the system-reminder context. If currentDate is unavailable, run `date +%Y-%m-%d` via Bash.
-   - If older than 24 hours → print "Stale session handoff (>24h), ignoring." → proceed to Step 0.
-   - If recent (< 24h) → parse content:
-     a. Extract feature name from Done/Pending sections.
+   - Compare the `generated` field to the currentDate provided in the system-reminder context. If currentDate is unavailable, run `date +%Y-%m-%d` via Bash. Note: currentDate is date-only (YYYY-MM-DD) while generated is datetime (YYYY-MM-DDTHH:MM). Use only the date portion of generated for comparison. If the date portion of generated differs from currentDate by more than 1 calendar day, treat as stale. Same day or previous day = recent.
+   - If stale → print "Stale session handoff (>24h), ignoring." → proceed to Step 0.
+   - If recent → parse content:
+     a. Extract feature name from Done/Pending sections. Strategy: look for file paths matching spec filename patterns (arguments after /review-doc or /writing-plans). If multiple candidates, prefer the one appearing in both Done and Pending. If no clear name, set feature to empty and let User Prompt fallback clarify.
      b. Determine step number by scanning Pending items for skill references and file paths:
         - Pending mentions spec review or /review-doc → step 2
         - Pending mentions respond to review → step 3
@@ -67,7 +67,7 @@ Runs on every invocation, before Step 0.
         - Pending mentions code review or /review-code → step 6
         - Pending mentions fix findings → step 7
         - Pending mentions finalize or complete → step 8
-        - No match → step 1 (start fresh)
+        - No match: if Pending is empty, scan Done for highest step keyword. Done mentions finalize/complete → step finalized. Done mentions code review → step 8. Done also empty → step 1. Otherwise → step 1 (start fresh)
         If Pending matches multiple step keywords, use the lowest-numbered
         unfinished step (the earliest pending work). Cross-reference with
         Done items: steps mentioned in Done are considered complete.
@@ -121,14 +121,16 @@ The guard text is prepended to the Skill tool dispatch prompt before the plan re
 |---|---|
 | 1 (Brainstorm) | `/orchestrate (/review-doc <spec_path> --max-iterations 3)` — `<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, output plain `/orchestrate` instead. |
 | 2 (Spec Review) | `/orchestrate (/respond-to-review <round> <spec_path>)` if criticals >0, else `/orchestrate` (plain, no inner command — advances to Step 4 via hint file) |
-| 3 (Respond to Review) | `/orchestrate (/review-doc <spec_path> --max-iterations 3)` for re-review, or `/orchestrate` if advancing to Step 4 |
+| 3 (Respond to Review) | if criticals > 0 after respond-to-review: `/orchestrate (/review-doc <spec_path> --max-iterations 3)`; if criticals = 0: `/orchestrate` (plain, advances to Step 4) |
 | 4 (Write Plan) | `/orchestrate` (Step 5 requires its own analysis before recommending a specific command) |
 | 5 (Implement) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
-| 6 (Code Review) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` if findings, else `/orchestrate` (advance to Step 8) |
+| 6 (Code Review) | if findings (criticals or highs > 0): `/orchestrate` (plain — Fast-Path Detection routes to Step 7); if no findings: `/orchestrate` (plain — Fast-Path Detection routes to Step 8) |
 | 7 (Fix Findings) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
 | 8 (Complete) | `/orchestrate` for next feature or new cycle |
 
 **Parsing behavior:** When orchestrate receives `/orchestrate (/some-command args)`:
+
+Note: The full initialization sequence still runs on receipt of a wrapped command (Mode Selection → Session Bootstrap → Step 0). If Step 0 detects RED, auto-handoff takes priority and the inner command is not dispatched. Mode Selection skips the prompt if mode is already persisted.
 
 1. Extract the inner command from parentheses.
 2. Do not update the step field on receipt of a wrapped command. Update only after the inner command completes and orchestrate resumes control, using normal step-detection logic.
@@ -155,6 +157,10 @@ The guard text is prepended to the Skill tool dispatch prompt before the plan re
 
 **Change:** Remove all references to plan checkbox tracking (`[x]`, `[ ]`). The hint file `step` field is the sole authority for progress. Step 5's completion condition changes from "all checkboxes `[x]`" to: Step 5 is considered complete (advance to Step 6) when the user explicitly states implementation is done. Commits since plan_hash serve as a signal that implementation has started (stay at Step 5 until user confirms completion). If 0 commits exist since plan_hash, orchestrate stays at Step 5 and presents the implementation dispatch.
 
+**Step 5 trigger replacement:** Replace "Plan exists, not all checkboxes [x]" with "Plan exists, implementation not confirmed complete". Replace "Edge: all [x] -> skip to Step 6" with "Edge: user explicitly states implementation is done -> advance to Step 6; 0 commits since plan_hash -> stay at Step 5 and present implementation dispatch."
+
+**0-commits override:** User explicit confirmation always overrides the commit signal. If the user states implementation is done with 0 commits, advance to Step 6 with warning: "No commits since plan_hash — proceeding to code review at your confirmation."
+
 **Step-specific validation update:** Step 5 validation changes from "plan checkboxes" to "commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)" — same mechanism already used by Step 6. Also update the Fast-Path Detection Algorithm step-specific validation entry for step 5: replace "5: plan checkboxes" with "5: commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Add `ai-dev-tools/skills/orchestrate/SKILL.md` to the Files Modified table for this validation update (it is already listed, but the Fast-Path Detection Algorithm table within it is now also modified).
 
 ---
@@ -165,7 +171,7 @@ Modifications to `ai-dev-tools/skills/session-handoff/SKILL.md` plus a new `refe
 
 ### 2A. Explicit CWD-Relative Path (Bug #2)
 
-**Location:** `ai-dev-tools/skills/session-handoff/SKILL.md`, Step 3.
+**Location:** All occurrences of `tmp/session-handoff.md` in `ai-dev-tools/skills/session-handoff/SKILL.md` (skill description, Step 3 write, self-check, confirmation).
 
 **Change:** Replace all references to `tmp/session-handoff.md` with `./tmp/session-handoff.md`. This explicitly anchors to CWD, ensuring consistent write/read location.
 
@@ -220,6 +226,8 @@ If tasks exist:
 3. If tasks are numbered sequentially, preserve ordering and terminology.
    Skill identification is not required — task order and subject are sufficient.
 
+If TaskList returns no tasks or all tasks are completed: fall back to user-message scanning as sole source. Completed tasks may supplement the Done section.
+
 Task list items take priority over conversation-derived items when they
 conflict. Conversation scanning fills gaps (decisions, gotchas) that
 tasks do not capture.
@@ -260,7 +268,16 @@ If gitStatus is absent from conversation context, read
 references/edge-cases.md for the fallback flow.
 ```
 
+**Error handling consolidation:** Replace the full Error Handling table in SKILL.md with a minimal redirect:
+```markdown
+## Error Handling
+See references/edge-cases.md for non-standard scenarios (no git repo, no commits, detached HEAD, nothing to hand off).
+```
+Only the two most common scenarios remain inline in SKILL.md: (1) tmp/ doesn't exist: create it; (2) Previous handoff exists: overwrite.
+
 **Keep in SKILL.md:** Happy path only — gitStatus present, git repo confirmed, normal gather/compose/write flow. Estimated size reduction: ~40%.
+
+**Dangling header cleanup:** After moving the gitStatus-absent block, remove the conditional header "If gitStatus is present (typical case):" — the happy path is now the only path in SKILL.md and no conditional header is needed.
 
 ---
 
