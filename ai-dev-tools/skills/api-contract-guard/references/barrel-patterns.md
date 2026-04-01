@@ -1,6 +1,6 @@
 # Barrel Patterns Reference — api-contract-guard
 
-Loaded at Step 6 (Barrel File Analysis). Contains barrel detection algorithms,
+Loaded at Step 5 (Barrel File Analysis). Contains barrel detection algorithms,
 export analysis, incomplete barrel detection, cross-module
 import scanning with path resolution rules, wildcard re-export resolution, barrel
 generation rules, and `package.json` `exports` field handling.

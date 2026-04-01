@@ -23,7 +23,7 @@
 
 The next session discovers the handoff via a CLAUDE.md instruction:
 
-> "If `tmp/session-handoff.md` exists, read it before starting any work. It contains context from the previous AI session. If the `generated` timestamp is more than 24 hours old, note that the handoff may be outdated."
+> "If `./tmp/session-handoff.md` exists, read it before starting any work. It contains context from the previous AI session. If the `generated` timestamp is more than 24 hours old, note that the handoff may be outdated."
 
 This is a one-time setup. The skill does not modify CLAUDE.md.
 
