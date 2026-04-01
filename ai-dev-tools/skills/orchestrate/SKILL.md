@@ -196,6 +196,22 @@ At Step 5 onset (all paths including First-Run User Prompt):
   -> Read references/implementation-step.md for task graph visualization,
     execution model recommendation, and override dispatch.
 
+At Step 5 onset, if a refactor roadmap exists and the current feature
+name appears in that roadmap (case-insensitive substring match of the
+feature name against roadmap item labels — match against the bold
+module/layer name only, i.e., text between ** markers in the checkbox
+line, not the full rationale text):
+  → Read references/refactor-execution.md for file operation, import rewrite,
+    and verification patterns.
+  → Checklist pre-flight: read tmp/checklists/index.md (if it exists), filter
+    for rows where Phase is `coding` or `both` AND Recommended Skill contains
+    `refactor-to-monorepo` or `refactor-to-layers`. Surface any matching entries
+    to the user before beginning execution.
+    Note: the `refactor-to-layers` filter branch is reserved for future use.
+    refactor-to-layers has no checklist crystallization section, so the
+    `refactor-to-layers` filter will currently return empty. This is expected —
+    do not warn the user on an empty result from the `refactor-to-layers` branch.
+
 If --strict is active at Step 8:
   -> Read references/strict-mode.md (if not already loaded) for
     verification gate and structured finishing.
@@ -210,15 +226,61 @@ At Step 8, after user confirms finalize:
 Execute in order. First matching trigger wins.
 
 **Step 1 — Brainstorm:** No spec in `docs/superpowers/specs/` for current feature. Check `tmp/current-roadmap.md` for next item. Invoke `superpowers:brainstorming`. Edge: superpowers plugin missing -> warn, offer manual spec creation.
+
+If a refactor roadmap exists (`docs/monorepo-strategy/roadmap.md` or
+`docs/layer-architecture/roadmap.md`) with unchecked items and no active spec
+for the next unit (a file exists in `docs/superpowers/specs/` whose filename
+contains the next unit name as a case-insensitive substring AND whose Status
+header is not `finalized` — or has no Status header — counts as an active spec;
+read only the first 10 lines of each matching spec file to determine Status),
+suggest: "Next unit: `<name>`. Start brainstorming?"
+If user confirms, invoke the originating refactor skill with --next-unit.
+Derive which skill to invoke from roadmap path:
+  docs/monorepo-strategy/roadmap.md → refactor-to-monorepo
+  docs/layer-architecture/roadmap.md → refactor-to-layers
+After --next-unit completes and produces a new single-unit spec, write hint
+(feature: <next-unit-name>, step: 2) and exit. Orchestrate must be re-invoked
+to continue — it does not automatically advance to Step 2 in the same session.
+
+Note: The existing Step 1 logic uses `tmp/current-roadmap.md` for general feature tracking. Refactor roadmaps are separate files checked in addition to `tmp/current-roadmap.md`. Refactor roadmap checks take priority.
 **Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 3` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
 **Step 3 — Respond to Review:** review_summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
 **Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
-**Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. Read references/implementation-step.md: generate task graph, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
+**Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. If the current feature is a refactor unit (matched via roadmap check): skip execution model selection, execute directly using `references/refactor-execution.md` following Pre-flight → File Operations → Verification. Otherwise: Read references/implementation-step.md: generate task graph, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
 **Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Present confirmation prompt with N and spec_path, then invoke `/review-code {N} --against {spec_path} --max-iterations 3` or user override. Edge: >50% non-feature commits interleaved -> warn.
 **Step 7 — Fix Findings:** review_summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
 - **Phase 1 (pre-confirmation):** Present `── Step 8: Complete ──` with Feature name, Status (Approved/Approved with suggestions), and "Ready to finalize?" No git baselines.
 - **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> recommendations -> "What's next?"
+
+If a refactor roadmap exists with unchecked items:
+  → Check roadmaps in this order: docs/monorepo-strategy/roadmap.md first,
+    then docs/layer-architecture/roadmap.md. For each roadmap, attempt a
+    case-insensitive substring match of the current feature name against
+    roadmap item labels. Stop at the first roadmap where exactly one match
+    is found — do not check the second roadmap if the first matches.
+    If the first roadmap checked yields zero or multiple matches, check
+    the second roadmap. If both roadmaps each yield exactly one match,
+    use docs/monorepo-strategy/roadmap.md as the default and warn:
+    "Feature matched entries in both roadmaps — defaulting to monorepo
+    roadmap. Mark the layer roadmap entry manually if needed."
+    The next-unit suggestion in this path refers only to the monorepo roadmap. Layer roadmap advancement is left to the user per the warning.
+    If neither roadmap yields exactly one match,
+    skip auto-mark and print: "Could not match feature to roadmap entry —
+    mark it complete manually."
+  → Mark the completed unit [x] in the matched roadmap file.
+  → Print: "Unit `<completed>` done. Next on roadmap: `<next-unit>`."
+  → Suggest: "Continue with brainstorming for `<next-unit>`?"
+  → If user confirms, write hint (feature: <next-unit-name>, step: 2)
+    where <next-unit-name> is the name of the next unchecked roadmap unit,
+    and invoke the originating refactor skill with --next-unit.
+    Derive which skill to invoke from roadmap path:
+    docs/monorepo-strategy/roadmap.md → refactor-to-monorepo
+    docs/layer-architecture/roadmap.md → refactor-to-layers
+    After --next-unit completes and produces a new single-unit spec,
+    write hint (feature: <next-unit-name>, step: 2) and exit.
+    Orchestrate must be re-invoked to continue — it does not
+    automatically advance to Step 2 in the same session.
 - **--strict Phase 2:** Update hint to `finalized` -> Read references/strict-mode.md (verification gate) -> Read references/quality-gates.md (baselines) -> roadmap -> structured finishing.
 
 ---
