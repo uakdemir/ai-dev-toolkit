@@ -17,9 +17,9 @@ If the user's arguments contain `--help`, output ONLY the text inside <help-text
 
 # session-handoff
 
-Generate a structured handoff document at `tmp/session-handoff.md` for consumption by the next AI agent session. Gathers facts from git state and context from conversation, producing a terse, machine-parseable file with YAML frontmatter + 5 sections.
+Generate a structured handoff document at `./tmp/session-handoff.md` for consumption by the next AI agent session. Gathers facts from git state and context from conversation, producing a terse, machine-parseable file with YAML frontmatter + 5 sections.
 
-**Prerequisite:** Auto-discovery requires a one-time setup — a CLAUDE.md instruction or SessionStart hook that reads `tmp/session-handoff.md` on startup. Without this setup, the file is written but not automatically consumed.
+**Prerequisite:** Auto-discovery requires a one-time setup — a CLAUDE.md instruction or SessionStart hook that reads `./tmp/session-handoff.md` on startup. Without this setup, the file is written but not automatically consumed.
 
 ## Workflow Overview
 
@@ -27,7 +27,7 @@ Execute these steps in order. Each step feeds into the next:
 
 1. **Gather** — collect git state + scan conversation for context
 2. **Compose** — assemble the handoff document
-3. **Write** — write to `tmp/session-handoff.md`, confirm to user
+3. **Write** — write to `./tmp/session-handoff.md`, confirm to user
 
 No tech stack selection, no scope detection, no parallel agents, no reference files. Single-pass, single output.
 
@@ -38,8 +38,6 @@ No tech stack selection, no scope detection, no parallel agents, no reference fi
 ### Git Analysis (Factual Backbone)
 
 **Preflight:** Check if `gitStatus` is present in the conversation context (injected by Claude Code at session start).
-
-**If `gitStatus` is present (typical case):**
 
 Extract from `gitStatus`:
 - **Branch name:** from "Current branch:" line
@@ -58,52 +56,52 @@ If `git log` returns nothing (no new commits this session), `session_commits: 0`
 
 If `git log` fails for any reason — including ambiguous SHA, rebase, or force-push — fall back to `git log --oneline --since="midnight" -20`.
 
-**If `gitStatus` is absent (non-standard invocation):**
-
-1. Run `git rev-parse --is-inside-work-tree`. If fails, skip all git and proceed
-   conversation-only. Warn: "No git repo — handoff will be conversation-based only."
-2. Run `git rev-parse --verify HEAD`. If fails (empty repo with no commits), skip
-   all git history commands. Set `session_commits: 0` and note
-   "Empty repo (no commits) — handoff will be conversation-based only." Proceed to
-   conversation-only path.
-3. Run `git branch --show-current` and `git status --short` (always — lightweight).
-4. Ask: "I don't have the session start point. Want me to check recent git history
-   to find session commits?"
-   - If yes: run `git log --oneline --since="midnight" -20`.
-     If the result is zero commits, set `session_commits: 0` and note
-     "No commits found since midnight — handoff will be conversation-based only."
-     If commits found, note "session boundary estimated" in the handoff.
-   - If no: conversation-only for commits. Set `session_commits: 0`. Branch name and uncommitted file state (from steps 2-3) are still written to the handoff frontmatter. Only session commit history is omitted.
+If gitStatus is absent from conversation context, read
+references/edge-cases.md for the fallback flow.
 
 > **Non-normative implementation note:** The agent has witnessed every commit it made during the session via tool call results. The `git log <start_head>..HEAD` output serves as the authoritative commit list, but the agent should cross-reference with its own memory of commits for richer Done item descriptions (commit messages alone may lack context the agent observed).
 
-### Conversation Analysis (Context Layer)
+### Conversation Analysis (User Messages Only)
 
-The agent scans conversation content available in its current context window. Do not attempt to retrieve conversation history beyond what is in context. If context has been compressed or truncated, note "Conversation partially scanned" in the handoff.
+Scan ONLY the user's messages in the conversation. Do not scan LLM responses
+or tool results — they are verbose and waste context tokens. One exception:
+the TaskList tool may be invoked directly as a structured artifact — it is
+not part of conversation scanning (see In-Progress Skill Detection below).
 
-Scan for context that git cannot provide:
+From user messages, extract:
 
-**Done items:** Look for completed actions — tool calls that wrote files, test runs that passed, user confirmations of completed work. Cross-reference with git commits to avoid duplication.
+**Done:** Commands the user ran — skill invocations, /orchestrate calls,
+  /orchestrate (/...) wrapped commands. Each invocation = one completed action.
 
-**Pending items:** Scan for:
-- Explicit deferrals: "later", "next session", "TODO", "we'll do this after"
-- Unfinished plan tasks (generic): if a plan file is referenced (e.g., `docs/superpowers/plans/*.md`), parse unchecked checkbox items (`- [ ]`) into concrete Pending bullets. Include the plan path and completion ratio as summary metadata.
-- Discussed but not started: topics the user raised that weren't acted on
+**Pending:** Explicit deferrals in user messages ("later", "next session",
+  "TODO", "skip for now"). Also: uncompleted /orchestrate (/...) breadcrumbs
+  where the user ran /orchestrate (/X) but there is no subsequent /orchestrate
+  call in the conversation.
 
-**Decisions:** Scan for:
-- User choices: "let's go with", "option X", "yes", "agreed", accepted proposals
-- Rejected alternatives: "not option Y because Z"
-- Constraints expressed: "don't", "always", "never", "we prefer"
+**Decisions:** User choices ("go with A", "option 2", "yes to X", "no,
+  because Y"). Capture the choice and the stated reason.
 
-**Gotchas:** Scan for:
-- Warnings: "be careful", "don't forget", "this is tricky", "won't work unless"
-- Environment requirements: Docker, database, API keys, specific versions
-- Generated files: files flagged as generated or auto-created
-- Order dependencies: "do X before Y", "this must run first"
+**Gotchas:** User-stated warnings ("be careful with", "don't forget",
+  "this breaks if"). Do not extract gotchas from tool results.
 
-**File paths:** Collect file paths mentioned in context of work done or pending. Include them inline with their relevant Done/Pending items, not as a separate section.
+### In-Progress Skill Detection
 
-**Scanning priorities:** If the conversation is long, prioritize recent tool calls, user instructions, and decisions over early-session exploration.
+After scanning user messages, check TaskList for active tasks.
+
+If tasks exist:
+1. Use task subjects, descriptions, and completion status as the primary
+   source for Done and Pending items. Tasks created by skill workflows
+   have reliable status tracking and ordering.
+2. The first incomplete task is the next action. Do not skip to a
+   downstream task.
+3. If tasks are numbered sequentially, preserve ordering and terminology.
+   Skill identification is not required — task order and subject are sufficient.
+
+If TaskList tool is unavailable or returns an error, skip In-Progress Skill Detection and rely on user-message scanning only. If TaskList returns no tasks or all tasks are completed: fall back to user-message scanning as sole source. Completed tasks may supplement the Done section.
+
+Task list items take priority over conversation-derived items when they
+conflict. Conversation scanning fills gaps (decisions, gotchas) that
+tasks do not capture.
 
 ---
 
@@ -149,6 +147,18 @@ pending_items: <count>
   - <hash> <message>
 ```
 
+### Next Action Validation
+
+Before writing the Pending section, validate ordering:
+
+1. If a review or approval step is incomplete in the task list, do not
+   list any post-review step (implementation, plan writing) as the
+   first pending item.
+2. If a spec file referenced in pending items has Status: Draft, do not
+   list implementation or plan writing as the next action.
+3. The first Pending bullet must be the immediate next action. Downstream
+   steps may follow but must be listed after it.
+
 ### Content Guidelines
 
 - **Terse:** Bullet points, not paragraphs. This is for an AI agent, not a human reader.
@@ -163,25 +173,15 @@ pending_items: <count>
 ## Step 3: Write
 
 1. Create `tmp/` directory if it doesn't exist.
-2. Write the composed document to `tmp/session-handoff.md`, overwriting any existing file.
+2. Write the composed document to `./tmp/session-handoff.md`, overwriting any existing file.
 3. **Self-check:** Read the file back and confirm: frontmatter contains `git_available`, `branch`, `uncommitted_changes`, `uncommitted_files`, `session_commits`, `pending_items`; all 5 section headers (`## Done`, `## Pending`, `## Decisions`, `## Gotchas`, `## Git State`) are present. If validation fails, attempt one rewrite. If second attempt also fails, write as-is and warn: "Handoff written but missing: {list of missing elements}."
-4. Print confirmation: "Handoff written to `tmp/session-handoff.md`." Check the project's root `CLAUDE.md` for a reference to `session-handoff.md`. If not found, append: "Note: Add this line to your CLAUDE.md for auto-discovery: `If tmp/session-handoff.md exists, read it before starting any work.`"
+4. Print confirmation: "Handoff written to `./tmp/session-handoff.md`." Check the project's root `CLAUDE.md` for a reference to `session-handoff.md`. If not found, append: "Note: Add this line to your CLAUDE.md for auto-discovery: `If ./tmp/session-handoff.md exists, read it before starting any work.`"
 5. Print a continuation prompt the user can paste into a new session:
    ```
    ── Continuation prompt ─────────────────────────
-   Read tmp/session-handoff.md and continue where the previous session left off.
+   Read ./tmp/session-handoff.md and continue where the previous session left off.
    ────────────────────────────────────────────────
    ```
-
----
-
-## Auto-Discovery Setup
-
-The next session discovers the handoff via a CLAUDE.md instruction:
-
-> "If `tmp/session-handoff.md` exists, read it before starting any work. It contains context from the previous AI session. If the `generated` timestamp is more than 24 hours old, note that the handoff may be outdated."
-
-This is a one-time setup. The skill does not modify CLAUDE.md.
 
 ---
 
@@ -189,11 +189,7 @@ This is a one-time setup. The skill does not modify CLAUDE.md.
 
 | Scenario | Behavior |
 |----------|----------|
-| Not a git repository | Skip git analysis. Conversation only. Warn: "No git repo — handoff will be conversation-based only." Non-git frontmatter: `git_available: false`, `branch: null`, `uncommitted_changes: false`, `uncommitted_files: []`, `session_commits: 0`. |
-| No commits today | Git State shows branch + uncommitted changes only. `session_commits: 0`. |
-| No conversation context | Git-only handoff. Done from git. Decisions, Gotchas, Pending: "No conversation context available." |
-| Nothing to hand off | Warn, do not write. Condition: no git changes AND all four content sections empty. Placeholders don't count as content — if git produced Done items but conversation produced nothing, the file IS written (with placeholders for Pending/Decisions/Gotchas). |
 | `tmp/` doesn't exist | Create it. |
 | Previous handoff exists | Overwrite. Each invocation is a cumulative snapshot. |
-| Context compressed | Scan available context, prioritize recent. Note: "Conversation partially scanned." |
-| Detached HEAD | Use commit hash from `git rev-parse --short HEAD`. |
+
+See references/edge-cases.md for non-standard scenarios (no git repo, no commits, detached HEAD, nothing to hand off).
