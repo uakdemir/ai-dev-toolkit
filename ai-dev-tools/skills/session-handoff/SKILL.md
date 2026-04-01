@@ -60,21 +60,20 @@ If `git log` fails for any reason — including ambiguous SHA, rebase, or force-
 
 **If `gitStatus` is absent (non-standard invocation):**
 
-Fall back to the full git analysis below. This covers edge cases like: session started without `gitStatus` injection, skill invoked outside Claude Code, or context was compressed and `gitStatus` is no longer visible.
-
-**Full git analysis fallback (when `gitStatus` is absent):**
-
-1. `git rev-parse --is-inside-work-tree` — preflight. If fails, skip all git commands and proceed to Conversation Analysis. Warn: "No git repo — handoff will be conversation-based only." Use non-git frontmatter defaults (see Error Handling).
-2. If inside a git repo, check for commits: `git rev-parse --verify HEAD`. If HEAD is invalid (empty repo), skip `git log` and `git diff --stat HEAD` — use `session_commits: 0`.
-3. `git branch --show-current` — current branch name. If empty (detached HEAD), use `git rev-parse --short HEAD`.
-4. `git status --short` — list of uncommitted changes (staged + unstaged)
-5. `git log --oneline -20` — recent commits for session detection (skip if no HEAD)
-6. `git diff --stat HEAD` — all uncommitted changes summary (skip if no HEAD)
-
-**Session commit detection (fallback only):**
-1. `git log --oneline --since="midnight" -20` on the current branch — today's commits (capped at 20)
-2. If no commits found or on a shared branch (main/master), fall back to last 10 commits on the current branch
-3. Note "session boundary estimated" if using the fallback
+1. Run `git rev-parse --is-inside-work-tree`. If fails, skip all git and proceed
+   conversation-only. Warn: "No git repo — handoff will be conversation-based only."
+2. Run `git rev-parse --verify HEAD`. If fails (empty repo with no commits), skip
+   all git history commands. Set `session_commits: 0` and note
+   "Empty repo (no commits) — handoff will be conversation-based only." Proceed to
+   conversation-only path.
+3. Run `git branch --show-current` and `git status --short` (always — lightweight).
+4. Ask: "I don't have the session start point. Want me to check recent git history
+   to find session commits?"
+   - If yes: run `git log --oneline --since="midnight" -20`.
+     If the result is zero commits, set `session_commits: 0` and note
+     "No commits found since midnight — handoff will be conversation-based only."
+     If commits found, note "session boundary estimated" in the handoff.
+   - If no: conversation-only for commits. Set `session_commits: 0`. Branch name and uncommitted file state (from steps 2-3) are still written to the handoff frontmatter. Only session commit history is omitted.
 
 > **Non-normative implementation note:** The agent has witnessed every commit it made during the session via tool call results. The `git log <start_head>..HEAD` output serves as the authoritative commit list, but the agent should cross-reference with its own memory of commits for richer Done item descriptions (commit messages alone may lack context the agent observed).
 
@@ -88,7 +87,6 @@ Scan for context that git cannot provide:
 
 **Pending items:** Scan for:
 - Explicit deferrals: "later", "next session", "TODO", "we'll do this after"
-- Unfinished implement-plan tasks: if the conversation references a strategy spec path, read the spec and count `[DONE]` vs remaining steps. Include the spec path and remaining count. If `tmp/execution-report.md` exists, reference it in the Done section but do not attempt to derive the strategy spec path from it — require the path from conversation context. This `[DONE]` parsing is specific to implement-plan artifacts.
 - Unfinished plan tasks (generic): if a plan file is referenced (e.g., `docs/superpowers/plans/*.md`), parse unchecked checkbox items (`- [ ]`) into concrete Pending bullets. Include the plan path and completion ratio as summary metadata.
 - Discussed but not started: topics the user raised that weren't acted on
 
