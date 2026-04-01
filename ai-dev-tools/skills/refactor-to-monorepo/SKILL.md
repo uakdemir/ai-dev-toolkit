@@ -4,16 +4,20 @@ description: "Use when the user wants to split a monolith into modules, identify
 ---
 
 <help-text>
-refactor-to-monorepo — Analyze monolith for monorepo extraction strategy
+refactor-to-monorepo — Analyze monolith, produce unit extraction roadmap
 
 USAGE
-  /refactor-to-monorepo
+  /refactor-to-monorepo [--next-unit]
+
+FLAGS
+  --next-unit   Generate spec for next unchecked unit in roadmap
 
 EXAMPLES
   /refactor-to-monorepo              Analyze and produce extraction plan
+  /refactor-to-monorepo --next-unit  Produce spec for next extraction unit
 </help-text>
 
-If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
+If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic. If user's arguments contain `--next-unit`, skip the main workflow and execute `--next-unit` behavior (see below).
 
 # refactor-to-monorepo
 
@@ -238,7 +242,7 @@ Goal: reconcile all three analysis views and produce final module boundaries.
    - Common resolutions: merge two domains, split a domain, create a shared service, introduce an API boundary, designate a primary owner with read-only access for consumers.
    - Seed-wins rule: When a conflict involves a user-seeded module, preserve the seed boundary by default. Document the conflict and the automated alternative (with coupling score as percentage, e.g. 78%). The user can override at the Phase 4 checkpoint.
 5. Produce the final module list with boundaries, confidence levels, and resolved conflicts.
-6. **User checkpoint:** "Here is the full analysis with proposed module boundaries and conflict resolutions. Please review before I generate the output artifacts."
+6. **User checkpoint:** "Here is the full analysis with proposed module boundaries and conflict resolutions. Please review before I generate the output artifacts: roadmap.md (ordered extraction list) and a single-unit spec for the first module."
 
 Wait for user approval before generating artifacts.
 
@@ -257,14 +261,14 @@ All checklists live in `tmp/checklists/`. The directory contains an `index.md` r
 
 | Checklist | Description | Phase | Recommended Skill |
 |-----------|-------------|-------|-------------------|
-| [monorepo-extraction.md](monorepo-extraction.md) | Universal extraction pitfalls | both | refactor-to-monorepo, implement-plan |
+| [monorepo-extraction.md](monorepo-extraction.md) | Universal extraction pitfalls | both | refactor-to-monorepo |
 ```
 
 **Column definitions:**
 
 | Column | Values | Purpose |
 |--------|--------|---------|
-| Phase | `analysis`, `coding`, or `both` | `analysis` = refactor-to-monorepo phases 1-4, `coding` = implement-plan phases 1-N, `both` = both contexts |
+| Phase | `analysis`, `coding`, or `both` | `analysis` = refactor-to-monorepo phases 1-4, `coding` = orchestrate Step 5 implementation, `both` = both contexts |
 | Recommended Skill | Comma-separated skill names | Filter: split on comma, trim whitespace, exact-match each element |
 
 **Entry format** (each entry in a checklist file):
@@ -279,7 +283,7 @@ All checklists live in `tmp/checklists/`. The directory contains an `index.md` r
 
 Entries are appended, never reordered.
 
-**Write protocol (for append operations by `implement-plan` — NOT used during crystallization):**
+**Write protocol (for append operations by external skills — NOT used during crystallization):**
 
 1. Read `index.md` to check if a matching file already exists.
 2. If matching file exists, append entries. Do not create duplicates.
@@ -389,41 +393,28 @@ Stack-specific tooling recommendation sourced from the matching section in `refe
 - **Dependency management** — inter-module dependency declarations, version pinning, hoisting rules.
 - **CI/CD considerations** — affected-module detection, selective test runs, deployment pipeline changes.
 
-### 6. `migration-plan.md` — Phased Migration Plan
+### 6. `roadmap.md` — Unit Extraction Roadmap
 
-Structure:
+```markdown
+# Monorepo Extraction Roadmap
 
-- **Phase 0: Preparation** — must complete before any module extraction begins.
-  - Initialize workspace/monorepo configuration using the tool recommended in monorepo-tooling.md.
-  - Set up CI for multi-module builds (build affected modules, run affected tests).
-  - Extract shared library from identified `shared/` candidates into its own module.
-  - Update all import paths referencing extracted shared code.
-  - Verify: all tests pass, build succeeds, no behavior changes.
+Ordered by extraction priority (dependency depth, coupling score, risk).
 
-- **Phases 1-N: Module Extraction** — one phase per module, ordered by lowest coupling score first.
-  - Each phase includes:
-    1. Files to move (full path listing).
-    2. Imports to update (cross-module references that change paths).
-    3. Configuration changes (build config, test config, package manifest).
-    4. Tests to verify (unit, integration, E2E).
-    5. **"App keeps working" checkpoint:** build passes, all tests pass, no runtime errors.
-  - Do not proceed to Phase N+1 until Phase N's checkpoint passes.
+- [ ] **module-a** — lowest coupling, no dependents, good first extraction
+- [ ] **module-b** — depends on module-a interface only
+- [ ] **module-c** — shared data layer, extract after module-b
+- [ ] **module-d** — core services, highest coupling, extract last
+```
 
-> Note: This plan describes what to do. Actual code changes are a separate effort and not executed by this skill.
+Checkbox format so orchestrate can track completion. Module names and descriptions are populated from the Phase 4 synthesis results.
 
-- **Checklists** — reference section pointing to relevant checklist files. Placed after the phase listing:
+### 7. Single-Unit Spec — First Extraction Unit
 
-  ```markdown
-  ## Checklists
+Detailed analysis for the first unchecked module only. Contains: module boundary, files to extract, dependencies to sever, interface to expose, expected import rewrites.
 
-  Before each extraction phase, consult:
-  - `tmp/checklists/monorepo-extraction.md` — universal extraction pitfalls
-  - `tmp/checklists/<stack>-extraction.md` — stack-specific hazards
+Written as a normal spec at `docs/superpowers/specs/YYYY-MM-DD-extract-<module>-design.md` with **Status: Draft** that enters the orchestrate cycle at Step 2.
 
-  Per-module hazards are noted in each module's spec under "Extraction Hazards".
-  ```
-
-  Omit the stack-specific line if "Other" was selected or if zero stack-specific observations were accumulated.
+The full Phase 4 run always produces both the roadmap and the first-unit spec directly — `--next-unit` is only used for subsequent units (units 2+).
 
 ---
 
@@ -438,7 +429,6 @@ Load reference files only when needed to minimize context window usage:
 | Phase 3 start | `references/analysis-framework.md` | Coupling score formula, import analysis approach |
 | Phase 4 conflict resolution | `references/migration-patterns.md` | Conflict resolution decision tree |
 | Artifact generation: module specs | `references/module-spec-template.md` | Per-module document template |
-| Artifact generation: migration plan | `references/migration-patterns.md` | Extraction ordering and phasing patterns |
 | Artifact generation: tooling | `references/tech-stacks.md` | Extract ONLY the matching stack's monorepo tooling section |
 
 **Exception:** If "Other" was selected for tech stack, skip `references/tech-stacks.md` entirely. Derive patterns from the user's follow-up answers.
@@ -458,3 +448,28 @@ Load reference files only when needed to minimize context window usage:
 | User seeds overlap (same file in two seeds) | Warn: "File `{path}` is in both `{seed_a}` and `{seed_b}`. Which module should own it?" Resolve before Phase 1. |
 | Seeded path does not exist | Warn: "Path `{path}` not found. Remove from seed or continue anyway?" If "continue," drop the path but keep the seed module. If all paths in a seed are invalid, drop the seed entirely with a warning. |
 | Seed name collides with auto-discovered domain | Auto-merge into the seeded module at Phase 1. Present in checkpoint: "[seeded] {name} (N files, including M auto-merged from discovered '{name}' domain)." |
+
+---
+
+## --next-unit Mode
+
+Trigger: invoked when a unit roadmap exists (`docs/monorepo-strategy/roadmap.md`) with unchecked items and the previous unit is finalized.
+
+**Behavior:**
+
+1. Read the roadmap, identify next unchecked unit
+2. Read the immediately prior extraction spec only (the most recently completed unit's spec — not all prior specs) for context on what was learned. The prior spec is the last checked item (`[x]`) immediately before the next unchecked item (`[ ]`) in roadmap checkbox order. Match to `docs/superpowers/specs/` by unit name substring in filename.
+3. Run a lightweight dependency scan limited to the next unit's file set and its direct imports. Re-read `docs/monorepo-strategy/dependency-matrix.md`: read the row and column corresponding to the next unit to identify its direct dependencies and dependents. Do NOT re-run the full 4-phase analysis.
+4. Produce a single-unit spec for the next module at `docs/superpowers/specs/YYYY-MM-DD-extract-<module>-design.md` with **Status: Draft**.
+
+Skips the full 4-phase analysis — uses existing strategy docs as context.
+
+**Error handling:**
+
+| Scenario | Behavior |
+|---|---|
+| No unchecked items in roadmap | Print "All units in the roadmap are complete. Nothing to extract." and exit. |
+| Missing roadmap file | Print "No roadmap found at the expected path. Run the full analysis first to generate a roadmap." and exit. |
+| Missing prior unit's spec/plan artifacts | Warn "Prior unit artifacts not found — proceeding without prior context." Continue with step 2 skipped. |
+| Spec already exists for next unit AND Status is not `finalized` | Print "A spec for `<next-unit>` already exists. Resume the orchestrate cycle for that unit instead of regenerating." and exit. |
+| Spec already exists for next unit AND Status IS `finalized` | Proceed normally (treat as not yet started for --next-unit purposes). |
