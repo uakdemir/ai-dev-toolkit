@@ -55,6 +55,7 @@ Runs on every invocation, before Step 0.
 1. Check if `./tmp/session-handoff.md` exists.
 2. If not found → skip, proceed to Step 0.
 3. If found → read YAML frontmatter `generated` timestamp.
+   - Compare the `generated` field to the currentDate provided in the system-reminder context. If currentDate is unavailable, run `date +%Y-%m-%d` via Bash.
    - If older than 24 hours → print "Stale session handoff (>24h), ignoring." → proceed to Step 0.
    - If recent (< 24h) → parse content:
      a. Extract feature name from Done/Pending sections.
@@ -67,14 +68,21 @@ Runs on every invocation, before Step 0.
         - Pending mentions fix findings → step 7
         - Pending mentions finalize or complete → step 8
         - No match → step 1 (start fresh)
+        If Pending matches multiple step keywords, use the lowest-numbered
+        unfinished step (the earliest pending work). Cross-reference with
+        Done items: steps mentioned in Done are considered complete.
      c. Extract spec and plan paths from file path references in the content.
      d. Write `./tmp/orchestrate-state.md` with extracted data. Preserve existing `mode` field
-        if hint file already exists. Set `head` to current `git rev-parse HEAD`.
+        if hint file already exists. Set `head` to current `git rev-parse HEAD`. Note: `head`
+        reflects HEAD at orchestrate invocation time. Fast-Path Detection comparing this to
+        current HEAD will correctly detect any commits made during this session.
      e. Print: "Resumed from session handoff: <feature>, step <N>"
 4. Proceed to Step 0 (Fast-Path Detection finds the newly written or updated hint file).
 ```
 
-**Integration:** This phase runs after mode resolution (so `mode` is known) but before Step 0 context estimation. If the hint file already has valid cycle state (non-empty `feature`), Session Bootstrap is a no-op — Fast-Path Detection handles it. Session Bootstrap only fires when the hint file is missing or has no valid cycle state AND a recent session-handoff.md exists.
+**Integration:** Session Bootstrap runs after Mode Selection completes. Mode is already resolved when step 3d writes the hint file. If creating a new hint file, include the resolved mode value. If the hint file already has valid cycle state (non-empty `feature`), Session Bootstrap is a no-op — Fast-Path Detection handles it. Session Bootstrap only fires when the hint file is missing or has no valid cycle state AND a recent session-handoff.md exists.
+
+When session-handoff is auto-triggered by orchestrate RED, the hint file already contains valid cycle state. Session Bootstrap's no-op condition handles this — the hint file has a non-empty feature field, so Bootstrap exits immediately without reading session-handoff.md.
 
 ### 1B. Step 4 Guard Against Writing-Plans Handoff (Bug #1)
 
@@ -93,6 +101,8 @@ Return control to the caller. Orchestrate manages execution model
 selection at Step 5."
 ```
 
+The guard text is prepended to the Skill tool dispatch prompt before the plan request. If writing-plans still presents an Execution Handoff section, orchestrate ignores it and proceeds to Step 5.
+
 ### 1C. Wrapped Next-Command Output (Improvement #6)
 
 **Location:** Every step's exit point in `ai-dev-tools/skills/orchestrate/SKILL.md`.
@@ -109,8 +119,8 @@ selection at Step 5."
 
 | After Step | Next Command |
 |---|---|
-| 1 (Brainstorm) | `/orchestrate (/review-doc <spec_path> --max-iterations 3)` |
-| 2 (Spec Review) | `/orchestrate (/respond-to-review <round> <spec_path>)` if criticals >0, else `/orchestrate` (advance to Step 4) |
+| 1 (Brainstorm) | `/orchestrate (/review-doc <spec_path> --max-iterations 3)` — `<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, output plain `/orchestrate` instead. |
+| 2 (Spec Review) | `/orchestrate (/respond-to-review <round> <spec_path>)` if criticals >0, else `/orchestrate` (plain, no inner command — advances to Step 4 via hint file) |
 | 3 (Respond to Review) | `/orchestrate (/review-doc <spec_path> --max-iterations 3)` for re-review, or `/orchestrate` if advancing to Step 4 |
 | 4 (Write Plan) | `/orchestrate` (Step 5 requires its own analysis before recommending a specific command) |
 | 5 (Implement) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
@@ -121,9 +131,17 @@ selection at Step 5."
 **Parsing behavior:** When orchestrate receives `/orchestrate (/some-command args)`:
 
 1. Extract the inner command from parentheses.
-2. Update the hint file (record the step transition).
+2. Do not update the step field on receipt of a wrapped command. Update only after the inner command completes and orchestrate resumes control, using normal step-detection logic.
 3. Dispatch the inner command via the Skill tool.
 4. After the inner command completes, orchestrate resumes control for state update + next-command output.
+
+**Acceptance example:** After Step 1 (Brainstorm) completes and spec is saved to `tmp/my-feature-design.md`, orchestrate outputs:
+
+```
+── Next ────────────────────────────────────────
+/orchestrate (/review-doc tmp/my-feature-design.md --max-iterations 3)
+────────────────────────────────────────────────
+```
 
 **Edge cases:**
 
@@ -135,9 +153,9 @@ selection at Step 5."
 
 **Location:** `ai-dev-tools/skills/orchestrate/SKILL.md`, Step 5 description and `references/implementation-step.md`.
 
-**Change:** Remove all references to plan checkbox tracking (`[x]`, `[ ]`). The hint file `step` field is the sole authority for progress. Step 5's completion condition changes from "all checkboxes `[x]`" to orchestrate's hint file indicating step advancement (e.g., user confirms implementation is done, or orchestrate detects commits since plan).
+**Change:** Remove all references to plan checkbox tracking (`[x]`, `[ ]`). The hint file `step` field is the sole authority for progress. Step 5's completion condition changes from "all checkboxes `[x]`" to: Step 5 is considered complete (advance to Step 6) when the user explicitly states implementation is done. Commits since plan_hash serve as a signal that implementation has started (stay at Step 5 until user confirms completion). If 0 commits exist since plan_hash, orchestrate stays at Step 5 and presents the implementation dispatch.
 
-**Step-specific validation update:** Step 5 validation changes from "plan checkboxes" to "commits since plan_hash" — same mechanism already used by Step 6. If commits exist since plan_hash, implementation has started or completed.
+**Step-specific validation update:** Step 5 validation changes from "plan checkboxes" to "commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)" — same mechanism already used by Step 6. Also update the Fast-Path Detection Algorithm step-specific validation entry for step 5: replace "5: plan checkboxes" with "5: commits since plan_hash (git log <plan_hash>..HEAD; any commits present means implementation has started)". Add `ai-dev-tools/skills/orchestrate/SKILL.md` to the Files Modified table for this validation update (it is already listed, but the Fast-Path Detection Algorithm table within it is now also modified).
 
 ---
 
@@ -151,6 +169,8 @@ Modifications to `ai-dev-tools/skills/session-handoff/SKILL.md` plus a new `refe
 
 **Change:** Replace all references to `tmp/session-handoff.md` with `./tmp/session-handoff.md`. This explicitly anchors to CWD, ensuring consistent write/read location.
 
+**Path convention note:** Session Bootstrap uses `./tmp/session-handoff.md` (with `./` prefix per this change). All other orchestrate path references remain as `tmp/orchestrate-state.md` — CWD anchoring applies only to the session-handoff path.
+
 ### 2B. User Message Scanning (Bug #5)
 
 **Location:** `ai-dev-tools/skills/session-handoff/SKILL.md`, Step 1 "Conversation Analysis" section.
@@ -161,7 +181,9 @@ Modifications to `ai-dev-tools/skills/session-handoff/SKILL.md` plus a new `refe
 ### Conversation Analysis (User Messages Only)
 
 Scan ONLY the user's messages in the conversation. Do not scan LLM responses
-or tool results — they are verbose and waste context tokens.
+or tool results — they are verbose and waste context tokens. One exception:
+the TaskList tool may be invoked directly as a structured artifact — it is
+not part of conversation scanning (see In-Progress Skill Detection below).
 
 From user messages, extract:
 
@@ -170,8 +192,8 @@ From user messages, extract:
 
 **Pending:** Explicit deferrals in user messages ("later", "next session",
   "TODO", "skip for now"). Also: uncompleted /orchestrate (/...) breadcrumbs
-  where a wrapped command was dispatched but no follow-up invocation exists
-  for the expected next step.
+  where the user ran /orchestrate (/X) but there is no subsequent /orchestrate
+  call in the conversation.
 
 **Decisions:** User choices ("go with A", "option 2", "yes to X", "no,
   because Y"). Capture the choice and the stated reason.
@@ -195,9 +217,8 @@ If tasks exist:
    have reliable status tracking and ordering.
 2. The first incomplete task is the next action. Do not skip to a
    downstream task.
-3. If tasks map to a known skill checklist (e.g., brainstorming steps 1-9,
-   orchestrate steps 1-8), list remaining incomplete steps in the skill's
-   own order and terminology.
+3. If tasks are numbered sequentially, preserve ordering and terminology.
+   Skill identification is not required — task order and subject are sufficient.
 
 Task list items take priority over conversation-derived items when they
 conflict. Conversation scanning fills gaps (decisions, gotchas) that
@@ -224,12 +245,14 @@ Before writing the Pending section, validate ordering:
 
 ### 2E. Slim Down SKILL.md (Improvement #7)
 
+**Implementation order:** Apply 2E first (uses original section headers as anchors), then apply 2A–2D.
+
 **Location:** `ai-dev-tools/skills/session-handoff/SKILL.md` and new `ai-dev-tools/skills/session-handoff/references/edge-cases.md`.
 
 **Move to `references/edge-cases.md`:**
-- gitStatus-absent fallback flow (current lines 62-76)
-- Error handling table (current lines 188-200)
-- Auto-Discovery Setup section (current lines 178-183)
+- The section starting with "If gitStatus is absent (non-standard invocation):"
+- The Error Handling table (under the `## Error Handling` header)
+- The `## Auto-Discovery Setup` section
 
 **Conditional loading:** Add to SKILL.md:
 ```
@@ -256,3 +279,4 @@ references/edge-cases.md for the fallback flow.
 - Changes to plan file format beyond removing checkboxes
 - Session-handoff scanning of tool results or LLM responses
 - Git-root path resolution (CWD is correct)
+- Parsing plan file unchecked checkboxes for Pending items (removed — TaskList and user messages are now the authoritative sources)
