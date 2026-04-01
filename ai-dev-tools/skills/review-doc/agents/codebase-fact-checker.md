@@ -43,20 +43,6 @@ Fact-check every verifiable claim in each document against the actual source cod
 - JSONB field shapes match what's described
 - Enum values and constants match their definitions
 
-## Preferred Tools
-
-For function/class/type verification, prefer Serena's semantic tools over file-level reads:
-
-| Task | Preferred Tool | Fallback |
-|------|---------------|----------|
-| Check function signature | `find_symbol` | Read full file |
-| Verify class has method X | `get_symbols_overview` | Read full file |
-| Verify import relationship | `find_referencing_symbols` | Grep across files |
-| Check file existence | Glob | Glob (unchanged) |
-| Verify non-code content | Read | Read (unchanged) |
-
-Use Serena tools when available. Fall back to Read/Grep when verifying non-code claims (config files, markdown content, line numbers).
-
 ## What to Ignore
 
 - Future plans or aspirational statements ("we will add X later")

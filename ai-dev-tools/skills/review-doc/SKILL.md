@@ -206,7 +206,7 @@ Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checke
 
 The fact-checker:
 1. Reads `tmp/review.json`
-2. Verifies claims against the codebase using preferred Serena tools (see agent prompt)
+2. Verifies claims against the codebase using Read/Grep/Glob tools
 3. Appends fact-check issues to the `issues` array with `category: "fact-check"`
 4. Populates `fact_check_claims` and computes `fact_check_accuracy`
 5. Recomputes `critical_count` and `high_count` from the full issues array
