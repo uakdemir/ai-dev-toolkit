@@ -52,6 +52,41 @@ Proceed with?
 Mode: strict (TDD + verification + spec compliance + structured completion)
 ```
 
+## Session Bootstrap (before Step 0)
+
+Runs on every invocation, after Mode Selection completes, before Step 0.
+
+1. Check if `./tmp/session-handoff.md` exists.
+2. If not found → skip, proceed to Step 0.
+3. If found → read YAML frontmatter `generated` timestamp.
+   - Compare the `generated` field to the currentDate provided in the system-reminder context. If currentDate is unavailable, run `date +%Y-%m-%d` via Bash. Note: currentDate is date-only (YYYY-MM-DD) while generated is datetime (YYYY-MM-DDTHH:MM). Use only the date portion of generated for comparison. If the date portion of generated differs from currentDate by more than 1 calendar day, treat as stale. Same day or previous day = recent.
+   - If stale → print "Stale session handoff (>24h), ignoring." → proceed to Step 0.
+   - If recent → parse content:
+     a. Extract feature name from Done/Pending sections. Strategy: look for file paths matching spec filename patterns (arguments after /review-doc or /writing-plans), and also scan for spec file path patterns (`docs/superpowers/specs/*.md` or `docs/*/specs/*.md`) anywhere in the content — session-handoff may summarize commands rather than preserving them verbatim. If multiple candidates, prefer the one appearing in both Done and Pending. If no clear name, set feature to empty and let User Prompt fallback clarify.
+     b. Determine step number by scanning Pending items for skill references and file paths:
+        - Pending mentions spec review or /review-doc → step 2
+        - Pending mentions respond to review → step 3
+        - Pending mentions write plan or /writing-plans → step 4
+        - Pending mentions implement or execution → step 5
+        - Pending mentions code review or /review-code → step 6
+        - Pending mentions fix findings → step 7
+        - Pending mentions finalize or complete → step 8
+        - No match: if Pending is empty, scan Done for highest step keyword. Done mentions finalize/complete → step finalized. Done mentions fix findings → step 8. Done mentions code review → step 7 or 8. Done mentions implementation/execution → step 6. Done mentions write plan → step 5. Done mentions respond to review → step 3 or 4. Done mentions spec review → step 3. Done also empty → step 1. Otherwise → step 1 (start fresh). Note: this fallback is intentionally conservative — the User Prompt acts as a safety net if the mapping is ambiguous.
+        If Pending matches multiple step keywords, use the lowest-numbered
+        unfinished step (the earliest pending work). Cross-reference with
+        Done items: steps mentioned in Done are considered complete.
+     c. Extract spec and plan paths from file path references in the content.
+     d. Write `tmp/orchestrate-state.md` with extracted data. Preserve existing `mode` field
+        if hint file already exists. Set `head` to current `git rev-parse HEAD`. Note: `head`
+        reflects HEAD at orchestrate invocation time. Fast-Path Detection comparing this to
+        current HEAD will correctly detect any commits made during this session.
+     e. Print: "Resumed from session handoff: <feature>, step <N>"
+4. Proceed to Step 0 (Fast-Path Detection finds the newly written or updated hint file).
+
+**Integration:** Session Bootstrap runs after Mode Selection completes. Mode is already resolved when step 3d writes the hint file. If creating a new hint file, include the resolved mode value. If the hint file already has valid cycle state (non-empty `feature`), Session Bootstrap is a no-op — Fast-Path Detection handles it. This is intentional — Fast-Path Detection's git-based validation is more reliable than handoff file parsing for mid-cycle state. Session Bootstrap only fires when the hint file is missing or has no valid cycle state AND a recent session-handoff.md exists.
+
+When session-handoff is auto-triggered by orchestrate RED, the hint file already contains valid cycle state. Session Bootstrap's no-op condition handles this — the hint file has a non-empty feature field, so Bootstrap exits immediately without reading session-handoff.md.
+
 # orchestrate
 
 Re-invocable state machine: detect cycle position, suggest next step, invoke skill on confirm. One step per invocation. State from artifacts + hint file, not session history.
@@ -127,7 +162,7 @@ After Step 0 completes:
         Write hint after resolution.
 ```
 
-**Step-specific validation** (1 tool call each): 1: spec not exist (if exists → 2). 2: spec Status header. 3: check review_summary Reviewed field matches hint spec AND read Critical/High counts — Critical>0: stay at 3; Critical=0 + High>0: advance to 4 (present info message first); Critical=0 + High=0: advance to 4; Reviewed mismatch: stale, route to 2. 4: plan exists. 5: plan checkboxes. 6: commits since plan_hash (`git log <plan_hash>..HEAD`; if plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}`; if still empty, show `Commits since plan: unknown (plan hash not found)` in the confirmation prompt. The user can override with a specific count or command). 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
+**Step-specific validation** (1 tool call each): 1: spec not exist (if exists → 2). 2: spec Status header. 3: check review_summary Reviewed field matches hint spec AND read Critical/High counts — Critical>0: stay at 3; Critical=0 + High>0: advance to 4 (present info message first); Critical=0 + High=0: advance to 4; Reviewed mismatch: stale, route to 2. 4: plan exists. 5: commits since plan_hash (implementation started; hint step field determines stay-at-5 vs advance-to-6 interpretation). 6: commits since plan_hash (`git log <plan_hash>..HEAD`; if plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}`; if still empty, show `Commits since plan: unknown (plan hash not found)` in the confirmation prompt. The user can override with a specific count or command). 7: review_summary criticals/highs. 8: review_summary clean. Finalized: none.
 
 If validation contradicts hint, advance to next logical step (don't rescan).
 
@@ -245,8 +280,8 @@ to continue — it does not automatically advance to Step 2 in the same session.
 Note: The existing Step 1 logic uses `tmp/current-roadmap.md` for general feature tracking. Refactor roadmaps are separate files checked in addition to `tmp/current-roadmap.md`. Refactor roadmap checks take priority.
 **Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 3` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
 **Step 3 — Respond to Review:** review_summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
-**Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
-**Step 5 — Implement:** Plan exists, not all checkboxes `[x]`. If the current feature is a refactor unit (matched via roadmap check): skip execution model selection, execute directly using `references/refactor-execution.md` following Pre-flight → File Operations → Verification. Otherwise: Read references/implementation-step.md: generate task graph, execution model recommendation, dispatch with overrides. Edge: all `[x]` -> skip to Step 6.
+**Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. When invoking superpowers:writing-plans, prepend to the dispatch prompt: "After saving the plan, do NOT present the Execution Handoff section. Return control to the caller. Orchestrate manages execution model selection at Step 5." If writing-plans still presents an Execution Handoff section, orchestrate ignores it and proceeds to Step 5. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
+**Step 5 — Implement:** Plan exists, implementation not confirmed complete. If the current feature is a refactor unit (matched via roadmap check): skip execution model selection, execute directly using `references/refactor-execution.md` following Pre-flight → File Operations → Verification. Otherwise: Read references/implementation-step.md: generate task graph, execution model recommendation, dispatch with overrides. Edge: user explicitly states implementation is done -> advance to Step 6; 0 commits since plan_hash -> stay at Step 5 and present implementation dispatch. User explicit confirmation always overrides the commit signal. If the user states implementation is done with 0 commits, advance to Step 6 with warning: "No commits since plan_hash — proceeding to code review at your confirmation."
 **Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Present confirmation prompt with N and spec_path, then invoke `/review-code {N} --against {spec_path} --max-iterations 3` or user override. Edge: >50% non-feature commits interleaved -> warn.
 **Step 7 — Fix Findings:** review_summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
@@ -318,6 +353,47 @@ Continue? or specify a different command.
 **N derivation (Step 6):** Computed via `git log {plan_hash}..HEAD --oneline | wc -l`. If plan_hash is empty, attempt to populate via `git log --format=%H -1 -- {plan_path}`; if still empty, show `Commits since plan: unknown (plan hash not found)` in the confirmation prompt. The user can override with a specific count or command.
 
 **Step 7 re-runs:** Step 7's internal re-run of `/review-code` within the same invocation skips the prompt. The Step 6 confirmation prompt appears on every orchestrate invocation that detects Step 6, including after Step 7 fixes.
+
+---
+
+## Wrapped Next-Command Output
+
+Every step's exit point outputs a breadcrumb for the user's message history:
+
+```
+── Next ────────────────────────────────────────
+/orchestrate (/next-skill-command args)
+────────────────────────────────────────────────
+```
+
+**Step-to-command mapping:**
+
+| After Step | Next Command |
+|---|---|
+| 1 (Brainstorm) | `/orchestrate (/review-doc <spec_path> --max-iterations 3)` — `<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, output plain `/orchestrate` instead. |
+| 2 (Spec Review) | `/orchestrate (/respond-to-review <round> <spec_path>)` if criticals >0, else `/orchestrate` (plain, no inner command — advances to Step 4 via hint file) |
+| 3 (Respond to Review) | if criticals > 0 after respond-to-review: `/orchestrate (/review-doc <spec_path> --max-iterations 3)`; if criticals = 0: `/orchestrate` (plain, advances to Step 4) |
+| 4 (Write Plan) | `/orchestrate` (Step 5 requires its own analysis before recommending a specific command) |
+| 5 (Implement) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
+| 6 (Code Review) | if findings (criticals or highs > 0): `/orchestrate` (plain — Fast-Path Detection routes to Step 7); if no findings: `/orchestrate` (plain — Fast-Path Detection routes to Step 8) |
+| 7 (Fix Findings) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
+| 8 (Complete) | `/orchestrate` for next feature or new cycle |
+
+**Parsing behavior:** When orchestrate receives `/orchestrate (/some-command args)`:
+
+Note: The full initialization sequence still runs on receipt of a wrapped command (Mode Selection → Session Bootstrap → Step 0). If Step 0 detects RED, auto-handoff takes priority and the inner command is not dispatched. Mode Selection skips the prompt if mode is already persisted.
+
+1. Extract the inner command from parentheses.
+2. Do not update the step field on receipt of a wrapped command. Update only after the inner command completes and orchestrate resumes control, using normal step-detection logic.
+3. Dispatch the inner command via the Skill tool.
+4. After the inner command completes, orchestrate resumes control for state update + next-command output.
+
+**Edge cases:**
+
+- Plain `/orchestrate` (no parens) — normal flow, detect state from hint file.
+- User modifies the inner command before pasting — orchestrate dispatches whatever is in the parens verbatim.
+- Inner command fails — existing error handling (Retry/Skip/Exit).
+- Receiving a wrapped command targeting a step beyond the current hint step is treated as implicit confirmation of all prior steps. This includes Step 5: receiving `/orchestrate (/review-code ...)` while at Step 5 satisfies the explicit-confirmation requirement from Step 5's completion condition. Update step appropriately after inner command completes.
 
 ---
 

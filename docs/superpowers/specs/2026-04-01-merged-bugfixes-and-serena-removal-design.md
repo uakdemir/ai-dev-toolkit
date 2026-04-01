@@ -1,6 +1,6 @@
 # Merged Spec: Handoff Pipeline Bugfixes + Remove Serena Dependency
 
-**Status:** Draft
+**Status:** Approved
 **Date:** 2026-04-01
 **Scope:** orchestrate, session-handoff, api-contract-guard, consolidate, review-doc, .gitignore
 **Conflict analysis:** Zero file overlap between the two workstreams. No ordering dependencies. Can be implemented in any order or in parallel.
