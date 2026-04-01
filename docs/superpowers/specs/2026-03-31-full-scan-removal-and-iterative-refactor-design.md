@@ -119,7 +119,9 @@ Replace with:
      If ambiguous, ask for clarification (step 4).
 ```
 
-No file scanning. The user tells you the feature name.
+No content scanning. The user tells you the feature name.
+
+**Spec field population (hint write):** After accepting the feature name from the user, do a lightweight filename scan of `docs/superpowers/specs/` to find files containing the feature name as a case-insensitive substring in the filename. This is filename matching only — no file content is read. If exactly one file matches, set `spec` to that file path in the written hint. If zero or multiple files match, set `spec` to `''`. This scan is limited to step 3 hint-write and does not affect state resolution or the feature name itself. Downstream step 3 validation (Reviewed vs hint spec) is skipped when `spec` is `''`.
 
 #### Conditional Loading
 
@@ -331,12 +333,12 @@ Note: SCAFFOLD mode output is unchanged — roadmap.md and single-unit spec are 
 
 Before (existing Phase 4 checkpoint text in refactor-to-layers/SKILL.md):
 ```
-Here is the full layer analysis with proposed boundaries and dependency violations. Please review before I generate the output artifacts: strategy.md (layer definitions and migration guidance).
+I've generated the layer architecture spec, structural tests, and provider interfaces. Review the summary at `docs/tmp/layer-summary.md`. Want to adjust anything before finalizing?
 ```
 
 After:
 ```
-Here is the full layer analysis with proposed boundaries and dependency violations. Please review before I generate the output artifacts: strategy.md (layer definitions and migration guidance), roadmap.md (ordered layer extraction list), and a single-unit spec for the first layer.
+I've generated the layer architecture spec, structural tests, provider interfaces, roadmap.md (ordered layer extraction list), and a single-unit spec for the first layer. Review the summary at `docs/tmp/layer-summary.md`. Want to adjust anything before finalizing?
 ```
 
 **`--next-unit` behavior:**
@@ -422,6 +424,10 @@ line, not the full rationale text):
     for rows where Phase is `coding` or `both` AND Recommended Skill contains
     `refactor-to-monorepo` or `refactor-to-layers`. Surface any matching entries
     to the user before beginning execution.
+    Note: the `refactor-to-layers` filter branch is reserved for future use.
+    refactor-to-layers has no checklist crystallization section, so the
+    `refactor-to-layers` filter will currently return empty. This is expected —
+    do not warn the user on an empty result from the `refactor-to-layers` branch.
 ```
 
 **Step 8 Phase 2 change:**
@@ -505,6 +511,18 @@ Update the refactor skill descriptions to mention iterative unit-at-a-time:
 - help skill no longer lists implement-plan
 
 ## Files Changed
+
+**`--next-unit` help-text lines (both refactor skills):** The "add --next-unit to help-text USAGE/EXAMPLES" action for `refactor-to-monorepo/SKILL.md` and `refactor-to-layers/SKILL.md` means adding the following exact lines to each skill's `<help-text>` block:
+
+```
+FLAGS
+  --next-unit   Generate spec for next unchecked unit in roadmap
+
+EXAMPLES
+  /refactor-to-monorepo --next-unit   Produce spec for next extraction unit
+```
+
+(Replace `refactor-to-monorepo` with `refactor-to-layers` in the EXAMPLES line for `refactor-to-layers/SKILL.md`.)
 
 **Ordering constraint:** Create `orchestrate/references/refactor-execution.md` (copying pattern descriptions from `implement-plan/references/execution-patterns.md` — see section 2.5 for content spec) before deleting any implement-plan files. The implement-plan Delete rows must come after the Create row in execution order.
 
