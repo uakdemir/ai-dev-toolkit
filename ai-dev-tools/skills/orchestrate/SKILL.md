@@ -278,7 +278,7 @@ After --next-unit completes and produces a new single-unit spec, write hint
 to continue — it does not automatically advance to Step 2 in the same session.
 
 Note: The existing Step 1 logic uses `tmp/current-roadmap.md` for general feature tracking. Refactor roadmaps are separate files checked in addition to `tmp/current-roadmap.md`. Refactor roadmap checks take priority.
-**Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 3` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
+**Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 2` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
 **Step 3 — Respond to Review:** review-doc-summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
 **Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. When invoking superpowers:writing-plans, prepend to the dispatch prompt: "After saving the plan, do NOT present the Execution Handoff section. Return control to the caller. Orchestrate manages execution model selection at Step 5." If writing-plans still presents an Execution Handoff section, orchestrate ignores it and proceeds to Step 5. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
 **Step 5 — Implement:** Plan exists, implementation not confirmed complete. If the current feature is a refactor unit (matched via roadmap check): skip execution model selection, execute directly using `references/refactor-execution.md` following Pre-flight → File Operations → Verification. Otherwise: Read references/implementation-step.md: generate task graph, execution model recommendation, dispatch with overrides. Edge: user explicitly states implementation is done -> advance to Step 6; 0 commits since plan_hash -> stay at Step 5 and present implementation dispatch. User explicit confirmation always overrides the commit signal. If the user states implementation is done with 0 commits, advance to Step 6 with warning: "No commits since plan_hash — proceeding to code review at your confirmation."
@@ -322,7 +322,7 @@ If a refactor roadmap exists with unchecked items:
 
 ## Review Confirmation Prompts
 
-Steps 2 and 6 present a confirmation prompt before invoking the review skill. The prompt shows the full command with `--max-iterations 3` as default.
+Steps 2 and 6 present a confirmation prompt before invoking the review skill. The prompt shows the full command with `--max-iterations 2` (review-doc) or `--max-iterations 3` (review-code) as default.
 
 **Step 2 prompt:**
 ```
@@ -331,7 +331,7 @@ Feature: <feature-name>
 Spec: <spec_path>
 
 Will run:
-  /review-doc <spec_path> --max-iterations 3
+  /review-doc <spec_path> --max-iterations 2
 
 Continue? or specify a different command.
 ```
@@ -366,16 +366,26 @@ Every step's exit point outputs a breadcrumb for the user's message history:
 ────────────────────────────────────────────────
 ```
 
+**Phase boundary breadcrumbs** use `/clear →` to recommend clearing context before continuing. This frees accumulated agent dispatch context between heavy phases (spec review cycle, implementation, code review cycle). The hint file persists all state needed for Fast-Path Detection to resume at the correct step.
+
+```
+── Next ────────────────────────────────────────
+/clear → /orchestrate (/next-skill-command args)
+────────────────────────────────────────────────
+```
+
+Phase boundaries: Steps 2-3 advancing to Step 4, Step 5 advancing to Step 6, Steps 6-7 advancing to Step 8. Steps looping within a phase (2↔3, 6↔7) do NOT recommend `/clear`.
+
 **Step-to-command mapping:**
 
 | After Step | Next Command |
 |---|---|
-| 1 (Brainstorm) | `/orchestrate (/review-doc <spec_path> --max-iterations 3)` — `<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, output plain `/orchestrate` instead. |
-| 2 (Spec Review) | `/orchestrate (/respond-to-review <round> <spec_path>)` if criticals >0, else `/orchestrate` (plain, no inner command — advances to Step 4 via hint file) |
-| 3 (Respond to Review) | if criticals > 0 after respond-to-review: `/orchestrate (/review-doc <spec_path> --max-iterations 3)`; if criticals = 0: `/orchestrate` (plain, advances to Step 4) |
+| 1 (Brainstorm) | `/orchestrate (/review-doc <spec_path> --max-iterations 2)` — `<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, output plain `/orchestrate` instead. |
+| 2 (Spec Review) | `/orchestrate (/respond-to-review <round> <spec_path>)` if criticals >0, else `/clear` → `/orchestrate` (phase boundary — advancing to Step 4) |
+| 3 (Respond to Review) | if criticals > 0 after respond-to-review: `/orchestrate (/review-doc <spec_path> --max-iterations 2)`; if criticals = 0: `/clear` → `/orchestrate` (phase boundary — advancing to Step 4) |
 | 4 (Write Plan) | `/orchestrate` (Step 5 requires its own analysis before recommending a specific command) |
-| 5 (Implement) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
-| 6 (Code Review) | if findings (criticals or highs > 0): `/orchestrate` (plain — Fast-Path Detection routes to Step 7); if no findings: `/orchestrate` (plain — Fast-Path Detection routes to Step 8) |
+| 5 (Implement) | `/clear` → `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` (phase boundary — implementation complete) |
+| 6 (Code Review) | if findings (criticals or highs > 0): `/orchestrate` (plain — Fast-Path Detection routes to Step 7); if no findings: `/clear` → `/orchestrate` (phase boundary — advancing to Step 8) |
 | 7 (Fix Findings) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
 | 8 (Complete) | `/orchestrate` for next feature or new cycle |
 
