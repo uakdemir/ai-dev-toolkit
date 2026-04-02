@@ -51,11 +51,11 @@ Fact-check every verifiable claim in each document against the actual source cod
 
 ## Output Format
 
-**Do NOT write markdown findings.** Instead, write structured JSON directly to `tmp/review.json`.
+**Do NOT write markdown findings.** Instead, write structured JSON directly to `tmp/review-doc.json`.
 
 ### Procedure
 
-1. Read `tmp/review.json` (already written by the reviewer in this round).
+1. Read `tmp/review-doc.json` (already written by the reviewer in this round).
 2. For each claim you verify, record the verdict.
 3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
    - `"category": "fact-check"`
@@ -72,7 +72,7 @@ Fact-check every verifiable claim in each document against the actual source cod
    ```
 5. Compute `fact_check_accuracy`: `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
 6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues).
-7. Rewrite `tmp/review.json` with the updated content using the Write tool.
+7. Rewrite `tmp/review-doc.json` with the updated content using the Write tool.
 
 ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.
 

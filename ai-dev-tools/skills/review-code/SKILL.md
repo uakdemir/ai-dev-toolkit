@@ -50,7 +50,7 @@ Examples:
 ## Setup
 
 1. Ensure `./tmp/` directory exists (create if needed).
-2. Delete stale files from prior runs: `./tmp/review.json`, `./tmp/review_summary.md`, `./tmp/fix-report.json`, `./tmp/iteration-*.md`.
+2. Delete stale files from prior runs: `./tmp/review-code.json`, `./tmp/review-code-summary.md`, `./tmp/review-code-fix-report.json`, `./tmp/review-code-iteration-*.md`.
 3. Do NOT delete `./tmp/past-issues-backlog.md` — it is intentionally append-only across runs.
 
 ## Pre-Flight Checks
@@ -85,7 +85,7 @@ For iteration 1 to max_iterations:
 
   REVIEW PHASE:
     Dispatch single reviewer agent at max-model
-    Agent produces tmp/review.json directly (no synthesis)
+    Agent produces tmp/review-code.json directly (no synthesis)
 
   VALIDATION:
     Recount severities from issues array
@@ -96,10 +96,10 @@ For iteration 1 to max_iterations:
     Run verification commands, compare to baseline
     If no regressions:
       BACKLOG WRITING (all issues as status: found) → tmp/past-issues-backlog.md
-      ITERATION LOG → tmp/iteration-N.md
+      ITERATION LOG → tmp/review-code-iteration-N.md
       Jump to Final Report
     If regressions:
-      Inject synthetic criticals into tmp/review.json (append to issues array,
+      Inject synthetic criticals into tmp/review-code.json (append to issues array,
         update critical_count), re-write the file
       Fall through to Fix Phase
 
@@ -112,7 +112,7 @@ For iteration 1 to max_iterations:
     Track regressions for next iteration's reviewer and fixer context
 
   BACKLOG WRITING (with dispositions from fix-report.json) → tmp/past-issues-backlog.md
-  ITERATION LOG → tmp/iteration-N.md
+  ITERATION LOG → tmp/review-code-iteration-N.md
 ```
 
 No final-gate pattern for review-code. Since all rounds already use max-model with the same single agent, a redundant review-only round on unchanged code adds no value. Verification commands serve as the quality gate instead.
@@ -126,7 +126,7 @@ Single agent dispatched at `max-model`. Receives:
 - ADRs (scope-based filtering, up to 200 lines)
 - Previous iteration findings (if iteration > 1)
 
-Read `prompts/reviewer.md` from this skill's directory for dispatch instructions. The reviewer writes `tmp/review.json` directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
+Read `prompts/reviewer.md` from this skill's directory for dispatch instructions. The reviewer writes `tmp/review-code.json` directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
 
 ## Context Budgets
 
@@ -146,7 +146,7 @@ Single agent dispatched at `max-model`. Receives:
 - Verification regressions (if any)
 - Spec content (if `--against` provided)
 
-Read `prompts/coder.md` from this skill's directory for dispatch instructions. Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/fix-report.json`.
+Read `prompts/coder.md` from this skill's directory for dispatch instructions. Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/review-code-fix-report.json`.
 
 ## Verification Commands
 
@@ -171,7 +171,7 @@ Scope-based filtering:
 After each iteration, append all issues to `tmp/past-issues-backlog.md`:
 1. Read `ai-dev-tools/references/backlog-entry-format.md` for the entry template.
 2. If `./tmp/past-issues-backlog.md` does not exist, create it with the standard header.
-3. Cross-reference with `tmp/fix-report.json` for dispositions (`fixed`, `deferred`, `pushed-back`).
+3. Cross-reference with `tmp/review-code-fix-report.json` for dispositions (`fixed`, `deferred`, `pushed-back`).
 4. On stop-check iterations (no fix phase): all issues recorded as `status: found`.
 5. On abort: record all issues as `status: found` with warning.
 6. `Source: review-code` for all entries.
@@ -186,15 +186,15 @@ After each iteration, append all issues to `tmp/past-issues-backlog.md`:
 
 | File | Purpose | Consumer |
 |---|---|---|
-| `tmp/review.json` | Structured JSON from last iteration | Machines |
-| `tmp/review_summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
-| `tmp/fix-report.json` | Coder dispositions per issue | Orchestrator |
+| `tmp/review-code.json` | Structured JSON from last iteration | Machines |
+| `tmp/review-code-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
+| `tmp/review-code-fix-report.json` | Coder dispositions per issue | Orchestrator |
 | `tmp/past-issues-backlog.md` | Full issue history across iterations | Pattern mining |
-| `tmp/iteration-N.md` | Per-iteration log | Debugging, audit |
+| `tmp/review-code-iteration-N.md` | Per-iteration log | Debugging, audit |
 
 ## Review Summary Format
 
-Generate `tmp/review_summary.md` using this template:
+Generate `tmp/review-code-summary.md` using this template:
 
 ```markdown
 # Review Summary
@@ -239,15 +239,15 @@ Review Code Complete
   Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed
   Verification: all passing
   Commits added: abc1234, def5678
-  Summary: tmp/review_summary.md
-  Full review: tmp/review.json
+  Summary: tmp/review-code-summary.md
+  Full review: tmp/review-code.json
   Backlog: tmp/past-issues-backlog.md
 ```
 
 ## Final Report
 
 When the loop completes (criticals zero + verification pass, or max iterations exhausted):
-1. Generate `tmp/review_summary.md` from the last iteration's `tmp/review.json` (top 10 issues by severity, then descending confidence).
+1. Generate `tmp/review-code-summary.md` from the last iteration's `tmp/review-code.json` (top 10 issues by severity, then descending confidence).
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (below).
 4. Print terminal output.
@@ -257,7 +257,7 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 
 **Trigger:** Status is "Approved with suggestions" (high/medium issues remain, zero criticals).
 
-After printing the terminal output, auto-triage each remaining issue from `tmp/review.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
+After printing the terminal output, auto-triage each remaining issue from `tmp/review-code.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
 
 **Auto-triage rules (per issue):**
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly — same approach as the fixer agent (edit the file, run `--verify` commands if configured).
@@ -282,7 +282,7 @@ Applied: N | Deferred: N | Pushed back: N
 
 If any fixes were applied, commit with: `fix(review-code): apply N review suggestions`.
 
-After all issues are processed, update `tmp/review_summary.md` with final dispositions and reprint the terminal output with updated counts.
+After all issues are processed, update `tmp/review-code-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
 **Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first):
 
@@ -314,11 +314,11 @@ Orchestrator maintains running counters across iterations:
 - `total_deferred` (flat count)
 - `total_pushed_back` (flat count)
 
-Parse `tmp/fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `after_sha != before_sha`, append the short SHA. This populates the "Commits added" line in terminal output.
+Parse `tmp/review-code-fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `after_sha != before_sha`, append the short SHA. This populates the "Commits added" line in terminal output.
 
 ## Verification with `--max-iterations 1`
 
-With a single iteration: if the reviewer finds zero criticals, the stop-check runs verification. If regressions are detected, the orchestrator appends synthetic critical issues to `tmp/review.json` (update the issues array and `critical_count`), re-writes the file, then continues to the fix phase within the same iteration. After the fix phase, run verification one final time to determine terminal status. The loop then ends (cap reached). If regressions persist, status is "Issues Found." If resolved, apply normal status logic.
+With a single iteration: if the reviewer finds zero criticals, the stop-check runs verification. If regressions are detected, the orchestrator appends synthetic critical issues to `tmp/review-code.json` (update the issues array and `critical_count`), re-writes the file, then continues to the fix phase within the same iteration. After the fix phase, run verification one final time to determine terminal status. The loop then ends (cap reached). If regressions persist, status is "Issues Found." If resolved, apply normal status logic.
 
 ## When `--verify` Is Not Provided
 
@@ -334,7 +334,7 @@ First match wins:
 
 ## Iteration Log Format
 
-Write to `tmp/iteration-N.md`:
+Write to `tmp/review-code-iteration-N.md`:
 
 ```markdown
 # Iteration N
@@ -354,7 +354,7 @@ Write to `tmp/iteration-N.md`:
 
 ## JSON Schema
 
-The review-code JSON schema for `tmp/review.json`:
+The review-code JSON schema for `tmp/review-code.json`:
 
 ```json
 {

@@ -28,7 +28,7 @@ git commit -m "fix(review-code): resolve N issues from iteration M"
 
 (Replace N with count of fixed issues, M with iteration number.)
 
-5. Write `tmp/fix-report.json` with dispositions for every issue in review.json (NOT verification regressions):
+5. Write `tmp/review-code-fix-report.json` with dispositions for every issue in review-code.json (NOT verification regressions):
 
 ```json
 {
@@ -43,7 +43,7 @@ git commit -m "fix(review-code): resolve N issues from iteration M"
 ## Rules
 
 - Every issue must have a disposition entry.
-- Use Edit for targeted code fixes. Use Write only for `tmp/fix-report.json`.
+- Use Edit for targeted code fixes. Use Write only for `tmp/review-code-fix-report.json`.
 - Make minimal changes. Do not refactor surrounding code.
 - Do not add error handling, comments, or types beyond what's needed for the fix.
 - Read files before editing — understand the context.

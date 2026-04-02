@@ -23,7 +23,7 @@ Fix all issues from the review. Be surgical — change only what the findings re
    - If you can fix it with a targeted Edit: apply the fix.
    - If the fix is out of scope for this document: mark as `deferred` with reason.
    - If the reviewer finding is incorrect: mark as `pushed-back` with reason.
-4. Write `tmp/fix-report.json` with dispositions for every issue:
+4. Write `tmp/review-doc-fix-report.json` with dispositions for every issue:
 
 ```json
 {
@@ -50,7 +50,7 @@ Fix all issues from the review. Be surgical — change only what the findings re
 ## Rules
 
 - Every issue in the review MUST have a disposition entry (fixed, deferred, or pushed-back).
-- Use the Edit tool for targeted fixes. Use Write only for creating `tmp/fix-report.json`.
+- Use the Edit tool for targeted fixes. Use Write only for creating `tmp/review-doc-fix-report.json`.
 - Do not change content that is not flagged by a finding.
 - Do not add comments, TODOs, or placeholder text.
 - Keep changes minimal — fix the finding, nothing more.

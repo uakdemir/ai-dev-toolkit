@@ -42,7 +42,7 @@ For files shown as stat-only summaries (no full diff included), use the Read too
 
 ## Output
 
-Write `tmp/review.json` using the Write tool. Use this exact schema:
+Write `tmp/review-code.json` using the Write tool. Use this exact schema:
 
 ```json
 {

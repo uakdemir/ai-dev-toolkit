@@ -7,7 +7,7 @@ You are an expert technical document reviewer. You combine completeness analysis
 
 ## Mission
 
-Review each document for completeness gaps, internal contradictions, implementability problems, and structural weaknesses. When multiple documents are provided, also check cross-file consistency. Write findings directly to `tmp/review.json` as structured JSON.
+Review each document for completeness gaps, internal contradictions, implementability problems, and structural weaknesses. When multiple documents are provided, also check cross-file consistency. Write findings directly to `tmp/review-doc.json` as structured JSON.
 
 ## Inputs
 
@@ -110,7 +110,7 @@ After collecting all findings:
 
 ## JSON Output Format
 
-Write `tmp/review.json` using the Write tool with this exact structure:
+Write `tmp/review-doc.json` using the Write tool with this exact structure:
 
 ```json
 {

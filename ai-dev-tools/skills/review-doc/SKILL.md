@@ -7,7 +7,7 @@ description: "Use when reviewing analysis specs, design documents, or implementa
 
 Iterative document review with model tiering. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. In the final round, a sequential fact-checker verifies claims against the codebase. Produces a curated human-readable summary.
 
-**Output:** `tmp/review.json` (structured, machine-readable) + `tmp/review_summary.md` (curated human summary, max 10 items + aggregates).
+**Output:** `tmp/review-doc.json` (structured, machine-readable) + `tmp/review-doc-summary.md` (curated human summary, max 10 items + aggregates).
 
 ## Argument Parsing
 
@@ -60,7 +60,7 @@ Examples:
 ## Setup
 
 1. Ensure `./tmp/` directory exists (create if needed).
-2. Delete stale files from prior runs: `./tmp/review.json`, `./tmp/review_summary.md`, `./tmp/fix-report.json`, `./tmp/iteration-*.md`.
+2. Delete stale files from prior runs: `./tmp/review-doc.json`, `./tmp/review-doc-summary.md`, `./tmp/review-doc-fix-report.json`, `./tmp/review-doc-iteration-*.md`.
 
 ## Pre-Flight Checks
 
@@ -88,11 +88,11 @@ For single file, keep `Reviewed: <doc-path>` (no count suffix).
 
 Single-pass mode (default). Three agents dispatched sequentially at max-model:
 
-1. **Reviewer** — reads each document, applies the combined checklist, writes `tmp/review.json` directly.
-2. **Fixer** — reads `tmp/review.json`, applies fixes to the documents, writes `tmp/fix-report.json` with dispositions. Hash verification before/after: if all hashes are unchanged after fixer, print `Warning: document was not modified. Proceeding to next step.` and continue.
-3. **Fact-checker** — reads `tmp/review.json`, appends fact-check issues, rewrites the file.
+1. **Reviewer** — reads each document, applies the combined checklist, writes `tmp/review-doc.json` directly.
+2. **Fixer** — reads `tmp/review-doc.json`, applies fixes to the documents, writes `tmp/review-doc-fix-report.json` with dispositions. Hash verification before/after: if all hashes are unchanged after fixer, print `Warning: document was not modified. Proceeding to next step.` and continue.
+3. **Fact-checker** — reads `tmp/review-doc.json`, appends fact-check issues, rewrites the file.
 
-Then jump to Final Report. In single-pass mode, the Final Report step reads `tmp/fix-report.json` to populate aggregate counts, same as in iterative mode.
+Then jump to Final Report. In single-pass mode, the Final Report step reads `tmp/review-doc-fix-report.json` to populate aggregate counts, same as in iterative mode.
 
 ## Iteration Flow
 
@@ -105,9 +105,9 @@ While iteration <= max_iterations OR is_final_gate:
 
   REVIEW PHASE:
     If NOT is_final_gate:
-      Dispatch 1 reviewer at min-model -> writes tmp/review.json
+      Dispatch 1 reviewer at min-model -> writes tmp/review-doc.json
     If is_final_gate:
-      Dispatch 1 reviewer at max-model -> writes tmp/review.json
+      Dispatch 1 reviewer at max-model -> writes tmp/review-doc.json
 
   VALIDATION:
     Recount severities from issues array (do not trust counts from JSON)
@@ -127,11 +127,11 @@ While iteration <= max_iterations OR is_final_gate:
     Fix-report.json with dispositions
 
   FACT-CHECK PHASE (final gate only):
-    Backup tmp/review.json before fact-checker runs.
+    Backup tmp/review-doc.json before fact-checker runs.
     Dispatch fact-checker at max-model sequentially (after fixer completes).
     If fact-checker fails, fall back to backup with warning.
 
-  ITERATION LOG -> tmp/iteration-N.md
+  ITERATION LOG -> tmp/review-doc-iteration-N.md
   iteration += 1
 ```
 
@@ -162,11 +162,11 @@ No fact-checker in early rounds. Early rounds focus on structural/completeness i
 
 Three agents dispatched **sequentially** at max-model:
 
-1. **Merged Reviewer** — read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt: `Agent(prompt: <reviewer-prompt>, model: <max-model>)`. The reviewer writes `tmp/review.json`.
+1. **Merged Reviewer** — read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt: `Agent(prompt: <reviewer-prompt>, model: <max-model>)`. The reviewer writes `tmp/review-doc.json`.
 
-2. **Fixer** — read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>, model: <max-model>)`. The fixer reads `tmp/review.json`, applies fixes, writes `tmp/fix-report.json`.
+2. **Fixer** — read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>, model: <max-model>)`. The fixer reads `tmp/review-doc.json`, applies fixes, writes `tmp/review-doc-fix-report.json`.
 
-3. **Codebase Fact-Checker** — backup `tmp/review.json` first. Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <max-model>)`. The fact-checker reads `tmp/review.json`, appends fact-check issues, sets `fact_check_claims` and `fact_check_accuracy`, rewrites the file. If the fact-checker fails, restore the backup and add a warning.
+3. **Codebase Fact-Checker** — backup `tmp/review-doc.json` first. Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <max-model>)`. The fact-checker reads `tmp/review-doc.json`, appends fact-check issues, sets `fact_check_claims` and `fact_check_accuracy`, rewrites the file. If the fact-checker fails, restore the backup and add a warning.
 
 All three run sequentially — each depends on the previous step's output.
 
@@ -178,7 +178,7 @@ Dispatched as a single Agent. Model depends on the round:
 
 Read `prompts/coder.md` for complete dispatch instructions.
 
-The orchestrator reads `tmp/review.json`, extracts all issues grouped by severity (critical first, then high, then medium), and includes them in the Agent dispatch prompt as conversation context. The dispatch prompt must include:
+The orchestrator reads `tmp/review-doc.json`, extracts all issues grouped by severity (critical first, then high, then medium), and includes them in the Agent dispatch prompt as conversation context. The dispatch prompt must include:
 - All issues grouped by severity
 - The document paths list:
   ```
@@ -189,9 +189,9 @@ The orchestrator reads `tmp/review.json`, extracts all issues grouped by severit
   For single file, use the same list format with one entry.
 - Reference document path (if `--against` provided)
 
-The fixer reads each document's content using the Read tool (not passed via dispatch context). Edits documents using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/fix-report.json`).
+The fixer reads each document's content using the Read tool (not passed via dispatch context). Edits documents using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/review-doc-fix-report.json`).
 
-Produces `tmp/fix-report.json` with dispositions for every issue:
+Produces `tmp/review-doc-fix-report.json` with dispositions for every issue:
 - `fixed` -- issue resolved
 - `deferred` -- out of scope, with reason
 - `pushed-back` -- reviewer finding is incorrect, with reason
@@ -200,17 +200,17 @@ Produces `tmp/fix-report.json` with dispositions for every issue:
 
 The fact-checker runs **sequentially after the fixer** in the final round only. It is always terminal — no fix phase follows.
 
-Before dispatch, the orchestrator backs up `tmp/review.json` (the reviewer+fixer output). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
+Before dispatch, the orchestrator backs up `tmp/review-doc.json` (the reviewer+fixer output). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
 
 Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <max-model>)`.
 
 The fact-checker:
-1. Reads `tmp/review.json`
+1. Reads `tmp/review-doc.json`
 2. Verifies claims against the codebase using Read/Grep/Glob tools
 3. Appends fact-check issues to the `issues` array with `category: "fact-check"`
 4. Populates `fact_check_claims` and computes `fact_check_accuracy`
 5. Recomputes `critical_count` and `high_count` from the full issues array
-6. Rewrites `tmp/review.json`
+6. Rewrites `tmp/review-doc.json`
 
 ## Hash Verification
 
@@ -223,14 +223,14 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 
 | File | Purpose | Consumer |
 |---|---|---|
-| `tmp/review.json` | Structured JSON from last iteration | `/respond-to-review`, machines |
-| `tmp/review_summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
-| `tmp/fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
-| `tmp/iteration-N.md` | Per-iteration log | Debugging, audit |
+| `tmp/review-doc.json` | Structured JSON from last iteration | `/respond-to-review`, machines |
+| `tmp/review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
+| `tmp/review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
+| `tmp/review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
 
 ## Review Summary Format
 
-The orchestrator generates `tmp/review_summary.md` directly during the Final Report step. Format:
+The orchestrator generates `tmp/review-doc-summary.md` directly during the Final Report step. Format:
 
 ```markdown
 # Review Summary
@@ -276,8 +276,8 @@ Review Doc Complete
   Remaining: 0 Critical | 2 High | 1 Medium
   Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed
   Fact-check: X/Y claims accurate (Z%)
-  Summary: tmp/review_summary.md
-  Full review: tmp/review.json
+  Summary: tmp/review-doc-summary.md
+  Full review: tmp/review-doc.json
 ```
 
 The `Reviewed:` line supports three formats:
@@ -289,7 +289,7 @@ The `Reviewed:` line supports three formats:
 
 When the loop completes (final gate passes or max iterations exhausted):
 
-1. The orchestrator generates `tmp/review_summary.md` directly -- no agent dispatch needed. Read `tmp/review.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
+1. The orchestrator generates `tmp/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (see Status Logic below).
 4. Print terminal output (see Terminal Output above).
@@ -299,7 +299,7 @@ When the loop completes (final gate passes or max iterations exhausted):
 
 **Trigger:** Status is "Approved with suggestions" (high/medium issues remain, zero criticals).
 
-After printing the terminal output, auto-triage each remaining issue from `tmp/review.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
+After printing the terminal output, auto-triage each remaining issue from `tmp/review-doc.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
 
 **Auto-triage rules (per issue):**
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly to the document — surgical edits only.
@@ -324,7 +324,7 @@ Applied: N | Deferred: N | Pushed back: N
 
 If any fixes were applied, commit with: `fix(review-doc): apply N review suggestions`.
 
-After all issues are processed, update `tmp/review_summary.md` with final dispositions and reprint the terminal output with updated counts.
+After all issues are processed, update `tmp/review-doc-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
 **Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first):
 
@@ -361,7 +361,7 @@ The orchestrator maintains the following state across the loop:
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 
-After each fix phase, parse `tmp/fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/review.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
+After each fix phase, parse `tmp/review-doc-fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/review-doc.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
 
 ## Status Logic
 
@@ -373,7 +373,7 @@ First match wins:
 
 ## Iteration Log Format
 
-Write to `tmp/iteration-N.md` after each iteration:
+Write to `tmp/review-doc-iteration-N.md` after each iteration:
 
 ```markdown
 # Iteration N
@@ -391,7 +391,7 @@ Write to `tmp/iteration-N.md` after each iteration:
 
 ## JSON Schema
 
-The review-doc schema for `tmp/review.json` validation reference:
+The review-doc schema for `tmp/review-doc.json` validation reference:
 
 ```json
 {
