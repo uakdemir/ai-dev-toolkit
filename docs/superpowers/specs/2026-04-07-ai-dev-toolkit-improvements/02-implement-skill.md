@@ -21,7 +21,7 @@ This is overloaded. Three concrete pain points:
 
 **In scope:**
 - Create new skill `ai-dev-tools/skills/implement/`
-- Move `implementation-step.md` and `task-graph.md` from `orchestrate/references/` to `implement/references/`
+- Move `implementation-step.md`, `task-graph.md`, AND `refactor-execution.md` from `orchestrate/references/` to `implement/references/` (refactor-unit handling moves into `/implement` along with the normal-feature path — see "Refactor-Unit Branch Handling" below)
 - Define a clean argument signature for `/implement`
 - Rewrite orchestrate Step 5 as a delegating wrapper that emits a breadcrumb to `/implement <plan>` instead of dispatching inline
 
@@ -38,9 +38,11 @@ This is overloaded. Three concrete pain points:
 | `ai-dev-tools/skills/implement/SKILL.md` | **CREATE** — full new skill |
 | `ai-dev-tools/skills/implement/references/implementation-step.md` | **MOVE** from `orchestrate/references/implementation-step.md` |
 | `ai-dev-tools/skills/implement/references/task-graph.md` | **MOVE** from `orchestrate/references/task-graph.md` |
-| `ai-dev-tools/skills/orchestrate/SKILL.md` | **EDIT** — Step 5 becomes delegating wrapper; Conditional Loading section drops the two moved files |
+| `ai-dev-tools/skills/implement/references/refactor-execution.md` | **MOVE** from `orchestrate/references/refactor-execution.md` |
+| `ai-dev-tools/skills/orchestrate/SKILL.md` | **EDIT** — Step 5 becomes delegating wrapper; Conditional Loading section drops the `implementation-step.md` reference AND the `refactor-execution.md` reference block (`task-graph.md` was only loaded transitively by `implementation-step.md` and is not directly referenced in `orchestrate/SKILL.md`) |
 | `ai-dev-tools/skills/orchestrate/references/implementation-step.md` | **DELETE** (moved) |
 | `ai-dev-tools/skills/orchestrate/references/task-graph.md` | **DELETE** (moved) |
+| `ai-dev-tools/skills/orchestrate/references/refactor-execution.md` | **DELETE** (moved) |
 
 ## Argument Signature
 
@@ -135,6 +137,22 @@ The `--skip-plan-recommendation` flag exists ONLY to suppress this prompt on a r
 
 ### Step D — Dispatch with Execution Model
 
+#### Refactor-Unit Branch Handling (pre-check)
+
+Before building the task graph, `/implement` performs a refactor-unit check identical to the one that orchestrate Step 5 does today:
+
+1. Check if a refactor roadmap exists (`docs/monorepo-strategy/roadmap.md` or `docs/layer-architecture/roadmap.md`) with unchecked items.
+2. If so, perform a case-insensitive substring match of the feature name (from the resolved plan/spec filename, or from the hint file's `feature:` field when invoked via orchestrate) against the bold roadmap item labels (text between `**` markers in the checkbox line, not the full rationale).
+3. **If the match succeeds → refactor-unit path:**
+   - Skip the task graph generation (step 1 below) and the execution model recommendation (step 2 below).
+   - Load `references/refactor-execution.md` and execute directly following its Pre-flight → File Operations → Verification sequence.
+   - Perform the checklist pre-flight surfacing (`tmp/checklists/index.md` filter for `refactor-to-monorepo` or `refactor-to-layers` rows) per the rules previously documented in `orchestrate/SKILL.md` Conditional Loading section.
+   - `--model` flag is **ignored** on the refactor-unit path (refactor execution is inherently single-agent). If `--model` is explicitly passed, print `"warning: --model ignored for refactor-unit execution"` and continue.
+   - After the refactor-execution sequence completes, return control to the caller (orchestrate or standalone shell).
+4. **If the match fails (normal-feature path) → proceed to steps 1-6 below:**
+
+#### Normal-feature path
+
 Same as today's `implementation-step.md` reference (which is now under `implement/references/`):
 
 1. Build task graph from plan
@@ -147,29 +165,74 @@ Same as today's `implementation-step.md` reference (which is now under `implemen
    [3] Clear context + single-agent — recommended for [tight context budget]
    [4] Parallel helper agents — recommended for [N parallelizable tasks]
    ```
-5. If user picks Option [3] (clear-context) → print the exit message with the `/clear → /implement <path> --model single` breadcrumb and exit (do not dispatch). The breadcrumb includes `--model single` explicitly so that on re-entry after `/clear`, the picker is bypassed regardless of whether the user edits the command before pasting. If the user removes `--model` from the breadcrumb before pasting, the re-invocation falls back to the default model selection defined below.
+5. If user picks Option [3] (clear-context) → **write the early-exit marker file `tmp/implement-exit-status.md` with `early_exit: clear_context` (see Return Contract with Orchestrate below for the full schema), then** print the exit message with the `/clear → /implement <path> --model single` breadcrumb and exit (do not dispatch). The breadcrumb includes `--model single` explicitly so that on re-entry after `/clear`, the picker is bypassed regardless of whether the user edits the command before pasting. If the user removes `--model` from the breadcrumb before pasting, the re-invocation falls back to the default model selection defined below. The marker file exists solely to signal this early exit to orchestrate so it doesn't stomp on the clear-context breadcrumb; see Return Contract with Orchestrate for orchestrate-side handling.
 6. Else dispatch the chosen execution model with the appropriate override preamble
 
 ### Default Model Selection
 
 When `--model` is not passed and the picker is not presented (e.g., when `/implement` is invoked standalone without explicit arguments and no picker interaction occurs), the default execution model is **single** (single-agent in current context). Override explicitly with `--model single`, `--model subagent`, or `--model parallel`. (`--model clear-context` is not a valid value — see Edge Case 7.)
 
+### Return Contract with Orchestrate
+
+When `/implement` is invoked via orchestrate (wrapped breadcrumb: `/orchestrate (/implement <plan>)`), orchestrate resumes control after `/implement` returns and runs its post-implement logic (auto-commit verification, `step: 6` hint-file write, Step 5 → Step 6 breadcrumb emission — all defined in spec 04). But not every return path from `/implement` is a normal completion — the **Option [3] clear-context path** exits *early*, before any implementation has run, and expects the user to re-invoke `/implement` in a fresh context. If orchestrate treated that early exit like a normal completion, it would run auto-commit verification against an unchanged tree, overwrite the hint file with `step: 6`, and emit its own Step 5 → Step 6 breadcrumb — stomping on `/implement`'s `/clear → /implement <path> --model single` breadcrumb.
+
+To prevent this, `/implement` signals early-exit to orchestrate via a **marker file**:
+
+**Marker file: `tmp/implement-exit-status.md`**
+
+- **Location:** Always `tmp/implement-exit-status.md` (plain file, not YAML frontmatter).
+- **Written by:** `/implement` only.
+- **Read by:** orchestrate Step 5 post-`/implement` logic (see spec 04 for details).
+- **Lifecycle:** `/implement` writes the marker **immediately before** exiting via Option [3] (clear-context dispatch). Orchestrate reads and **deletes** the marker as part of its post-`/implement` resume sequence. If the marker is absent when orchestrate resumes, normal-completion logic runs (the default).
+- **Schema (plain key-value, one per line):**
+  ```
+  early_exit: clear_context
+  exit_reason: user picked option [3] at execution model picker
+  exit_time: <ISO-8601 timestamp>
+  plan_or_spec: <absolute path that /implement was invoked with>
+  ```
+  `early_exit` is the required discriminator; orchestrate matches on the literal value `clear_context`. The other three fields are informational. Unknown or missing fields MUST NOT cause orchestrate to ignore the marker — only the `early_exit:` field is load-bearing.
+- **When to write the marker:** Only on Option [3] clear-context exit. **Do NOT** write it on:
+  - Normal dispatch completion (Options [1], [2], [4]) — orchestrate's normal resume path applies.
+  - `--model single|subagent|parallel` dispatch returning control after implementation completes — normal resume.
+  - Refactor-unit path returning after `refactor-execution.md` completes — normal resume.
+  - Error exits from path-resolution or plan-not-found errors — orchestrate's existing error-handling path applies; marker is unnecessary.
+
+**Orchestrate-side behavior (canonical definition lives here; spec 04 references this section):** After `/implement` returns, orchestrate MUST:
+1. Check if `tmp/implement-exit-status.md` exists.
+2. If **yes** and `early_exit: clear_context`:
+   - **Skip** auto-commit verification.
+   - **Do NOT** write `step: 6` to the hint file (hint stays at `step: 5`).
+   - **Do NOT** emit the Step 5 → Step 6 breadcrumb.
+   - Delete the marker file (cleanup).
+   - Return control to the user — `/implement`'s `/clear → /implement <path> --model single` breadcrumb is already the last line of output; orchestrate does not append anything after it.
+3. If **no** (normal completion): run the standard post-`/implement` sequence (spec 04 Step 5 post-`/implement`): auto-commit → write `step: 6` → emit Step 5 → Step 6 breadcrumb.
+
+**Cross-reference:** Spec 04 Step 5 post-`/implement` must call the marker-file check defined above before running auto-commit verification. Spec 02 is the canonical definition of the marker schema, lifecycle, and when-to-write rules; spec 04 only references this section and wires the check into its Step 5 post-`/implement` rewrite. Implementer of spec 04: see spec 04 Step 5 post-`/implement` rewrite for the explicit call-site.
+
 ## Orchestrate Step 5 Changes
 
 Step 5 in `orchestrate/SKILL.md` is rewritten as a **delegating wrapper**:
 
-**Before:** ~90 lines of inline plan/spec detection + task graph + execution model dispatch
+**Before:** ~90 lines of inline plan/spec detection + task graph + execution model dispatch, plus a mutually exclusive refactor-unit branch that skipped execution model selection and executed directly via `refactor-execution.md`.
 **After:** ~10 lines that:
 1. Read `plan:` field from hint file
 2. If the `plan:` field is empty or the plan file does not exist, emit an error breadcrumb: `"No plan found for the current feature. Run /writing-plans <spec> first to produce a plan, then re-invoke orchestrate."` and route the user back to Step 4.
 3. Emit breadcrumb: `/orchestrate (/implement <plan-path>)` (or `--strict` form per Item 03)
 4. Exit
 
+**Both branches (normal-feature AND refactor-unit) are removed from orchestrate.** `/implement` inherits both paths via its Step D: the Refactor-Unit Branch Handling pre-check (see Step D above) decides which path to run after it resolves the feature name from the hint file or the plan/spec filename. Specifically, the existing orchestrate Step 5 inline text in `orchestrate/SKILL.md` (around lines 284 at time of writing) — "If the current feature is a refactor unit (matched via roadmap check): skip execution model selection, execute directly using `references/refactor-execution.md`..." — is deleted as part of this rewrite. The roadmap detection, `refactor-execution.md` load, and checklist pre-flight surfacing all move into `/implement` Step D's Refactor-Unit Branch Handling subsection.
+
 The orchestrate state machine still owns the **transitions** (Step 4 → Step 5 → Step 6). It no longer owns the **execution** of Step 5 — that's `/implement`'s job.
 
 ### Conditional Loading section
 
-Update `orchestrate/SKILL.md` Conditional Loading section (around line 231-232) to **remove** the two moved files. They're now loaded by `/implement` itself.
+Update `orchestrate/SKILL.md` Conditional Loading section (around lines 230-248) to **remove two blocks**:
+
+1. The `implementation-step.md` reference block (around lines 230-232). `task-graph.md` was never directly referenced by `orchestrate/SKILL.md` — it was loaded transitively from inside `implementation-step.md`, which now lives under `implement/references/`.
+2. The entire `refactor-execution.md` + checklist pre-flight block (around lines 234-248, starting "At Step 5 onset, if a refactor roadmap exists..."). This block is deleted from orchestrate because `/implement` Step D's Refactor-Unit Branch Handling subsection (see above) now owns roadmap detection, `refactor-execution.md` loading, and the `tmp/checklists/index.md` pre-flight surfacing.
+
+All three reference files (`implementation-step.md`, `task-graph.md`, `refactor-execution.md`) are loaded by `/implement` itself. Other Conditional Loading entries unrelated to Step 5 (strict-mode.md, quality-gates.md, etc.) are untouched.
 
 ## Hint File Step Transitions
 
@@ -177,7 +240,8 @@ Update `orchestrate/SKILL.md` Conditional Loading section (around line 231-232) 
 |---|---|---|
 | 4 → 5 | `step: 5` | `/orchestrate (/implement <plan-path>)` |
 | 5 (during /implement) | unchanged — /implement doesn't write hint file | n/a |
-| 5 → 6 | `step: 6` written by orchestrate when the wrapped `/review-code` command completes and orchestrate resumes control within the same invocation, following the Wrapped Next-Command Output parsing behavior | `/clear → /orchestrate (/review-code N --against spec --max-iterations 3)` (emitted by orchestrate at the end of Step 5 before exit) |
+| 5 → 6 (normal completion) | `step: 6` written by orchestrate when the wrapped `/implement` command completes normally (Options [1], [2], [4], or refactor-unit path) and orchestrate resumes control within the same invocation, following the Wrapped Next-Command Output parsing behavior and the Return Contract with Orchestrate (marker-file check passes as absent or non-clear-context) | `/clear → /orchestrate (/review-code N --against spec --max-iterations 3)` (emitted by orchestrate at the end of Step 5 before exit) |
+| 5 → 5 (clear-context early exit) | **unchanged — stays at `step: 5`**. `/implement` exits via Option [3] after writing the `tmp/implement-exit-status.md` marker (`early_exit: clear_context`). Orchestrate reads the marker, skips auto-commit, does NOT write `step: 6`, does NOT emit its own breadcrumb, and deletes the marker. | `/clear → /implement <path> --model single` (emitted by `/implement` itself — orchestrate emits nothing after) |
 
 ## State Synchronization Rules
 
@@ -202,6 +266,7 @@ When `/implement` is invoked **standalone** (not via orchestrate), the hint file
 10. **Plan written by `/writing-plans` mid-orchestrate, then `/implement` invoked standalone with no path** — Hint file's `plan:` field has the freshly-written plan. Step A picks it up. Works.
 11. **Concurrent orchestrate sessions writing different plans to the hint file** — Out of scope. Single-session assumption holds across the whole toolkit.
 12. **Spec with no hard signals AND user wants a plan anyway** — User can manually run `/writing-plans <spec>` first; `/implement` doesn't try to be a hard gate.
+13. **Hint file still says `step: 5` after standalone `/implement` completes from the clear-context path** — When the user picks option `[3]` at Step D, `/implement` exits with the `/clear → /implement <path> --model single` breadcrumb; the user runs `/clear`, then re-invokes `/implement` standalone, which completes the implementation without touching the hint file (per the State Synchronization Rules — `/implement` is stateless w.r.t. the hint file). After this standalone completion, the hint file still says `step: 5`. The user should run `/orchestrate` to resume the cycle — Fast-Path Detection will detect commits since `plan_hash` and advance to Step 6 automatically per the existing Step 5/6 validation rules.
 
 ## Verification
 

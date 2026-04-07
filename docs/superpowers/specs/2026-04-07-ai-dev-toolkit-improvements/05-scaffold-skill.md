@@ -120,7 +120,7 @@ Examples:
 
 ## Placeholder Resolution
 
-The `node-fastify-react` stack uses ~20 placeholders across the three template layers (`root/`, `package/`, `technology/`) — the full authoritative list lives in `references/placeholder-resolution.md`. **Note for implementors:** A pre-existing 18-entry placeholder table is available at `tmp/scaffold/claude_prompt.md` — use this as the starting point for `references/placeholder-resolution.md` rather than re-scanning templates from scratch. SKILL.md documents only the **resolution sources** at a high level:
+The `node-fastify-react` stack uses ~20 placeholders across the three template layers (`root/`, `package/`, `technology/`) — the full authoritative list lives in `references/placeholder-resolution.md`. **Note for implementors:** A pre-existing 20-entry placeholder table is available at `tmp/scaffold/claude_prompt.md` — use this as the starting point for `references/placeholder-resolution.md` rather than re-scanning templates from scratch. SKILL.md documents only the **resolution sources** at a high level:
 
 | Source | Placeholders | When resolved |
 |---|---|---|
@@ -188,7 +188,7 @@ When invoked as `/scaffold --bootstrap` (or inferred via empty directory):
 
 In order (root → package → technology), for each file in `templates/<stack>/<layer>/`:
 1. Compute target path (e.g., `templates/<stack>/root/CLAUDE.md` → `./CLAUDE.md`).
-2. **Skip-existing check:** (1) Read `.scaffold-manifest.yaml` to get the list of manifest-listed (overwritable) files. (2) If target file does not exist → write it. (3) If target file exists AND is listed in the manifest AND `--force` is true → overwrite it. (4) Otherwise → skip (target exists but is not in the manifest, or `--force` is false).
+2. **Skip-existing check:** (1) Read `.scaffold-manifest.yaml` to get the list of manifest-listed (overwritable) files. (2) If target file does not exist → write it. (3) If target file exists AND is listed in the manifest AND `--force` is true → overwrite it. (4a) If target file exists AND is listed in the manifest AND `--force` is false → skip silently. (4b) If target file exists AND is NOT listed in the manifest → skip with warning: `"warning: file <path> exists but is not in the scaffold manifest, skipping (likely user-modified)"`.
 3. Substitute all `{{PLACEHOLDER}}` markers in the template content.
 4. Write the file.
 5. Append the target path to the in-memory manifest list.
