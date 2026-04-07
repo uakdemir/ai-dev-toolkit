@@ -96,6 +96,7 @@ The order **plan → spec** matters: if both are populated (the normal case afte
 3. **Content fallback:** If location is ambiguous (e.g., `tmp/foo.md`), grep the file for content markers:
    - Plan markers: `## Phase`, `## Task`, `### Step`
    - Spec markers: `## Architecture`, `## Components`, `## Data Flow`
+   - **Tiebreaker:** If both plan and spec markers are found, classify as plan (plan markers are more distinctive and less likely to appear incidentally in spec files). Require a minimum of 2 plan markers to classify as plan; a single `### Step` hit alone is insufficient.
 4. If both location and content are ambiguous → print error and exit
 
 Location-first detection covers >95% of cases. The content fallback only fires for ad-hoc files in `tmp/`.
@@ -156,8 +157,9 @@ Step 5 in `orchestrate/SKILL.md` is rewritten as a **delegating wrapper**:
 **Before:** ~90 lines of inline plan/spec detection + task graph + execution model dispatch
 **After:** ~10 lines that:
 1. Read `plan:` field from hint file
-2. Emit breadcrumb: `/orchestrate (/implement <plan-path>)` (or `--strict` form per Item 03)
-3. Exit
+2. If the `plan:` field is empty or the plan file does not exist, emit an error breadcrumb: `"No plan found for the current feature. Run /writing-plans <spec> first to produce a plan, then re-invoke orchestrate."` and route the user back to Step 4.
+3. Emit breadcrumb: `/orchestrate (/implement <plan-path>)` (or `--strict` form per Item 03)
+4. Exit
 
 The orchestrate state machine still owns the **transitions** (Step 4 → Step 5 → Step 6). It no longer owns the **execution** of Step 5 — that's `/implement`'s job.
 
@@ -171,7 +173,7 @@ Update `orchestrate/SKILL.md` Conditional Loading section (around line 231-232) 
 |---|---|---|
 | 4 → 5 | `step: 5` | `/orchestrate (/implement <plan-path>)` |
 | 5 (during /implement) | unchanged — /implement doesn't write hint file | n/a |
-| 5 → 6 | `step: 6` (written by orchestrate when /implement returns) | `/orchestrate (/review-code N)` |
+| 5 → 6 | `step: 6` (written by orchestrate on the next invocation after the user pastes and runs `/orchestrate (/review-code N)`) | `/clear → /orchestrate (/review-code N --against spec --max-iterations 3)` (emitted by orchestrate at the end of Step 5 before exit) |
 
 ## State Synchronization Rules
 

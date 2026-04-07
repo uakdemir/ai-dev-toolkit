@@ -55,6 +55,9 @@ Four pain points motivate this batch:
                        │ build on the strict-propagation + breadcrumb-as-last-line
                        │ guarantees from Item 03
                        ▼
+                  [independent]
+
+
               Item 05 (/scaffold skill)
                        │
                        │ standalone — no deps on others, but ordered last

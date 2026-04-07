@@ -24,7 +24,7 @@ Six pain points compound at orchestrate's step boundaries.
 
 **In scope:**
 - Multi-line breadcrumb format with labeled options (template + position rule)
-- Auto-commit verification after `/implement` and `/review-code` (commit only if `git status --porcelain` is non-empty)
+- Auto-commit verification after `/implement`, `/review-code`, and Step 8 finalize (commit only if `git status --porcelain` is non-empty)
 - Quality-gate suggestion pool (hardcoded set of 3, randomly pick 2 at success points)
 - Per-step rewrites for Steps 2, 4, 5 post-implement, 6 (both fail and success paths), 7, and 8
 - Step 8 brainstorming form (explicit `(/brainstorming)` wrap)
@@ -76,7 +76,7 @@ Next steps (pick one):
 
 ## Auto-Commit Verification
 
-After `/implement`, `/review-code`, or `/finalize` returns control to orchestrate, run the following sequence **before** emitting the next-step breadcrumb:
+After `/implement` returns, after `/review-code` returns, or after Step 8 finalize logic completes inside orchestrate, run the following sequence **before** emitting the next-step breadcrumb:
 
 1. Run `git status --porcelain`.
 2. If output is **empty** (clean tree) → no-op, proceed directly to breadcrumb.
@@ -89,7 +89,7 @@ After `/implement`, `/review-code`, or `/finalize` returns control to orchestrat
 |---|---|
 | After `/implement` returns with uncommitted modifications | `chore: post-implement checkpoint for <plan-filename>` |
 | After `/review-code` returns with uncommitted modifications | `chore: post-review-code checkpoint for <spec-filename>` |
-| After `/finalize` returns with uncommitted modifications | `chore: post-finalize checkpoint for <spec-filename>` |
+| After Step 8 finalize completes with uncommitted modifications | `chore: post-finalize checkpoint for <spec-filename>` |
 
 `<plan-filename>` and `<spec-filename>` are the **basenames only** (no directory path, no `.md` extension). Example: a plan at `docs/superpowers/plans/2026-04-07-foo-plan.md` produces the commit message `chore: post-implement checkpoint for 2026-04-07-foo-plan`.
 
@@ -121,7 +121,7 @@ A hardcoded pool of three quality-gate skills:
 2. `/test-audit`
 3. `/convention-enforcer`
 
-At designated success points (Step 6 with 0 criticals, Step 7 finalize complete), randomly pick **2 of the 3** and surface them as additional labeled options in the breadcrumb block, **after** the recommended next-step option.
+At designated success points (Step 6 with 0 criticals, Step 8 finalize/complete), randomly pick **2 of the 3** and surface them as additional labeled options in the breadcrumb block, **after** the recommended next-step option.
 
 **Selection algorithm:**
 - Use timestamp-based randomness (no seed persistence — different invocations get different picks; no need for reproducibility).
@@ -137,9 +137,11 @@ The recommended next-step option is **always `[1]`**. Quality-gate options take 
 
 ## Per-Step Rewrites
 
-Six steps in `orchestrate/SKILL.md` get rewritten under this item. The Step 5 / Step 6 / Step 7 rewrites also invoke the auto-commit verification block defined above. The Step 6 success path and Step 7 also invoke the quality-gate pool. All breadcrumbs honor Item 03's `--strict` propagation and position guarantee.
+Six steps in `orchestrate/SKILL.md` get rewritten under this item. The Step 5 / Step 6 / Step 8 rewrites also invoke the auto-commit verification block defined above. The Step 6 success path and Step 8 also invoke the quality-gate pool. All breadcrumbs honor Item 03's `--strict` propagation and position guarantee.
 
 The rewrites below show **standard mode** examples for readability. In strict mode, every `/orchestrate` token in every option becomes `/orchestrate --strict`.
+
+Note on step numbering: the actual orchestrate SKILL.md has Step 7 = Fix Findings and Step 8 = Complete/finalize. References to "Step 7 (finalize)" throughout this spec mean **Step 8** in the running SKILL.md. The section headers below use the SKILL.md step numbers.
 
 ### Step 2 (review-doc complete) — ALWAYS 2 lines
 
@@ -159,6 +161,7 @@ Next steps (pick one):
 - `<spec>` is the spec path from the orchestrate hint file.
 - `--max-iterations 2` is the recommended default; user can edit before invoking.
 - Option `[1]` is recommended (state-machine-correct progression). Option `[2]` is the escape hatch.
+- **Step 3 (/respond-to-review) is intentionally not surfaced as a breadcrumb option here.** The review-doc loop's built-in fix phase already applies critical fixes during its own iterations, making a separate respond-to-review step redundant at this boundary. The recommended path when criticals remain is to run additional review-doc iterations (option `[1]`) rather than routing through Step 3. The SKILL.md Step 2 description should be updated to reflect this: the new recommended next step when criticals > 0 is to re-run `/review-doc` (as shown in option `[1]`), not to invoke `/respond-to-review`.
 - This rewrite applies to **Step 2 itself** (after the first review-doc completes). The Step 1 → Step 2 transition (brainstorm produces spec → review-doc breadcrumb) is unchanged and remains single-line, since brainstorm-complete has only one natural next step.
 
 ### Step 4 (write-plan complete) — 2 lines
@@ -215,8 +218,8 @@ Next steps (pick one):
   [1] Run another /review-code iteration to fix remaining criticals
       /clear → /orchestrate (/review-code N --against spec --max-iterations 3)
 
-  [2] Advance to Step 7 (finalize) anyway — escape hatch even with criticals
-      /clear → /orchestrate (/finalize)
+  [2] Advance to Step 8 (Complete) anyway — escape hatch even with criticals
+      /clear → /orchestrate
 ```
 
 **Notes:**
@@ -232,8 +235,8 @@ Next steps (pick one):
 
 Next steps (pick one):
 
-  [1] Advance to Step 7 (finalize) — recommended
-      /clear → /orchestrate (/finalize)
+  [1] Advance to Step 8 (Complete) — recommended
+      /clear → /orchestrate
 
   [2] /clear → /<random-quality-gate-1>
 
@@ -245,16 +248,16 @@ Next steps (pick one):
 - No paranoia re-run option (re-run review-code on a clean tree is not surfaced — out of scope for v1).
 - Quality-gate options are single-line because `/clear → /<gate-name>` is already complete; there's no description line for these. (See "Edge cases" below for the tradeoff on this.)
 
-### Step 7 (finalize complete) — auto-commit FIRST, then same 3-line pattern as Step 6 success
+### Step 8 (Complete/finalize) — auto-commit FIRST, then same 3-line pattern as Step 6 success
 
-After `/finalize` returns control to orchestrate:
+After the Step 8 finalize logic completes control inside orchestrate (Step 8 is inline logic, not a separate `/finalize` skill call):
 
 1. Run the **Auto-Commit Verification** sequence (with `chore: post-finalize checkpoint for <spec-filename>` template).
 2. If a commit happened, print the commit confirmation.
 3. Render the next-steps breadcrumb:
 
 ```
-[/finalize returned successfully]
+[Step 8 finalize complete]
 [git status: 2 files modified, auto-committed as "chore: post-finalize checkpoint for <spec-filename>"]
 
 Next steps (pick one):
@@ -268,9 +271,9 @@ Next steps (pick one):
 ```
 
 **Notes:**
-- Option `[1]` is recommended; this is the natural cycle exit. It uses the **explicit `(/brainstorming)` wrap** rather than a bare `/orchestrate` (Step 8 alignment — see below).
+- Option `[1]` is recommended; this is the natural cycle exit. It uses the **explicit `(/brainstorming)` wrap** rather than a bare `/orchestrate` (see Step 8 next-cycle exit below).
 - Quality-gate options `[2]` and `[3]` are randomly picked at this success point too. Same pool, same algorithm.
-- Re-randomized at every Step 7 invocation (no caching across steps).
+- Re-randomized at every Step 8 invocation (no caching across steps).
 
 ### Step 8 (next-cycle exit) — explicit brainstorming form
 
@@ -306,11 +309,13 @@ Cycle complete. Start a new cycle:
 
 7. **User is already on a clean tree post-`/implement`.** Auto-commit step is a no-op. Print `[git status: clean]` and proceed silently to the breadcrumb. No spurious empty commit.
 
-8. **User picks a quality-gate option (`[2]` or `[3]`) at Step 6 success or Step 7.** The selected gate runs in a fresh context (`/clear → ...`). When the gate finishes, the user is back in plain shell — orchestrate's state machine has handed off. The user can manually re-invoke `/orchestrate` to resume the cycle from where they left off; the hint file's `step:` field still reflects the pre-gate state because quality gates are out-of-band.
+8. **User picks a quality-gate option (`[2]` or `[3]`) at Step 6 success or Step 8.** The selected gate runs in a fresh context (`/clear → ...`). When the gate finishes, the user is back in plain shell — orchestrate's state machine has handed off. The user can manually re-invoke `/orchestrate` to resume the cycle from where they left off; the hint file's `step:` field still reflects the pre-gate state because quality gates are out-of-band.
 
 9. **Quality-gate pool with fewer than 2 entries (hypothetical future shrink).** Render whatever options exist; never error out. For v1, the pool is always exactly 3, so this case is purely defensive.
 
-10. **Step 7 finalize commit-failure case.** Same prepend warning behavior as auto-commit failure in Step 5/6. The warning message is identical regardless of which step triggered it; only the commit message template differs.
+9a. **Single-line quality-gate options in multi-line breadcrumb blocks.** The Multi-Line Breadcrumb Format section specifies that each option is two lines: a description line then the `/command args` line. Quality-gate options (`[2]` and `[3]` in Step 6 success and Step 8) are rendered as a **single line** (`/clear → /<gate-name>`) as an explicit exception to this rule. Rationale: the gate name is self-describing (`/api-contract-guard`, `/test-audit`, `/convention-enforcer`) and a separate description line would be redundant. This exception applies **only to quality-gate pool options** — all other options in any labeled-options block must use the two-line format.
+
+10. **Step 8 finalize commit-failure case.** Same prepend warning behavior as auto-commit failure in Step 5/6. The warning message is identical regardless of which step triggered it; only the commit message template differs.
 
 11. **Hint file missing the `mode:` field at breadcrumb time.** Default to non-strict (`mode: standard`). This matches Item 03's behavior — Item 04 inherits, not redefines.
 
@@ -326,20 +331,20 @@ Per project conventions: no test suite. Manual verification:
 4. Force a pre-commit hook failure (e.g., temporary fail in `.git/hooks/pre-commit`) and run through `/implement` — confirm the `**IMPORTANT** COMMIT FIRST, LAST COMMIT FAILED.` warning prepends the breadcrumb and the next-step breadcrumb still appears below it.
 5. Run `/review-code` to a clean state (0 criticals) and confirm Step 6 emits the success-path 3-line breadcrumb with 2 random quality gates.
 6. Run `/review-code` to a state with criticals and confirm Step 6 emits the Case A 2-line breadcrumb with the escape-hatch option `[2]`.
-7. Run `/finalize` to completion and confirm Step 7 emits the 3-line breadcrumb with `(/brainstorming)` wrap on option `[1]` and 2 random quality gates on `[2]`/`[3]`.
+7. Complete Step 8 (finalize) and confirm Step 8 emits the 3-line breadcrumb with `(/brainstorming)` wrap on option `[1]` and 2 random quality gates on `[2]`/`[3]`.
 8. Trigger Step 8 (next-cycle exit) and confirm the breadcrumb is the single line `/orchestrate (/brainstorming)` (or `--strict` form), with no trailing prose.
 9. Read the modified `orchestrate/SKILL.md` and confirm the auto-commit verification block, multi-line breadcrumb format spec, and quality-gate selection logic are all present and internally consistent.
 
 ---
 
 **Summary of this spec:**
-- **Multi-line labeled-options breadcrumbs** at Steps 2, 4, 6 (both fail and success paths), 7 — `[1]` is always the recommended next step, `[2]`/`[3]` are alternatives or random quality gates from a pool of 3 (`/api-contract-guard`, `/test-audit`, `/convention-enforcer`).
-- **Auto-commit verification** runs after `/implement`, `/review-code`, `/finalize` returns, using literal templates `chore: post-<phase> checkpoint for <plan-or-spec-filename>`. Skips for clean trees and untracked-only states. On commit failure, prepends `**IMPORTANT** COMMIT FIRST, LAST COMMIT FAILED.` and still emits the breadcrumb (trust the user, don't block).
-- **Six per-step rewrites** (Steps 2, 4, 5, 6, 7, 8) change orchestrate's exit-point breadcrumbs from single-recommendation to multi-option (where ≥2 paths exist), with auto-commit bookended on the implement/review-code/finalize transitions. Step 8 finally uses an explicit `(/brainstorming)` wrap instead of a bare `/orchestrate` hand-wave.
+- **Multi-line labeled-options breadcrumbs** at Steps 2, 4, 6 (both fail and success paths), 8 — `[1]` is always the recommended next step, `[2]`/`[3]` are alternatives or random quality gates from a pool of 3 (`/api-contract-guard`, `/test-audit`, `/convention-enforcer`).
+- **Auto-commit verification** runs after `/implement` returns, after `/review-code` returns, and after Step 8 finalize logic completes, using literal templates `chore: post-<phase> checkpoint for <plan-or-spec-filename>`. Skips for clean trees and untracked-only states. On commit failure, prepends `**IMPORTANT** COMMIT FIRST, LAST COMMIT FAILED.` and still emits the breadcrumb (trust the user, don't block).
+- **Six per-step rewrites** (Steps 2, 4, 5, 6, 8, and the next-cycle Step 8 exit) change orchestrate's exit-point breadcrumbs from single-recommendation to multi-option (where ≥2 paths exist), with auto-commit bookended on the implement/review-code/Step 8 finalize transitions. The next-cycle Step 8 exit finally uses an explicit `(/brainstorming)` wrap instead of a bare `/orchestrate` hand-wave.
 
 **Decisions taken:**
 - **Commit-failure handling:** prepend a loud warning at the top of the breadcrumb output, **still emit the next-step breadcrumb** below it (corrected mid-spec from my original "fail-loud-and-exit" proposal — the user is trusted to read the warning and choose how to proceed).
 - **Quality-gate pool is hardcoded to exactly 3 entries** (`/api-contract-guard`, `/test-audit`, `/convention-enforcer`) with random pick of 2 at success points. No user configuration in v1.
 - **`/respond-to-review` line is dropped entirely from breadcrumbs** — never rendered, even when criticals remain. The review-code loop applies fixes during its own iterations, so the line was redundant.
-- **Step 6 Case A escape hatch** (`[2] Advance to Step 7 anyway`) is shown **even when criticals remain** — first-class option, not a hidden override. The user is trusted to know when to defer.
+- **Step 6 Case A escape hatch** (`[2] Advance to Step 8 (Complete) anyway`) is shown **even when criticals remain** — first-class option, not a hidden override. The user is trusted to know when to defer.
 - **Untracked-only state skips auto-commit** — they may be intentional cruft and shouldn't be silently swept into a checkpoint commit.

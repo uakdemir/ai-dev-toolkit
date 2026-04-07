@@ -82,11 +82,11 @@ Audit every exit point in `orchestrate/SKILL.md` and confirm the breadcrumb is t
 | 3 | Step 0 RED auto-handoff exit | Prose only, no breadcrumb | Prose + breadcrumb appended (see Change 4) |
 | 4 | Step 1 brainstorm complete | Breadcrumb followed by encouragement prose | Breadcrumb is last line |
 | 5 | Step 2 review complete | Breadcrumb mid-output | Breadcrumb is last line |
-| 6 | Step 3 writing-plans complete | Breadcrumb mid-output | Breadcrumb is last line |
-| 7 | Step 4 plan-review complete | Breadcrumb mid-output | Breadcrumb is last line |
+| 6 | Step 3 respond-to-review complete | Breadcrumb mid-output | Breadcrumb is last line |
+| 7 | Step 4 write-plan complete | Breadcrumb mid-output | Breadcrumb is last line |
 | 8 | Step 5 delegating wrapper exit (post Item 02) | New exit point | Breadcrumb is last line |
 | 9 | Step 6 code-review complete | Breadcrumb followed by next-step prose | Breadcrumb is last line |
-| 10 | Step 7 finalize complete | Breadcrumb followed by celebration prose | Breadcrumb is last line |
+| 10 | Step 8 Complete/finalize | Breadcrumb followed by celebration prose | Breadcrumb is last line |
 | 11 | Step 8 brainstorm-next exit | Plain `/orchestrate` followed by prose | Wrapped `/orchestrate (/brainstorming)` is last line (per Item 04 — Item 03 just removes the trailing prose) |
 | 12 | Fast-path detection success exit | Breadcrumb mid-output | Breadcrumb is last line |
 | 13 | User Prompt fallback exit | Breadcrumb mid-output | Breadcrumb is last line |
@@ -128,6 +128,8 @@ After the handoff doc is written, resume in a fresh session with:
 ```
 
 The `--light` flag itself is **out of scope** for Item 03 (it lives in `/session-handoff`). This spec only specifies that orchestrate calls it with that flag. The session-handoff change is a separate follow-up.
+
+**Fallback behavior (while `--light` is not yet implemented):** If `/session-handoff --light` returns an error or unrecognized-flag response, orchestrate falls back to calling plain `/session-handoff` instead. The breadcrumb and prose output are identical either way — only the handoff doc size differs. Implementors: add a try/fallback wrapper around the `--light` call so the RED path is never broken by a missing flag.
 
 ### Change 5 — Error Handling table: add Breadcrumb column
 
