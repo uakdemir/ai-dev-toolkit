@@ -259,7 +259,7 @@ to continue — it does not automatically advance to Step 2 in the same session.
 
 Note: The existing Step 1 logic uses `tmp/current-roadmap.md` for general feature tracking. Refactor roadmaps are separate files checked in addition to `tmp/current-roadmap.md`. Refactor roadmap checks take priority.
 **Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 2` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
-**Step 3 — Respond to Review:** review-doc-summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> informational, advance to Step 4.
+**Step 3 — Respond to Review:** review-doc-summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> print the informational message BEFORE the breadcrumb, then advance to Step 4 with the breadcrumb as the literal last line per the Exit Output Format subsection.
 **Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. When invoking superpowers:writing-plans, prepend to the dispatch prompt: "After saving the plan, do NOT present the Execution Handoff section. Return control to the caller. Orchestrate manages execution model selection at Step 5." If writing-plans still presents an Execution Handoff section, orchestrate ignores it and proceeds to Step 5. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
 **Step 5 — Implement:** Plan exists, implementation not confirmed complete. Step 5 is a delegating wrapper: orchestrate does NOT inline plan detection, task graph, or execution model dispatch — all of that lives in `/implement`. Read the `plan:` field from the hint file. If the `plan:` field is empty or the plan file does not exist, emit this error breadcrumb and route the user back to Step 4:
 
@@ -359,6 +359,24 @@ Before emitting any breadcrumb, read the `mode:` field from `tmp/orchestrate-sta
 **Mode resolution for breadcrumb emission:** Always reread the hint file at exit-point time (do not cache from invocation start) — the user may have transitioned to strict via the mode prompt mid-invocation. If the hint file is missing at exit time (e.g., Step 0 RED before write), default to non-strict.
 
 **Rule of thumb:** The `--strict` token attaches to the `/orchestrate` token, never inside the parentheses. For phase boundaries, the `/clear → ` prefix is unchanged; the flag still attaches to the orchestrate token.
+
+## Exit Output Format
+
+Every step exit point that hands control back to the user MUST end with the breadcrumb as the literal last line(s) of the response. No prose, no commentary, no celebration text, no "next-step" hints may follow the breadcrumb. If you need to say something to the user, say it BEFORE the breadcrumb.
+
+**Format at every exit:**
+
+```
+[any informational output the step produces]
+
+── Next ────────────────────────────────────────
+<breadcrumb command per Step-to-command mapping, with --strict per Strict Mode Breadcrumbs>
+────────────────────────────────────────────────
+```
+
+The closing rule line `────────────────────────────────────────────────` is the literal final line of the response. Nothing follows it. This applies to all 15 exit points enumerated in the audit list of the source spec, including Step 0 RED (which appends the breadcrumb after the auto-handoff prose — see "Step 0 RED auto-handoff" below).
+
+**When NOT to emit a breadcrumb:** see the "When NOT to emit a breadcrumb" subsection below.
 
 ## Wrapped Next-Command Output
 
