@@ -69,7 +69,9 @@ Add a new subsection to `orchestrate/SKILL.md` titled **"Strict Mode Breadcrumbs
 
 ### Change 2 — Breadcrumb position guarantee
 
-Audit every exit point in `orchestrate/SKILL.md` and confirm the breadcrumb is the **literal last line** of the printed output. Wrap the audit list directly into the spec for traceability.
+Audit every exit point in `orchestrate/SKILL.md` and confirm the breadcrumb is the **literal last lines** of the printed output. (Plural — "last lines", not "last line" — because Item 04 layers multi-line option blocks on top of several of these rows. The position guarantee carries over: even when a breadcrumb is a multi-line labeled-options block, the entire block must be the absolute final block of the response with nothing after it.) Wrap the audit list directly into the spec for traceability.
+
+**Note for Item 04 implementer:** Several rows in the audit table below (Step 2, Step 4, Step 5 post-implement, Step 6, Step 7) will be rewritten by Item 04 as multi-line option blocks. The "Today" column reflects the single-line state; the "After" column reflects single-line under Item 03. Item 04 then transforms several of those single-line "After" rows into multi-line blocks. The position guarantee from this item still applies — multi-line blocks must be the absolute last block, no trailing prose.
 
 **Audit list — exit points that emit a breadcrumb:**
 
