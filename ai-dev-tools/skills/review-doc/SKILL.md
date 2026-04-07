@@ -103,6 +103,10 @@ Then jump to Final Report. In single-pass mode, the Final Report step reads `tmp
 ```
 While iteration <= max_iterations OR is_final_gate:
 
+  PRE-REVIEW PROMOTION:
+    If iteration == max_iterations AND NOT is_final_gate:
+      Set is_final_gate = true (this iteration runs as the final gate from the start)
+
   REVIEW PHASE:
     If NOT is_final_gate:
       Dispatch 1 reviewer at min-model -> writes tmp/review-doc.json
@@ -135,7 +139,13 @@ While iteration <= max_iterations OR is_final_gate:
   iteration += 1
 ```
 
-The final gate is exempt from the `--max-iterations` cap: if criticals reach zero at iteration N == max_iterations, the final gate still runs as iteration N+1. Terminal output reports this as e.g. "5/4" (5 iterations with cap of 4).
+The final gate runs at the last allowed iteration. Three trigger paths:
+
+1. **Fast path (early termination, criticals = 0 before max):** If `critical_count == 0` in an early round (iteration N < max_iterations), `is_final_gate` flips to `true`, the next iteration runs as the final gate, and the loop ends early. Terminal output: e.g. `3/4` (if criticals hit zero at iteration 2 with cap 4, final gate runs as iteration 3).
+2. **Cap path (always-runs guarantee):** If criticals never reach zero before iteration `max_iterations`, that iteration is promoted to the final gate at the start of the loop body — meaning the reviewer, fixer, and fact-checker all run at max-model. Terminal output: `N/N`.
+3. **Fast path (criticals = 0 exactly at max iteration):** If `critical_count == 0` at iteration `max_iterations` and `is_final_gate` is not yet set, the STOP CHECK flips `is_final_gate = true` and continues; the final gate runs as iteration `max_iterations + 1` (exempt from cap). Terminal output: e.g. `5/4`.
+
+Either way, the user is guaranteed at least one max-model pass with fact-check before the loop exits, as long as `--max-iterations >= 1`. (Single-pass mode `--max-iterations 1` is already handled by the existing edge case path and is unchanged by this rule.)
 
 ## Agent Dispatch (Early Rounds)
 
@@ -382,7 +392,7 @@ Write to `tmp/review-doc-iteration-N.md` after each iteration:
 **Agents:** 1 (merged reviewer) or 1 + fact-checker (final round)
 **Fixer model:** min-model or max-model
 **Issues found:** X critical, Y high, Z medium
-**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, final gate triggered" | "0 criticals, loop complete" | "Fix phase failed: <error>"
+**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, final gate triggered" | "0 criticals, loop complete" | "Last allowed iteration, final gate triggered" | "Fix phase failed: <error>"
 **Issues fixed:** [category] [severity] at [location]
 **Issues deferred:** [category] [severity] at [location] -- reason
 **Issues pushed back:** [category] [severity] at [location] -- reason
