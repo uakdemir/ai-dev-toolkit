@@ -1,7 +1,7 @@
 # ai-dev-toolkit Improvements — Spec Batch
 
 **Date:** 2026-04-07
-**Status:** Draft
+**Status:** Approved with suggestions
 **Sub-specs:** 5 (numbered by implementation order, NOT by original discussion order)
 
 ## Sub-Specs
