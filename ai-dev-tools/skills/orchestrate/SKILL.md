@@ -473,20 +473,22 @@ Note: The full initialization sequence still runs on receipt of a wrapped comman
 
 ## Error Handling
 
-| Scenario | Behavior |
-|---|---|
-| Hint file missing or YAML malformed | User Prompt (both modes). Write hint after resolution. |
-| Unknown step/feature or head not in history | User Prompt. Write hint after resolution. |
-| Hint says finalized but spec deleted | Write hint (step: 1, clear fields) → route to Step 1. |
-| Hint validation contradicts hint step | Advance to next logical step (don't rescan). |
-| Quality gate git commands fail | Skip that gate, warn. |
-| references/ file missing | Error: "orchestrate reference file missing: {path}. Re-install the ai-dev-tools plugin." |
-| Multiple features in-progress | Present list, ask user to pick. Update hint. |
-| No roadmap file | Ask "What feature?" at Step 1. Skip roadmap update at Step 8. |
-| Invoked skill fails | Report failure, offer: Retry / Skip / Exit. |
-| Context pressure (YELLOW/RED) | Handled by Step 0 + YELLOW gate. Resume via artifacts on next invocation. |
-| No test/build command discoverable (--strict) | Discovery: (1) check CLAUDE.md, (2) package.json scripts, (3) Makefile test target, (4) probe pytest/jest/cargo test. None found → skip verification gate: "No verification command found. Configure in CLAUDE.md." |
-| No valid cycle state + strict mode | User Prompt → targeted validation → hint write. If unresolved after 2-3 rounds, default to step 1 with whatever was resolved. |
+The Breadcrumb column shows the literal last line of the response for each error path. Inline-prompt rows are explicitly marked `(no breadcrumb — inline prompt)` per the When NOT to emit a breadcrumb subsection. Strict-mode breadcrumbs replace `/orchestrate` with `/orchestrate --strict` per the Strict Mode Breadcrumbs subsection — both forms are shown for unambiguous rows.
+
+| Scenario | Behavior | Breadcrumb (last line of output) |
+|---|---|---|
+| Hint file missing or YAML malformed | User Prompt (both modes). Write hint after resolution. | (no breadcrumb — inline prompt; clarification rounds are not exits. The downstream step's exit emits the breadcrumb in its own mode.) |
+| Unknown step/feature or head not in history | User Prompt. Write hint after resolution. | (no breadcrumb — inline prompt; downstream step exit handles emission.) |
+| Hint says finalized but spec deleted | Write hint (step: 1, clear fields) → route to Step 1. | Standard: `/orchestrate` / Strict: `/orchestrate --strict` (Step 1 routing exit, per row 1 of Step-to-command mapping if brainstorming did not produce a file). |
+| Hint validation contradicts hint step | Advance to next logical step (don't rescan). | The next-logical-step's exit breadcrumb per the Step-to-command mapping (in standard or strict per mode). |
+| Quality gate git commands fail | Skip that gate, warn. | The Step 8 exit breadcrumb (Standard: `/orchestrate` / Strict: `/orchestrate --strict`); the warning is printed BEFORE the breadcrumb. |
+| references/ file missing | Error: "orchestrate reference file missing: {path}. Re-install the ai-dev-tools plugin." | (no breadcrumb — hard error; the user must reinstall before re-invoking.) |
+| Multiple features in-progress | Present list, ask user to pick. Update hint. | (no breadcrumb — inline prompt; the resolved step's exit emits the breadcrumb in its own mode.) |
+| No roadmap file | Ask "What feature?" at Step 1. Skip roadmap update at Step 8. | (no breadcrumb on the Step 1 question — inline prompt. Step 8 still emits its normal exit breadcrumb in Standard or Strict per mode.) |
+| Invoked skill fails | Report failure, offer: Retry / Skip / Exit. | If user picks Retry: (no breadcrumb — inline retry). If user picks Skip: the next step's exit breadcrumb per Step-to-command mapping. If user picks Exit: Standard: `/orchestrate` / Strict: `/orchestrate --strict` (so the user can re-invoke after fixing the underlying issue). |
+| Context pressure (YELLOW/RED) | Handled by Step 0 + YELLOW gate. Resume via artifacts on next invocation. | RED auto-handoff path: Standard: `/orchestrate` / Strict: `/orchestrate --strict` (per mode), as the literal last line after the prose + `/session-handoff --light` call (see Step 0 RED behavior). YELLOW warn-and-proceed: the downstream step's normal exit breadcrumb. |
+| No test/build command discoverable (--strict) | Discovery: (1) check CLAUDE.md, (2) package.json scripts, (3) Makefile test target, (4) probe pytest/jest/cargo test. None found → skip verification gate: "No verification command found. Configure in CLAUDE.md." | The Step 8 exit breadcrumb (`/orchestrate --strict`, since this row only fires in strict mode); the skip-warning is printed BEFORE the breadcrumb. |
+| No valid cycle state + strict mode | User Prompt → targeted validation → hint write. If unresolved after 2-3 rounds, default to step 1 with whatever was resolved. | (no breadcrumb during clarification rounds — inline prompts. After resolution, the resolved step's exit emits `/orchestrate --strict` per mode.) |
 
 ---
 
