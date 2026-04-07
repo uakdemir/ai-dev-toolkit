@@ -11,7 +11,7 @@
 | 01 | `01-review-doc-final-gate.md` | review-doc always runs final gate on last allowed iteration | `tmp/ai-dev-tool-improvement-prompt.md` |
 | 02 | `02-implement-skill.md` | New `/implement` skill extracted from orchestrate Step 5 | mid-brainstorm |
 | 03 | `03-orchestrate-strict-propagation.md` | `--strict` propagation in breadcrumbs + breadcrumb-as-last-line | mid-brainstorm |
-| 04 | `04-orchestrate-recommendation-breadcrumbs.md` | Multi-line breadcrumbs, auto-commit, quality-gate suggestions | mid-brainstorm (Path B split) |
+| 04 | `04-orchestrate-recommendation-breadcrumbs.md` | Multi-line breadcrumbs, auto-commit, quality-gate suggestions | mid-brainstorm split from Item 03 |
 | 05 | `05-scaffold-skill.md` | New `/scaffold` skill (monorepo bootstrap + add-package) | original prompt |
 
 ## Rationale

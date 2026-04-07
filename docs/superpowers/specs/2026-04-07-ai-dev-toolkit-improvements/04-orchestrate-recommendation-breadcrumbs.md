@@ -24,7 +24,7 @@ Six pain points compound at orchestrate's step boundaries.
 
 **In scope:**
 - Multi-line breadcrumb format with labeled options (template + position rule)
-- Auto-commit verification after `/implement` and `/review-code` (option ii: only if `git status --porcelain` is non-empty)
+- Auto-commit verification after `/implement` and `/review-code` (commit only if `git status --porcelain` is non-empty)
 - Quality-gate suggestion pool (hardcoded set of 3, randomly pick 2 at success points)
 - Per-step rewrites for Steps 2, 4, 5 post-implement, 6 (both fail and success paths), 7, and 8
 - Step 8 brainstorming form (explicit `(/brainstorming)` wrap)
@@ -34,7 +34,7 @@ Six pain points compound at orchestrate's step boundaries.
 - User-configurable quality-gate pool — hardcoded to 3 gates for v1
 - Per-user breadcrumb format preference — single canonical format
 - Single-line breadcrumb forms (bare `/orchestrate`, bare wrapped) — these stay single-line; multi-line is only for steps with ≥2 alternatives
-- Changes to `/respond-to-review` — the review-doc loop already applies fixes, so the additional `/respond-to-review` line is dropped from the breadcrumb proposal entirely (UMUT decision: never show that line)
+- Changes to `/respond-to-review` — the review-doc loop already applies fixes, so the additional `/respond-to-review` line is dropped from the breadcrumb proposal entirely (decision: never show that line)
 
 ## Files Modified
 
@@ -220,7 +220,7 @@ Next steps (pick one):
 ```
 
 **Notes:**
-- Option `[2]` is shown **even when criticals remain** (UMUT decision). The user is trusted to know when criticals are acceptable to defer.
+- Option `[2]` is shown **even when criticals remain** (explicit design decision). The user is trusted to know when criticals are acceptable to defer.
 - The legacy `/respond-to-review` line is **never rendered** — it was dropped from the design entirely. The review-code loop already applies fixes during its own iterations.
 - Both options use phase-boundary form (`/clear → ...`) because both transitions warrant a fresh context.
 
@@ -242,7 +242,7 @@ Next steps (pick one):
 
 **Notes:**
 - 3 options total: `[1]` is the recommended next step, `[2]` and `[3]` are randomly picked from the **Quality-Gate Pool** (defined above).
-- No paranoia re-run option (re-run review-code on a clean tree is not surfaced — UMUT did not ask for one).
+- No paranoia re-run option (re-run review-code on a clean tree is not surfaced — out of scope for v1).
 - Quality-gate options are single-line because `/clear → /<gate-name>` is already complete; there's no description line for these. (See "Edge cases" below for the tradeoff on this.)
 
 ### Step 7 (finalize complete) — auto-commit FIRST, then same 3-line pattern as Step 6 success

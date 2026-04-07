@@ -190,7 +190,7 @@ When `/implement` is invoked **standalone** (not via orchestrate), the hint file
 4. **Spec has `## Phase 1` but only one phase** — Hard signal triggers, recommendation prompt shows. (We can refine the threshold later if this is too aggressive.)
 5. **Plan file has zero tasks** — Task graph is empty; print `"Plan contains no actionable tasks. Nothing to implement."` and exit.
 6. **`--model parallel` requested but plan has no parallelizable tasks** — Print warning `"--model parallel requested but plan tasks have linear dependencies; falling back to subagent-per-task."` and continue.
-7. **`--model clear-context`** — **NOT a valid value.** Reject with `"--model clear-context is not supported; clear-context is dispatch-only. Omit --model and choose option [3] from the picker."` (per the Option B decision)
+7. **`--model clear-context`** — **NOT a valid value.** Reject with `"--model clear-context is not supported; clear-context is dispatch-only. Omit --model and choose option [3] from the picker."` Clear-context is interactive-only (it has to print a breadcrumb and exit, which doesn't fit the `--model` short-circuit semantics).
 8. **Spec recommendation prompt declined repeatedly** — User passes `--skip-plan-recommendation` once; future invocations of the same spec see the prompt again. (We don't persist the skip — it's a one-shot suppression.)
 9. **Plan and spec both in `tmp/`** — Location detection ambiguous; content fallback decides. If still ambiguous, error.
 10. **Plan written by `/writing-plans` mid-orchestrate, then `/implement` invoked standalone with no path** — Hint file's `plan:` field has the freshly-written plan. Step A picks it up. Works.
@@ -216,6 +216,6 @@ Per project conventions: no test suite. Manual verification:
 - Orchestrate Step 5 becomes a 10-line delegating wrapper; the two reference files (`implementation-step.md`, `task-graph.md`) physically move from `orchestrate/references/` to `implement/references/`
 
 **Decisions taken implicitly:**
-- `--model clear-context` is **NOT** a valid CLI value (Option B from earlier decision). Clear-context remains as picker option [3] only — interactive dispatch
+- `--model clear-context` is **NOT** a valid CLI value. Clear-context remains as picker option [3] only — interactive dispatch, because it has to print a breadcrumb and exit rather than executing the implementation in-process
 - Spec recommendation algorithm is **skip-by-default** with three hard signals (multi-component, cross-cutting, explicit phase markers). Most specs go straight to implementation. Let me know if you'd prefer prompt-by-default
 - `/implement` is **stateless** w.r.t. the hint file (reads only; orchestrate is the sole writer). This prevents race conditions but means standalone invocations don't update orchestrate's progress
