@@ -382,16 +382,18 @@ Phase boundaries: Steps 2-3 advancing to Step 4, Step 5 advancing to Step 6, Ste
 
 **Step-to-command mapping:**
 
-| After Step | Next Command |
+Each row shows the standard-mode form first; the strict-mode form is the same string with `--strict` inserted after `/orchestrate` (per the Strict Mode Breadcrumbs subsection above). Both forms are listed inline so the implementer never has to derive them.
+
+| After Step | Next Command (standard / strict) |
 |---|---|
-| 1 (Brainstorm) | `/orchestrate (/review-doc <spec_path> --max-iterations 2)` — `<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, output plain `/orchestrate` instead. |
-| 2 (Spec Review) | `/orchestrate (/respond-to-review <round> <spec_path>)` if criticals >0, else `/clear` → `/orchestrate` (phase boundary — advancing to Step 4) |
-| 3 (Respond to Review) | if criticals > 0 after respond-to-review: `/orchestrate (/review-doc <spec_path> --max-iterations 2)`; if criticals = 0: `/clear` → `/orchestrate` (phase boundary — advancing to Step 4) |
-| 4 (Write Plan) | `/orchestrate` (Step 5 requires its own analysis before recommending a specific command) |
-| 5 (Implement) | `/clear` → `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` (phase boundary — implementation complete) |
-| 6 (Code Review) | if findings (criticals or highs > 0): `/orchestrate` (plain — Fast-Path Detection routes to Step 7); if no findings: `/clear` → `/orchestrate` (phase boundary — advancing to Step 8) |
-| 7 (Fix Findings) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` |
-| 8 (Complete) | `/orchestrate` for next feature or new cycle |
+| 1 (Brainstorm) | Standard: `/orchestrate (/review-doc <spec_path> --max-iterations 2)`<br>Strict: `/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)`<br>`<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, emit bare `/orchestrate` (or `/orchestrate --strict`) instead. |
+| 2 (Spec Review) | If criticals > 0 — Standard: `/orchestrate (/respond-to-review <round> <spec_path>)` / Strict: `/orchestrate --strict (/respond-to-review <round> <spec_path>)`<br>If criticals = 0 (phase boundary, advancing to Step 4) — Standard: `/clear → /orchestrate` / Strict: `/clear → /orchestrate --strict` |
+| 3 (Respond to Review) | If criticals > 0 — Standard: `/orchestrate (/review-doc <spec_path> --max-iterations 2)` / Strict: `/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)`<br>If criticals = 0 (phase boundary, advancing to Step 4) — Standard: `/clear → /orchestrate` / Strict: `/clear → /orchestrate --strict` |
+| 4 (Write Plan) | Standard: `/orchestrate`<br>Strict: `/orchestrate --strict`<br>(Step 5 requires its own analysis before recommending a specific command.) |
+| 5 (Implement, delegating wrapper to `/implement`) | Phase boundary — implementation complete.<br>Standard: `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`<br>Strict: `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
+| 6 (Code Review) | If findings (criticals or highs > 0) — Standard: `/orchestrate` / Strict: `/orchestrate --strict` (Fast-Path Detection routes to Step 7).<br>If no findings (phase boundary, advancing to Step 8) — Standard: `/clear → /orchestrate` / Strict: `/clear → /orchestrate --strict` |
+| 7 (Fix Findings) | Standard: `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`<br>Strict: `/orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
+| 8 (Complete) | Standard: `/orchestrate`<br>Strict: `/orchestrate --strict`<br>(For next feature or new cycle.) |
 
 **Parsing behavior:** When orchestrate receives `/orchestrate (/some-command args)`:
 
