@@ -407,6 +407,17 @@ The closing rule line `───────────────────
 
 **When NOT to emit a breadcrumb:** see the "When NOT to emit a breadcrumb" subsection below.
 
+## When NOT to emit a breadcrumb
+
+Breadcrumbs are emitted ONLY at the moment the skill is exiting and handing control back to the user, signaling "here is what to run next." The following situations are NOT exits — do not emit a breadcrumb:
+
+- **Mid-conversation clarifying questions** ("Which plan should I implement?" "Confirm spec path?") — these are inline prompts; the skill is awaiting user input before continuing.
+- **Tool-output displays** ("Here's the task graph:" "Here's the diff preview:") — these are informational, not transitions.
+- **Validation failures that loop back internally** ("Plan parse failed, retrying with relaxed mode") — internal retry, not a step boundary.
+- **Any output that the user is expected to respond to before the skill continues.**
+
+When in doubt: ask "is the skill returning control to the shell after this output?" If yes, emit a breadcrumb. If no (the user will type a reply that the skill processes inline), do not emit a breadcrumb.
+
 ## Wrapped Next-Command Output
 
 Every step's exit point outputs a breadcrumb for the user's message history:
