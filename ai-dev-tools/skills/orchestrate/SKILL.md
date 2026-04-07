@@ -346,6 +346,20 @@ Continue? or specify a different command.
 
 ---
 
+## Strict Mode Breadcrumbs
+
+Before emitting any breadcrumb, read the `mode:` field from `tmp/orchestrate-state.md`. If `mode: strict`, insert the literal token `--strict` immediately after `/orchestrate` and before any wrapped inner command. If `mode` is missing, malformed, or `standard`, emit the bare form (no flag).
+
+| Form | Standard mode | Strict mode |
+|---|---|---|
+| Bare | `/orchestrate` | `/orchestrate --strict` |
+| Wrapped | `/orchestrate (/inner-command args)` | `/orchestrate --strict (/inner-command args)` |
+| Phase boundary | `/clear → /orchestrate (/inner-command args)` | `/clear → /orchestrate --strict (/inner-command args)` |
+
+**Mode resolution for breadcrumb emission:** Always reread the hint file at exit-point time (do not cache from invocation start) — the user may have transitioned to strict via the mode prompt mid-invocation. If the hint file is missing at exit time (e.g., Step 0 RED before write), default to non-strict.
+
+**Rule of thumb:** The `--strict` token attaches to the `/orchestrate` token, never inside the parentheses. For phase boundaries, the `/clear → ` prefix is unchanged; the flag still attaches to the orchestrate token.
+
 ## Wrapped Next-Command Output
 
 Every step's exit point outputs a breadcrumb for the user's message history:
