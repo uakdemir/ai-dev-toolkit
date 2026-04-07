@@ -114,7 +114,26 @@ usage_percent = estimated_used / 200_000 × 100
 | YELLOW | 60–80% | Proceed to state detection, then evaluate at Step 2 (context-aware gate) |
 | RED | > 80% or compression detected | Auto-handoff (see below) |
 
-**RED behavior:** Print `⚠ Context critically low (~X% estimated). Generating session handoff...` Auto-run `/session-handoff`. Print `Session handoff saved. Start a new conversation and run /orchestrate to continue.` Exit.
+**RED behavior:** Print the prose block, then auto-run `/session-handoff --light`, then append the breadcrumb. The breadcrumb is the literal last line per the Exit Output Format subsection.
+
+```
+⚠ Context critically low (~X% estimated). Saving a light session handoff
+before auto-compact triggers...
+
+[/session-handoff --light is now running]
+
+After the handoff doc is written, resume in a fresh session with the
+breadcrumb below.
+
+── Next ────────────────────────────────────────
+/orchestrate            ← if mode: standard (or no mode field)
+/orchestrate --strict   ← if mode: strict
+────────────────────────────────────────────────
+```
+
+Pick exactly one of the two `/orchestrate` lines based on the hint file's `mode:` field (or the `--strict` flag from the current invocation if the hint file has not been written yet). Do NOT print both lines — the breadcrumb must be a single concrete command. The format above shows both options for documentation purposes only.
+
+**Fallback for `--light` flag:** If `/session-handoff --light` errors with an unrecognized-flag response (the `--light` flag is a known follow-up to the session-handoff skill and may not yet be implemented), retry with plain `/session-handoff`. The prose and breadcrumb output are identical either way — only the handoff doc size differs. Wrap the `--light` invocation in a try/fallback so the RED path is never broken by a missing flag.
 
 ---
 
@@ -166,7 +185,9 @@ After Step 0 completes:
 
 If validation contradicts hint, advance to next logical step (don't rescan).
 
-**YELLOW gate:** After detection, if YELLOW and next step is heavy (5/6/7), auto-handoff. If moderate/light (1/2/3/4/8), warn and proceed.
+**Exit:** Fast-path detection itself does not emit a breadcrumb. It hands off to the resolved step, whose own exit emits the breadcrumb per the Exit Output Format subsection.
+
+**YELLOW gate:** After detection, if YELLOW and next step is heavy (5/6/7), auto-handoff using the same RED behavior path (prose + `/session-handoff --light` with fallback + breadcrumb as literal last line). If moderate/light (1/2/3/4/8), warn and proceed — the warning is printed BEFORE whatever breadcrumb the downstream step emits at its own exit, per the Exit Output Format subsection.
 
 ---
 
@@ -215,7 +236,12 @@ If validation contradicts hint, advance to next logical step (don't rescan).
      Please describe your current step more specifically,
      or check tmp/orchestrate-state.md and update it manually."
    → Write hint with whatever was resolved (feature if known,
-     step 1 as default). Proceed to the resolved or default step.
+     step 1 as default). Proceed to the resolved or default step,
+     whose own exit emits the breadcrumb per the Exit Output Format
+     subsection. User Prompt itself does not emit a breadcrumb on
+     mid-conversation clarifying questions (rounds 1-3) — those are
+     inline prompts, not exits, per the When NOT to emit a breadcrumb
+     subsection.
 ```
 
 **Spec field population (hint write):** After accepting the feature name from the user, do a lightweight filename scan of `docs/superpowers/specs/` to find files containing the feature name as a case-insensitive substring in the filename. This is filename matching only — no file content is read. If exactly one file matches, set `spec` to that file path in the written hint. If zero or multiple files match, set `spec` to `''`. This scan is limited to step 3 hint-write and does not affect state resolution or the feature name itself. Downstream step 3 validation (Reviewed vs hint spec) is skipped when `spec` is `''`.
