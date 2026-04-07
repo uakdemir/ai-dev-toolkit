@@ -227,26 +227,6 @@ If validation contradicts hint, advance to next logical step (don't rescan).
 If hint file is missing or validation fails:
   → User Prompt (both modes). Write hint after resolution.
 
-At Step 5 onset (all paths including User Prompt):
-  -> Read references/implementation-step.md for task graph visualization,
-    execution model recommendation, and override dispatch.
-
-At Step 5 onset, if a refactor roadmap exists and the current feature
-name appears in that roadmap (case-insensitive substring match of the
-feature name against roadmap item labels — match against the bold
-module/layer name only, i.e., text between ** markers in the checkbox
-line, not the full rationale text):
-  → Read references/refactor-execution.md for file operation, import rewrite,
-    and verification patterns.
-  → Checklist pre-flight: read tmp/checklists/index.md (if it exists), filter
-    for rows where Phase is `coding` or `both` AND Recommended Skill contains
-    `refactor-to-monorepo` or `refactor-to-layers`. Surface any matching entries
-    to the user before beginning execution.
-    Note: the `refactor-to-layers` filter branch is reserved for future use.
-    refactor-to-layers has no checklist crystallization section, so the
-    `refactor-to-layers` filter will currently return empty. This is expected —
-    do not warn the user on an empty result from the `refactor-to-layers` branch.
-
 If --strict is active at Step 8:
   -> Read references/strict-mode.md (if not already loaded) for
     verification gate and structured finishing.
