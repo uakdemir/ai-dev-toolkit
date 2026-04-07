@@ -147,8 +147,12 @@ Same as today's `implementation-step.md` reference (which is now under `implemen
    [3] Clear context + single-agent — recommended for [tight context budget]
    [4] Parallel helper agents — recommended for [N parallelizable tasks]
    ```
-5. If user picks Option [3] (clear-context) → print the exit message with the `/clear → /implement <path> --model single` breadcrumb and exit (do not dispatch)
+5. If user picks Option [3] (clear-context) → print the exit message with the `/clear → /implement <path> --model single` breadcrumb and exit (do not dispatch). The breadcrumb includes `--model single` explicitly so that on re-entry after `/clear`, the picker is bypassed regardless of whether the user edits the command before pasting. If the user removes `--model` from the breadcrumb before pasting, the re-invocation falls back to the default model selection defined below.
 6. Else dispatch the chosen execution model with the appropriate override preamble
+
+### Default Model Selection
+
+When `--model` is not passed and the picker is not presented (e.g., when `/implement` is invoked standalone without explicit arguments and no picker interaction occurs), the default execution model is **single** (single-agent in current context). Override explicitly with `--model single`, `--model subagent`, or `--model parallel`. (`--model clear-context` is not a valid value — see Edge Case 7.)
 
 ## Orchestrate Step 5 Changes
 
@@ -173,7 +177,7 @@ Update `orchestrate/SKILL.md` Conditional Loading section (around line 231-232) 
 |---|---|---|
 | 4 → 5 | `step: 5` | `/orchestrate (/implement <plan-path>)` |
 | 5 (during /implement) | unchanged — /implement doesn't write hint file | n/a |
-| 5 → 6 | `step: 6` (written by orchestrate on the next invocation after the user pastes and runs `/orchestrate (/review-code N)`) | `/clear → /orchestrate (/review-code N --against spec --max-iterations 3)` (emitted by orchestrate at the end of Step 5 before exit) |
+| 5 → 6 | `step: 6` written by orchestrate when the wrapped `/review-code` command completes and orchestrate resumes control within the same invocation, following the Wrapped Next-Command Output parsing behavior | `/clear → /orchestrate (/review-code N --against spec --max-iterations 3)` (emitted by orchestrate at the end of Step 5 before exit) |
 
 ## State Synchronization Rules
 

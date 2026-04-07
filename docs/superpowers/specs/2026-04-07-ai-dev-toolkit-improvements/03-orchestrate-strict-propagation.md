@@ -86,14 +86,15 @@ Audit every exit point in `orchestrate/SKILL.md` and confirm the breadcrumb is t
 | 7 | Step 4 write-plan complete | Breadcrumb mid-output | Breadcrumb is last line |
 | 8 | Step 5 delegating wrapper exit (post Item 02) | New exit point | Breadcrumb is last line |
 | 9 | Step 6 code-review complete | Breadcrumb followed by next-step prose | Breadcrumb is last line |
-| 10 | Step 8 Complete/finalize | Breadcrumb followed by celebration prose | Breadcrumb is last line |
-| 11 | Step 8 brainstorm-next exit | Plain `/orchestrate` followed by prose | Wrapped `/orchestrate (/brainstorming)` is last line (per Item 04 — Item 03 just removes the trailing prose) |
-| 12 | Fast-path detection success exit | Breadcrumb mid-output | Breadcrumb is last line |
-| 13 | User Prompt fallback exit | Breadcrumb mid-output | Breadcrumb is last line |
-| 14 | Error Handling exits (each row) | Some have breadcrumbs, some don't | Per Change 5: every error row has a Breadcrumb column |
-| 15 | Step 0 Context Health Check YELLOW (warn-and-continue) | Breadcrumb mid-output | Breadcrumb is last line |
+| 10 | Step 7 Fix Findings exit | Wrapped `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` (re-runs code review after fixes applied) | Breadcrumb is last line |
+| 11 | Step 8 Complete/finalize | Breadcrumb followed by celebration prose | Breadcrumb is last line |
+| 12 | Step 8 brainstorm-next exit | Plain `/orchestrate` followed by prose | Wrapped `/orchestrate (/brainstorming)` is last line (per Item 04 — Item 03 just removes the trailing prose) |
+| 13 | Fast-path detection success exit | Breadcrumb mid-output | Breadcrumb is last line |
+| 14 | User Prompt fallback exit | Breadcrumb mid-output | Breadcrumb is last line |
+| 15 | Error Handling exits (each row) | Some have breadcrumbs, some don't | Per Change 5: every error row has a Breadcrumb column |
+| 16 | Step 0 Context Health Check YELLOW (warn-and-continue) | Breadcrumb mid-output | Breadcrumb is last line |
 
-All 15 sites must end with the breadcrumb as the literal final line.
+All 16 sites must end with the breadcrumb as the literal final line.
 
 ### Change 3 — "When NOT to emit a breadcrumb" subsection
 
@@ -164,7 +165,7 @@ Update the Error Handling table at lines 411-425 to include a third column showi
 
 Per project conventions: no test suite. Manual verification:
 1. Run `/orchestrate --strict` from Step 0; confirm every step boundary breadcrumb includes `--strict`
-2. Read modified `SKILL.md` and confirm all 15 audit-list exit points have the breadcrumb as the literal last line
+2. Read modified `SKILL.md` and confirm all 16 audit-list exit points have the breadcrumb as the literal last line
 3. Force a RED handoff (manually flag context >80% in test) and confirm prose + breadcrumb both appear, prose first, breadcrumb last
 4. Mid-conversation: trigger a clarifying question and confirm NO breadcrumb is appended
 5. Trigger an Error Handling row and confirm the new Breadcrumb column matches the last line of output
@@ -174,10 +175,10 @@ Per project conventions: no test suite. Manual verification:
 
 **Summary of this spec:**
 - Strict-mode flag echoes in all three breadcrumb forms (bare, wrapped, phase-boundary) by reading `mode:` from the hint file before emitting
-- All 15 breadcrumb-emitting exit points are audited and fixed so the breadcrumb is the literal last line of the response
+- All 16 breadcrumb-emitting exit points are audited and fixed so the breadcrumb is the literal last line of the response
 - New "When NOT to emit a breadcrumb" subsection prevents accidental breadcrumbs on mid-conversation prompts; RED auto-handoff calls `/session-handoff --light` and appends a breadcrumb after its prose
 
 **Decisions taken implicitly:**
 - The `--light` flag on `/session-handoff` is a known follow-up to a different skill — Item 03 only specifies that orchestrate calls it. If you'd rather block this spec on the `/session-handoff --light` flag landing first, let me know
 - RED auto-handoff keeps the prose AND adds a breadcrumb (both formats coexist) rather than replacing prose with a breadcrumb. Rationale: prose is human-readable context, breadcrumb is the copy-paste target — they serve different purposes
-- All 15 audit-list sites are listed inline so the implementer has a checklist; if any site turns out to not match the description, the implementer flags it back rather than silently adapting
+- All 16 audit-list sites are listed inline so the implementer has a checklist; if any site turns out to not match the description, the implementer flags it back rather than silently adapting

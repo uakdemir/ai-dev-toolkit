@@ -57,7 +57,7 @@ Starting a new monorepo (or adding a new package to an existing one) means hand-
 | `ai-dev-tools/skills/scaffold/templates/node-fastify-react/technology/.claude/settings.json` | **CREATE** (copy from `tmp/scaffold/technology/.claude/settings.json`) |
 | `ai-dev-tools/skills/scaffold/templates/node-fastify-react/technology/.claude/hookify.warn-db-push.local.md` | **CREATE** (copy from `tmp/scaffold/technology/.claude/hookify.warn-db-push.local.md`) |
 
-11 template files (verbatim copies from `tmp/scaffold/`) plus `SKILL.md` and `placeholder-resolution.md` — 13 files total. No edits to existing files.
+10 template files (verbatim copies from `tmp/scaffold/`) plus `SKILL.md` and `placeholder-resolution.md` — 12 files total. No edits to existing files.
 
 The templates retain their original `{{PLACEHOLDER}}` markers and are substituted at runtime by the skill. The reference file `placeholder-resolution.md` documents how each placeholder is resolved (CLI flag, prompt, or auto-derived from project context).
 
@@ -188,7 +188,7 @@ When invoked as `/scaffold --bootstrap` (or inferred via empty directory):
 
 In order (root → package → technology), for each file in `templates/<stack>/<layer>/`:
 1. Compute target path (e.g., `templates/<stack>/root/CLAUDE.md` → `./CLAUDE.md`).
-2. **Skip-existing check:** if target file exists → skip (do not overwrite, even on `--force`; only manifest-listed files are overwritten by `--force`).
+2. **Skip-existing check:** (1) Read `.scaffold-manifest.yaml` to get the list of manifest-listed (overwritable) files. (2) If target file does not exist → write it. (3) If target file exists AND is listed in the manifest AND `--force` is true → overwrite it. (4) Otherwise → skip (target exists but is not in the manifest, or `--force` is false).
 3. Substitute all `{{PLACEHOLDER}}` markers in the template content.
 4. Write the file.
 5. Append the target path to the in-memory manifest list.
@@ -250,7 +250,7 @@ Then conditionally:
 
 ### Step A4 — Wire workspace declarations
 
-1. **Update `pnpm-workspace.yaml`:** use text-level insertion rather than a YAML parse-and-rewrite (standard YAML parsers strip comments). Strategy: read the file as text, find the last line of the `packages:` list block (the last line that starts with `  - `), and append `  - packages/<name>` on a new line immediately after it. Write the modified text back. If `packages/<name>` already appears in the file → skip silently. If the `packages:` block cannot be located → fall back to warning and skip (same behavior as other wiring failures).
+1. **Update `pnpm-workspace.yaml`:** use text-level insertion rather than a YAML parse-and-rewrite (standard YAML parsers strip comments). Strategy: read the file as text, find the last line of the `packages:` list block (the last line that starts with `  - `), and append `  - packages/<name>` on a new line immediately after it using standard 2-space indentation. Write the modified text back. Edge cases: if `packages:` is an inline empty list (`packages: []`), rewrite it to block form (`packages:\n  - packages/<name>`) before appending. If `packages:` is missing from the file entirely, add it at the document root as a new block entry. If `packages/<name>` already appears in the file → skip silently. If the `packages:` block cannot be located for any other reason → fall back to warning and skip (same behavior as other wiring failures).
 2. **Update root `CLAUDE.md` Workspace Packages table:** locate the table (find heading `## Workspace Packages` or similar; if not present → print warning and skip), add a new row:
    ```
    | @<scope>/<name> | <description> | packages/<name>/ |

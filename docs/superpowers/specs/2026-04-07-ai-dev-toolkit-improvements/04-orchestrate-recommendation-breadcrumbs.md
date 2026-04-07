@@ -26,7 +26,7 @@ Six pain points compound at orchestrate's step boundaries.
 - Multi-line breadcrumb format with labeled options (template + position rule)
 - Auto-commit verification after `/implement`, `/review-code`, and Step 8 finalize (commit only if `git status --porcelain` is non-empty)
 - Quality-gate suggestion pool (hardcoded set of 3, randomly pick 2 at success points)
-- Per-step rewrites for Steps 2, 4, 5 post-implement, 6 (both fail and success paths), 7, and 8
+- Per-step rewrites for Steps 2, 4, 5 post-implement, 6 (both fail and success paths), and 8
 - Step 8 brainstorming form (explicit `(/brainstorming)` wrap)
 
 **Out of scope:**
@@ -141,8 +141,6 @@ Six steps in `orchestrate/SKILL.md` get rewritten under this item. The Step 5 / 
 
 The rewrites below show **standard mode** examples for readability. In strict mode, every `/orchestrate` token in every option becomes `/orchestrate --strict`.
 
-Note on step numbering: the actual orchestrate SKILL.md has Step 7 = Fix Findings and Step 8 = Complete/finalize. References to "Step 7 (finalize)" throughout this spec mean **Step 8** in the running SKILL.md. The section headers below use the SKILL.md step numbers.
-
 ### Step 2 (review-doc complete) — ALWAYS 2 lines
 
 Render two options regardless of the review's findings count. The user wants the skip-ahead path surfaced even when the spec is small/clean.
@@ -161,7 +159,7 @@ Next steps (pick one):
 - `<spec>` is the spec path from the orchestrate hint file.
 - `--max-iterations 2` is the recommended default; user can edit before invoking.
 - Option `[1]` is recommended (state-machine-correct progression). Option `[2]` is the escape hatch.
-- **Step 3 (/respond-to-review) is intentionally not surfaced as a breadcrumb option here.** The review-doc loop's built-in fix phase already applies critical fixes during its own iterations, making a separate respond-to-review step redundant at this boundary. The recommended path when criticals remain is to run additional review-doc iterations (option `[1]`) rather than routing through Step 3. The SKILL.md Step 2 description should be updated to reflect this: the new recommended next step when criticals > 0 is to re-run `/review-doc` (as shown in option `[1]`), not to invoke `/respond-to-review`.
+- **Step 3 (/respond-to-review) is intentionally not surfaced as a breadcrumb option here.** The review-doc loop's built-in fix phase already applies critical fixes during its own iterations, making a separate respond-to-review step redundant at this boundary. The recommended path when criticals remain is to run additional review-doc iterations (option `[1]`) rather than routing through Step 3. Explicit implementation guidance: (1) Update the SKILL.md Step-to-command mapping table row "After Step 2" to remove the `criticals > 0` conditional path through `/respond-to-review` — the new Step 2 breadcrumb is always the 2-option block above, regardless of critical count. (2) Step 3's trigger logic (Respond to Review: `review-doc-summary.md Reviewed matches spec AND Critical>0`) remains unchanged — Step 3 is still reachable for cases where `/review-doc` was run outside the orchestrate loop; only its surfacing in the Step 2 breadcrumb is removed. (3) The `/respond-to-review` skill itself is unchanged — only orchestrate no longer advertises it at the Step 2 breadcrumb boundary.
 - This rewrite applies to **Step 2 itself** (after the first review-doc completes). The Step 1 → Step 2 transition (brainstorm produces spec → review-doc breadcrumb) is unchanged and remains single-line, since brainstorm-complete has only one natural next step.
 
 ### Step 4 (write-plan complete) — 2 lines
@@ -223,7 +221,7 @@ Next steps (pick one):
 ```
 
 **Notes:**
-- Option `[2]` is shown **even when criticals remain** (explicit design decision). The user is trusted to know when criticals are acceptable to defer.
+- Option `[2]` is shown **even when criticals remain** (explicit design decision). The user is trusted to know when criticals are acceptable to defer. **Routing caveat:** Because option `[2]` uses a bare `/clear → /orchestrate` (no wrapped inner command), Fast-Path Detection will run on that invocation and may re-route to Step 7 (Fix Findings) if `tmp/review-code-summary.md` still contains criticals or highs. To bypass Fast-Path Detection and advance directly to Step 8, the user should first update `tmp/orchestrate-state.md` to set `step: 8` before pasting the option `[2]` command.
 - The legacy `/respond-to-review` line is **never rendered** — it was dropped from the design entirely. The review-code loop already applies fixes during its own iterations.
 - Both options use phase-boundary form (`/clear → ...`) because both transitions warrant a fresh context.
 
@@ -313,7 +311,7 @@ Cycle complete. Start a new cycle:
 
 9. **Quality-gate pool with fewer than 2 entries (hypothetical future shrink).** Render whatever options exist; never error out. For v1, the pool is always exactly 3, so this case is purely defensive.
 
-9a. **Single-line quality-gate options in multi-line breadcrumb blocks.** The Multi-Line Breadcrumb Format section specifies that each option is two lines: a description line then the `/command args` line. Quality-gate options (`[2]` and `[3]` in Step 6 success and Step 8) are rendered as a **single line** (`/clear → /<gate-name>`) as an explicit exception to this rule. Rationale: the gate name is self-describing (`/api-contract-guard`, `/test-audit`, `/convention-enforcer`) and a separate description line would be redundant. This exception applies **only to quality-gate pool options** — all other options in any labeled-options block must use the two-line format.
+9a. **Single-line quality-gate options in multi-line breadcrumb blocks.** The Multi-Line Breadcrumb Format section specifies that each option is two lines: a description line then the `/command args` line. This single-line exception applies **only to randomly-selected quality-gate pool options** (`[2]` and `[3]` in Step 6 success and Step 8 where the specific gate pair is not known in advance). These are rendered as a **single line** (`/clear → /<gate-name>`) because the gate name is self-describing (`/api-contract-guard`, `/test-audit`, `/convention-enforcer`) and a separate description line would be redundant. Deterministically-selected gates (e.g., a gate explicitly required by project context, not drawn from the random pool) must use the standard two-line format with a description line (e.g., `"Run convention enforcement"` followed by `    /clear → /convention-enforcer`). All other options in any labeled-options block — whether inside or outside quality-gate slots — must use the two-line format.
 
 10. **Step 8 finalize commit-failure case.** Same prepend warning behavior as auto-commit failure in Step 5/6. The warning message is identical regardless of which step triggered it; only the commit message template differs.
 
