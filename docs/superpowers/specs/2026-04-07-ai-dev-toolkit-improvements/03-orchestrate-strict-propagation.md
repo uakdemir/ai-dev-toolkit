@@ -71,7 +71,7 @@ Add a new subsection to `orchestrate/SKILL.md` titled **"Strict Mode Breadcrumbs
 
 Audit every exit point in `orchestrate/SKILL.md` and confirm the breadcrumb is the **literal last lines** of the printed output. (Plural — "last lines", not "last line" — because Item 04 layers multi-line option blocks on top of several of these rows. The position guarantee carries over: even when a breadcrumb is a multi-line labeled-options block, the entire block must be the absolute final block of the response with nothing after it.) Wrap the audit list directly into the spec for traceability.
 
-**Note for Item 04 implementer:** Several rows in the audit table below (Step 2, Step 4, Step 5 post-implement, Step 6, Step 7) will be rewritten by Item 04 as multi-line option blocks. The "Today" column reflects the single-line state; the "After" column reflects single-line under Item 03. Item 04 then transforms several of those single-line "After" rows into multi-line blocks. The position guarantee from this item still applies — multi-line blocks must be the absolute last block, no trailing prose.
+**Note for Item 04 implementer:** Several rows in the audit table below (Step 2, Step 4, Step 5 post-implement, Step 6) will be rewritten by Item 04 as multi-line option blocks. The "Today" column reflects the single-line state; the "After" column reflects single-line under Item 03. Item 04 then transforms several of those single-line "After" rows into multi-line blocks. Step 7 stays single-line — Item 04 does not rewrite Step 7. The position guarantee from this item still applies — multi-line blocks must be the absolute last block, no trailing prose.
 
 **Audit list — exit points that emit a breadcrumb:**
 
@@ -88,13 +88,12 @@ Audit every exit point in `orchestrate/SKILL.md` and confirm the breadcrumb is t
 | 9 | Step 6 code-review complete | Breadcrumb followed by next-step prose | Breadcrumb is last line |
 | 10 | Step 7 Fix Findings exit | Wrapped `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` (re-runs code review after fixes applied) | Breadcrumb is last line |
 | 11 | Step 8 Complete/finalize | Breadcrumb followed by celebration prose | Breadcrumb is last line |
-| 12 | Step 8 brainstorm-next exit | Plain `/orchestrate` followed by prose | Wrapped `/orchestrate (/brainstorming)` is last line (per Item 04 — Item 03 just removes the trailing prose) |
+| 12 | Step 8 brainstorm-next exit | Plain `/orchestrate` followed by prose | Plain `/orchestrate` is last line (trailing prose removed — Item 03 does the removal; Item 04 does not change this breadcrumb form because `/brainstorming` is not a registered top-level slash command) |
 | 13 | Fast-path detection success exit | Breadcrumb mid-output | Breadcrumb is last line |
 | 14 | User Prompt fallback exit | Breadcrumb mid-output | Breadcrumb is last line |
 | 15 | Error Handling exits (each row) | Some have breadcrumbs, some don't | Per Change 5: every error row has a Breadcrumb column |
-| 16 | Step 0 Context Health Check YELLOW (warn-and-continue) | Breadcrumb mid-output | Breadcrumb is last line |
 
-All 16 sites must end with the breadcrumb as the literal final line.
+All 15 sites must end with the breadcrumb as the literal final line. (Note: Step 0 YELLOW warn-and-proceed is intentionally NOT a distinct audit row — it defers to whichever step runs after state detection, which is already audited under rows 1, 2, 4–14.)
 
 ### Change 3 — "When NOT to emit a breadcrumb" subsection
 
@@ -165,7 +164,7 @@ Update the Error Handling table at lines 411-425 to include a third column showi
 
 Per project conventions: no test suite. Manual verification:
 1. Run `/orchestrate --strict` from Step 0; confirm every step boundary breadcrumb includes `--strict`
-2. Read modified `SKILL.md` and confirm all 16 audit-list exit points have the breadcrumb as the literal last line
+2. Read modified `SKILL.md` and confirm all 15 audit-list exit points have the breadcrumb as the literal last line
 3. Force a RED handoff (manually flag context >80% in test) and confirm prose + breadcrumb both appear, prose first, breadcrumb last
 4. Mid-conversation: trigger a clarifying question and confirm NO breadcrumb is appended
 5. Trigger an Error Handling row and confirm the new Breadcrumb column matches the last line of output
@@ -175,10 +174,10 @@ Per project conventions: no test suite. Manual verification:
 
 **Summary of this spec:**
 - Strict-mode flag echoes in all three breadcrumb forms (bare, wrapped, phase-boundary) by reading `mode:` from the hint file before emitting
-- All 16 breadcrumb-emitting exit points are audited and fixed so the breadcrumb is the literal last line of the response
+- All 15 breadcrumb-emitting exit points are audited and fixed so the breadcrumb is the literal last line of the response
 - New "When NOT to emit a breadcrumb" subsection prevents accidental breadcrumbs on mid-conversation prompts; RED auto-handoff calls `/session-handoff --light` and appends a breadcrumb after its prose
 
 **Decisions taken implicitly:**
 - The `--light` flag on `/session-handoff` is a known follow-up to a different skill — Item 03 only specifies that orchestrate calls it. If you'd rather block this spec on the `/session-handoff --light` flag landing first, let me know
 - RED auto-handoff keeps the prose AND adds a breadcrumb (both formats coexist) rather than replacing prose with a breadcrumb. Rationale: prose is human-readable context, breadcrumb is the copy-paste target — they serve different purposes
-- All 16 audit-list sites are listed inline so the implementer has a checklist; if any site turns out to not match the description, the implementer flags it back rather than silently adapting
+- All 15 audit-list sites are listed inline so the implementer has a checklist; if any site turns out to not match the description, the implementer flags it back rather than silently adapting

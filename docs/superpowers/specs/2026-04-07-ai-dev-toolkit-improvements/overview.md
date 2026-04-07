@@ -77,7 +77,7 @@ Reasoning:
 - **02 second** because it's the foundational refactor — extracts `/implement` from orchestrate Step 5. Items 03 and 04 both depend on the new Step 5 shape.
 - **03 third** because it adds the `--strict` propagation contract and breadcrumb-as-last-line guarantee that Item 04 builds on.
 - **04 fourth** because multi-line labeled breadcrumbs need the strict-propagation and position guarantees from Item 03 in place.
-- **05 last** because it's the largest net-new surface area (new `/scaffold` skill + 11 templates) with no inbound dependencies — best to land after the orchestrate changes settle so any `/scaffold` breadcrumbs at completion use the new format.
+- **05 last** because it's the largest net-new surface area (new `/scaffold` skill + 10 templates) with no inbound dependencies — best to land after the orchestrate changes settle so any `/scaffold` breadcrumbs at completion use the new format.
 
 ## Out of Scope
 
