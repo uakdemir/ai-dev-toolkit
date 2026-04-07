@@ -22,6 +22,7 @@ MAIN COMMAND
 COMMANDS (ORCHESTRATE FLOW)
   /orchestrate              Development cycle manager (start here)
   /review-doc <path> [...]  Review specs and design documents
+  /implement [path] [...]   Execute a plan or spec (task graph + dispatch)
   /document-for-ai          Generate AI-optimized docs (auto-invoked by orchestrate)
   /review-code <N> <spec>   Review last N commits against a spec
 
