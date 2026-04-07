@@ -276,7 +276,7 @@ Edge: user explicitly states implementation is done -> advance to Step 6; 0 comm
 **Step 7 — Fix Findings:** review-code-summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
 - **Phase 1 (pre-confirmation):** Present `── Step 8: Complete ──` with Feature name, Status (Approved/Approved with suggestions), and "Ready to finalize?" No git baselines.
-- **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> recommendations -> "What's next?"
+- **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> print recommendations -> print "What's next?" prompt -> emit the breadcrumb (`/orchestrate` or `/orchestrate --strict` per mode) as the literal last line per the Exit Output Format subsection. The "What's next?" prompt and recommendations both appear BEFORE the breadcrumb.
 
 If a refactor roadmap exists with unchecked items:
   → Check roadmaps in this order: docs/monorepo-strategy/roadmap.md first,
@@ -304,9 +304,12 @@ If a refactor roadmap exists with unchecked items:
     docs/layer-architecture/roadmap.md → refactor-to-layers
     After --next-unit completes and produces a new single-unit spec,
     write hint (feature: <next-unit-name>, step: 2) and exit.
-    Orchestrate must be re-invoked to continue — it does not
-    automatically advance to Step 2 in the same session.
-- **--strict Phase 2:** Update hint to `finalized` -> Read references/strict-mode.md (verification gate) -> Read references/quality-gates.md (baselines) -> roadmap -> structured finishing.
+    Print the "Orchestrate must be re-invoked to continue — it does not
+    automatically advance to Step 2 in the same session." advisory BEFORE
+    the breadcrumb. Then emit the breadcrumb (`/orchestrate` or
+    `/orchestrate --strict` per mode) as the literal last line per the
+    Exit Output Format subsection.
+- **--strict Phase 2:** Update hint to `finalized` -> Read references/strict-mode.md (verification gate) -> Read references/quality-gates.md (baselines) -> roadmap -> print structured-finishing output -> emit the breadcrumb (`/orchestrate --strict`) as the literal last line per the Exit Output Format subsection.
 
 ---
 
