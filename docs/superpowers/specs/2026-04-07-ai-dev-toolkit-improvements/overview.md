@@ -65,14 +65,16 @@ Four pain points motivate this batch:
 
 ## Implementation Order
 
-**02 → 03 → 04 → 05 → 01**
+**01 → 02 → 03 → 04 → 05**
+
+File numbering matches the build sequence — implement in numeric order.
 
 Reasoning:
-- **02 first** because it changes the largest surface area (orchestrate Step 5 + new skill) and items 03–04 depend on the new Step 5 shape.
-- **03 second** because it adds the strict-propagation contract that Item 04 builds on.
-- **04 third** because multi-line breadcrumbs need the strict-propagation + last-line guarantees in place.
-- **05 fourth** because it's the largest net-new skill but has no inbound dependencies — best to land after the orchestrate changes settle so any /scaffold breadcrumbs at completion can use the new format.
-- **01 last** because it's a self-contained 4-line edit to one file with no inbound or outbound dependencies — easy to land at any time, deferred to the end so it doesn't block the bigger items.
+- **01 first** because it's the smallest, most isolated fix (a self-contained edit to one file with no inbound or outbound dependencies). Landing it first puts a fast win on the board and clears the smallest item before the larger orchestrate work begins.
+- **02 second** because it's the foundational refactor — extracts `/implement` from orchestrate Step 5. Items 03 and 04 both depend on the new Step 5 shape.
+- **03 third** because it adds the `--strict` propagation contract and breadcrumb-as-last-line guarantee that Item 04 builds on.
+- **04 fourth** because multi-line labeled breadcrumbs need the strict-propagation and position guarantees from Item 03 in place.
+- **05 last** because it's the largest net-new surface area (new `/scaffold` skill + 11 templates) with no inbound dependencies — best to land after the orchestrate changes settle so any `/scaffold` breadcrumbs at completion use the new format.
 
 ## Out of Scope
 
@@ -94,9 +96,9 @@ No test suite in this plugin project (per project conventions). Verification is 
 
 **Summary of this overview doc:**
 - Five sub-specs (01–05) covering review-doc, /implement extraction, /strict propagation, multi-line breadcrumbs, /scaffold
-- Implementation order is **02 → 03 → 04 → 05 → 01** (NOT the file numbering order — items are numbered by topic, sequenced by dependency)
+- Implementation order is **01 → 02 → 03 → 04 → 05** — file numbering matches the build sequence
 - Five OOS callouts to prevent scope creep — most notably the structural-test generation ideas are deferred from /scaffold v1
 
-**Decisions taken implicitly:**
-- File numbering uses topic order, not implementation order — let me know if you'd prefer files renamed to match the build sequence (e.g., `01-implement-skill.md` because /implement ships first)
-- Item 01 ordered last despite being the smallest fix — rationale is "land it whenever, no blockers" but I could also put it first to get a fast win on the board
+**Decisions taken:**
+- File numbering matches implementation order — `01` is the first item to land, `05` is the last. Reading the files in numeric order is reading them in build sequence.
+- Item 01 ordered first despite being the smallest fix to put a fast win on the board and clear the smallest item before the larger orchestrate work begins. Items 02–04 form a dependency chain (02 → 03 → 04); Item 05 is standalone and lands last because it's the largest net-new surface area.
