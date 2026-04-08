@@ -1,0 +1,23 @@
+{
+  "_comment": "Technology layer additions — merge into root settings.json",
+  "sandbox": {
+    "network": {
+      "additionalHosts": [
+        "stackoverflow.com",
+        "developer.mozilla.org",
+        "nodejs.org",
+        "vitejs.dev",
+        "react.dev",
+        "fastify.dev",
+        "orm.drizzle.team",
+        "turbo.build",
+        "pnpm.io",
+        "tailwindcss.com"
+      ]
+    }
+  },
+  "hooks": {
+    "_PostToolUse_root": "if [ -f apps/server/tsconfig.json ]; then (cd apps/server && npx tsc --noEmit 2>&1 | head -20); else npx tsc --noEmit 2>&1 | head -20; fi",
+    "_PostToolUse_package": "cd {{MONOREPO_ROOT}}/packages/{{PACKAGE_NAME}} && npx tsc --noEmit 2>&1 | head -20"
+  }
+}

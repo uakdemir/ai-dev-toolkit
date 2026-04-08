@@ -19,6 +19,11 @@
 
 # Claude Code
 .claude/
+# Scaffold templates: the .claude/ subdirs under node-fastify-react
+# template trees are payload (Claude reads them at /scaffold runtime),
+# not local Claude Code config. They must be tracked.
+!ai-dev-tools/skills/scaffold/templates/**/.claude/
+!ai-dev-tools/skills/scaffold/templates/**/.claude/**
 
 .codex
 
