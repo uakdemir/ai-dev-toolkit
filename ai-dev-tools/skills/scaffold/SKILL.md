@@ -206,4 +206,119 @@ The technology layer does NOT write separate files. Instead:
 | Manifest file corrupt (invalid YAML) | Error: `"Manifest file <path> is corrupt. Fix or delete to proceed."` |
 | `--force` in a fully-bootstrapped dir | Print loud confirmation: `"--force will OVERWRITE every file listed in .scaffold-manifest.yaml (N files). Proceed? [y/N]"`. Default `N`. |
 
-<!-- Add-package mode populated in Task 5 -->
+## Add-Package Mode
+
+Triggered by `--add-package <name>` or by mode inference in a directory containing `pnpm-workspace.yaml` or `turbo.json`.
+
+### Step A1 — Pre-flight checks
+
+1. **Monorepo root check.** Cwd must contain `pnpm-workspace.yaml` OR `turbo.json`. If neither → error: `"Not a monorepo root. cd to the monorepo root or use --bootstrap to create one."`
+2. **Package name validation.** `<name>` must be a valid npm package name: lowercase, no spaces, no leading dots, no uppercase letters. Regex check: `^[a-z0-9][a-z0-9._-]*$`. If invalid → error: `"Invalid package name '<name>'. npm package names must be lowercase, no spaces, no leading dots."`
+3. **Package collision check.** If `packages/<name>/` already exists → error: `"Package <name> already exists at packages/<name>/. Pick a different name or remove the existing directory."`
+4. **Stack check.** Per the Stack Resolution section above.
+
+### Step A2 — Resolve placeholders
+
+1. Auto-derive `{{MONOREPO_ROOT}}`, `{{PACKAGE_MANAGER}}`, `{{BUILD_TOOL}}` per `references/placeholder-resolution.md`.
+2. `{{PACKAGE_NAME}}` ← `<name>` from the `--add-package` argument.
+3. `{{@scope/package-name}}` → read root `package.json` `name` field. Extract scope (the part before `/` if `name` starts with `@`). Produce `@<scope>/<name>`. If root has no scope → prompt the user for the scope.
+4. `{{PACKAGE_DESCRIPTION}}` → prompt, or `package_description:` from `--config`.
+5. `{{@scope/dep-package}}` (multi-value, optional) → prompt: `"Workspace dependencies for this package? (comma-separated, blank for none):"`, or `deps:` list from `--config`.
+6. After all placeholders resolved → print a summary table and ask `"Proceed with scaffold? [Y/n]"`. On `n` → exit without writing files.
+
+### Step A3 — Write package layer
+
+For each file under `templates/<stack>/package/`:
+
+1. **Compute target path.** `package/<path>` → `./packages/<name>/<path>` (e.g., `package/CLAUDE.md` → `./packages/<name>/CLAUDE.md`; `package/.claude/settings.json` → `./packages/<name>/.claude/settings.json`).
+2. **Skip-existing check** per the same rules as bootstrap Step B3.
+3. **Substitute placeholders**, write the file, append to in-memory manifest list.
+4. **Create parent directories** as needed.
+
+Then conditionally scaffold subdirectories:
+
+- If `--has-schema` → create `packages/<name>/src/db/schema/` and write `packages/<name>/src/db/schema/.gitkeep` (empty file).
+- If `--has-routes` → create `packages/<name>/src/routes/` and write `packages/<name>/src/routes/.gitkeep`.
+- If `--has-client` → create `packages/<name>/src/client/` and write `packages/<name>/src/client/.gitkeep`.
+
+Each `.gitkeep` file is added to the manifest. If `.gitkeep` already exists → skip silently (content-free, replacement is a no-op).
+
+### Step A4 — Wire workspace declarations
+
+1. **Update `pnpm-workspace.yaml`** using text-level insertion (not YAML parse-and-rewrite — standard YAML parsers strip comments):
+   - Read the file as text.
+   - Search for a line matching `packages/<name>` exactly. If found → skip silently (already registered).
+   - Find the `packages:` block. If it is an inline empty list (`packages: []`) → rewrite to block form: `packages:\n  - packages/<name>`.
+   - If the `packages:` block is present in block form → find the last line starting with `  - ` under the block, append `  - packages/<name>` on a new line immediately after it using 2-space indentation.
+   - If `packages:` is missing from the file entirely → append a new block at the end of the document:
+     ```
+     packages:
+       - packages/<name>
+     ```
+   - If the `packages:` block cannot be located for any other reason (e.g., malformed YAML, unexpected structure) → print warning: `"warning: could not update pnpm-workspace.yaml, wire it manually"`. Do not abort.
+   - Write the modified text back.
+2. **Update root `CLAUDE.md` Workspace Packages table:**
+   - Read the root `CLAUDE.md`.
+   - Locate the `## Workspace Packages` heading (exact string). If not found, try `### Workspace Packages`. If neither → print warning: `"warning: could not locate Workspace Packages table in root CLAUDE.md, skipping table update — add the row manually"`, continue.
+   - Read the header row directly below the heading to determine column layout. Typical layout: `| Package | Description | Path |`.
+   - Append a new row immediately after the last existing row:
+     ```
+     | @<scope>/<name> | <description> | packages/<name>/ |
+     ```
+   - Write the modified file back.
+3. If either wiring step fails for any reason → print warning, do NOT abort. Package files are already written; wiring failures are recoverable via the wire-up checklist.
+
+### Step A5 — Manifest update and wire-up checklist
+
+1. **Update `.scaffold-manifest.yaml`:** read the existing manifest (if any), append the new package's files to the `files:` list. Do NOT rewrite existing manifest entries. Preserve the existing `stack:` and `created:` top-level fields. If the manifest is missing → create a fresh one listing only the files written in this run.
+2. Print summary:
+
+   ```
+   Package <name> scaffolded.
+     Files: <N>
+     has-schema: <true|false>
+     has-routes: <true|false>
+     has-client: <true|false>
+   ```
+
+3. Print wire-up checklist:
+
+   ```
+   Package <name> scaffolded. Remaining manual steps:
+
+     1. If your package has routes: register them in apps/server/src/app.ts
+        Example: app.register(import('@<scope>/<name>'))
+     2. If your package has client hooks: import them in apps/client/src/main.tsx
+     3. Run 'pnpm install' to link the workspace symlinks
+     4. Add a typecheck script to packages/<name>/package.json if not already there
+   ```
+
+4. Exit successfully.
+
+### Add-package edge cases
+
+| Case | Behavior |
+|---|---|
+| Not a monorepo root | Error mentioning `--bootstrap` |
+| Package name collision | Error, do not merge |
+| Invalid npm package name | Error before doing any work |
+| Manifest missing | Treat as user-modified; create fresh manifest with just the new package's files |
+| Workspace-declaration update fails | Warn, continue (files already written) |
+| Root `CLAUDE.md` Workspace Packages table not found | Warn, continue |
+| `.gitkeep` already exists | Skip silently |
+| Ambiguous package manager (multiple lockfiles) | Pick in priority order: pnpm-lock.yaml → bun.lockb → package-lock.json → default pnpm. Print choice. |
+
+## References
+
+- `references/placeholder-resolution.md` — authoritative list of every `{{PLACEHOLDER}}` marker, resolution source per placeholder, and `--config` YAML schema.
+
+## Design decisions (v1)
+
+- **Templates only, no convention generation.** Drizzle test generation, declarative `conventions:` blocks, ESLint rule generation are deferred. v1 ships the 10 template files verbatim.
+- **No `app.ts` or `main.tsx` wiring** during `--add-package`. Wiring is project-specific and gets messy when automated. The scaffold prints a wire-up checklist instead.
+- **`--force` is asymmetric.** Overrides manifest-listed files, but does NOT override files that are not in the manifest. User files are always protected.
+- **Plain `/scaffold` does mode inference, not help printing.** `--help` is only shown when explicitly requested.
+- **Unknown config keys are errors; missing config keys fall back to prompts.** Typos are silent and dangerous; partial configs are intentional.
+- **Manifest corruption is fail-loud.** Never silently regenerate.
+- **Layer 3 (`technology/`) merges into Layer 1 root files** rather than writing separately. Arrays concatenate (root first); scalars use technology value on conflict; objects recurse.
+- **Only stack in v1: `node-fastify-react`.** The `--stack` flag exists for future extensibility.
