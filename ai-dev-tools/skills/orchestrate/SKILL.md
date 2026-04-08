@@ -305,7 +305,7 @@ Render Case A options as bare commands stacked one per line per the Multi-Line B
 **Step 7 — Fix Findings:** review-code-summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
 - **Phase 1 (pre-confirmation):** Present `── Step 8: Complete ──` with Feature name, Status (Approved/Approved with suggestions), and "Ready to finalize?" No git baselines.
-- **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> print recommendations -> emit the breadcrumb (`/orchestrate` or `/orchestrate --strict` per mode) as the literal last line per the Exit Output Format subsection. Recommendations appear BEFORE the breadcrumb; no trailing "What's next?" prose follows the breadcrumb.
+- **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> print recommendations. After all Phase 2 work completes, run the **Auto-Commit Verification** sequence with the `chore: post-finalize checkpoint for <spec-filename>` template, then emit a 3-option multi-line breadcrumb: option 1 is plain `/orchestrate` (start the next cycle — recommended; Step 1 detection invokes `superpowers:brainstorming` internally because `/brainstorming` is not a registered top-level slash command; `/orchestrate --strict` in strict mode). Options 2 and 3 are two randomly-selected quality gates from the **Quality-Gate Pool** in the form `/clear → /<gate-name>`, re-randomized on every invocation. Render all three options as bare commands stacked one per line per the Multi-Line Breadcrumb Format subsection. Recommendations appear BEFORE the breadcrumb; no trailing "What's next?" prose follows the breadcrumb.
 
 If a refactor roadmap exists with unchecked items:
   → Check roadmaps in this order: docs/monorepo-strategy/roadmap.md first,
@@ -514,6 +514,31 @@ Run this sequence **before** emitting the next-step breadcrumb at the following 
 - The breadcrumb-as-last-line guarantee still holds: the absolute last line of the response is the last command line of the breadcrumb. The warning is prepended at the top, not appended at the bottom.
 - Do NOT exit. The user is trusted to read the warning and choose commit-and-continue, override, or manually resolve.
 
+### Quality-Gate Pool
+
+A hardcoded pool of three quality-gate skills surfaced as additional breadcrumb options at designated success points:
+
+1. `/api-contract-guard`
+2. `/test-audit`
+3. `/convention-enforcer`
+
+**Success points that surface quality gates:**
+
+- Step 6 Case B (review-code returned with 0 criticals, 0 highs).
+- Step 8 finalize post-confirmation (post-auto-commit, at the success breadcrumb).
+
+**Selection algorithm:**
+
+- Use timestamp-based randomness (no seed persistence — different invocations get different picks; reproducibility is not required).
+- Pick **2 distinct** entries from the pool of 3.
+- Render each as a single-line option `/clear → /<gate-name>` (phase-boundary form, since quality gates clear context and run independently).
+- The recommended next-step option is always rendered **first** (top line of the stacked breadcrumb). Quality-gate options are rendered on the lines below the recommended option. This positions state-machine progression as the default while keeping the gates discoverable.
+- Re-randomize at every emission (no caching across steps or across invocations of the same step).
+
+**Why random instead of round-robin or fixed:** randomness encourages users to try different gates over time. No state persistence is required. The user retains full control and can always ignore the gate options and paste the first (recommended) line.
+
+**Defensive edge case:** if the pool ever shrinks below 2 entries (not applicable in v1 — pool is hardcoded to exactly 3), render whatever options exist without erroring out.
+
 **Step-to-command mapping:**
 
 The table has three columns: **After Step** (case label — free to contain case-distinction prose like `criticals present` or `phase boundary advancing to Step 4`), **Standard** (literal command text for standard mode), and **Strict** (literal command text for strict mode). Output cells contain only literal `/command args` text — never conditional prose, never wrapper labels, never descriptions. When a step emits multiple options at one case, the options are stacked in the output cell using `<br>` as the line separator, rendered at runtime as one command per line per the Multi-Line Breadcrumb Format subsection above.
@@ -530,9 +555,9 @@ Rows 2, 3, 6, and 8 are split into one row per case (e.g., Step 6 has separate `
 | 4 (Write Plan — plan saved, always 2 options) | `/orchestrate (/implement <plan_path>)`<br>`/orchestrate (/review-doc <plan_path>)` | `/orchestrate --strict (/implement <plan_path>)`<br>`/orchestrate --strict (/review-doc <plan_path>)` |
 | 5 (Implement — phase boundary advancing to Step 6) | `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` | `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
 | 6 (Code Review — criticals or highs remaining) | `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`<br>`/clear → /orchestrate` | `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)`<br>`/clear → /orchestrate --strict` |
-| 6 (Code Review — clean, phase boundary advancing to Step 8) | `/clear → /orchestrate` | `/clear → /orchestrate --strict` |
+| 6 (Code Review — clean, phase boundary advancing to Step 8) | `/clear → /orchestrate`<br>`/clear → /<random-quality-gate-1>`<br>`/clear → /<random-quality-gate-2>` | `/clear → /orchestrate --strict`<br>`/clear → /<random-quality-gate-1>`<br>`/clear → /<random-quality-gate-2>` |
 | 7 (Fix Findings) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` | `/orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
-| 8 (Complete) | `/orchestrate` | `/orchestrate --strict` |
+| 8 (Complete — post-finalize success) | `/orchestrate`<br>`/clear → /<random-quality-gate-1>`<br>`/clear → /<random-quality-gate-2>` | `/orchestrate --strict`<br>`/clear → /<random-quality-gate-1>`<br>`/clear → /<random-quality-gate-2>` |
 
 **Parsing behavior:** When orchestrate receives `/orchestrate (/some-command args)`:
 
