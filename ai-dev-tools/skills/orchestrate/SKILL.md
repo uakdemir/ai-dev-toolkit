@@ -292,11 +292,16 @@ No plan found for the current feature. Run /writing-plans <spec> first to produc
 ```
 
 Otherwise, emit the breadcrumb (Standard: `/orchestrate (/implement <plan-path>)`; Strict: `/orchestrate --strict (/implement <plan-path>)`) per the Strict Mode Breadcrumbs subsection, and exit. After `/implement` returns control to orchestrate, check for the marker file `tmp/implement-exit-status.md`:
-- If the marker exists AND contains `early_exit: clear_context`: skip auto-commit verification, do NOT write `step: 6` (hint stays at `step: 5`), do NOT emit a Step 5 → Step 6 breadcrumb, delete the marker file, return control to the user. `/implement` has already printed its own `/clear → /implement <path> --model single` breadcrumb.
-- If the marker is absent OR does not contain `early_exit: clear_context`: run the standard post-`/implement` sequence — auto-commit verification, write `step: 6` to the hint file, emit the Step 5 → Step 6 breadcrumb (Standard: `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`; Strict: `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)`) per the Strict Mode Breadcrumbs subsection.
+- If the marker exists AND contains `early_exit: clear_context`: skip Auto-Commit Verification, do NOT write `step: 6` (hint stays at `step: 5`), do NOT emit a Step 5 → Step 6 breadcrumb, delete the marker file, return control to the user. `/implement` has already printed its own `/clear → /implement <path> --model single` breadcrumb as the last line of its output.
+- If the marker is absent OR does not contain `early_exit: clear_context`: run the standard post-`/implement` sequence — (1) run the **Auto-Commit Verification** sequence (see the Auto-Commit Verification subsection under Wrapped Next-Command Output) with the `chore: post-implement checkpoint for <plan-filename>` template, (2) write `step: 6` to the hint file, (3) emit the Step 5 → Step 6 phase-boundary breadcrumb (Standard: `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`; Strict: `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)`) as a single-line breadcrumb per the Strict Mode Breadcrumbs and Exit Output Format subsections.
 
 Edge: user explicitly states implementation is done -> advance to Step 6; 0 commits since plan_hash -> stay at Step 5 and emit the `/implement` breadcrumb. User explicit confirmation always overrides the commit signal. If the user states implementation is done with 0 commits, advance to Step 6 with warning: "No commits since plan_hash — proceeding to code review at your confirmation."
-**Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Present confirmation prompt with N and spec_path, then invoke `/review-code {N} --against {spec_path} --max-iterations 3` or user override. Edge: >50% non-feature commits interleaved -> warn.
+**Step 6 — Code Review:** Commits after plan hash (`git log {plan_hash}..HEAD`). Present confirmation prompt with N and spec_path, then invoke `/review-code {N} --against {spec_path} --max-iterations 3` or user override. After `/review-code` returns control to orchestrate, run the **Auto-Commit Verification** sequence with the `chore: post-review-code checkpoint for <spec-filename>` template, then emit a next-steps breadcrumb. Two cases:
+
+- **Case A (criticals or highs remaining):** 2-option multi-line breadcrumb. Option 1 is `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` (run another `/review-code` iteration — recommended, fixes remaining findings). Option 2 is `/clear → /orchestrate` (advance to Step 8 anyway — escape hatch, shown even when criticals remain; the user is trusted to know when to defer). When Case A is emitted, orchestrate writes `step: 8` to `tmp/orchestrate-state.md` **before** emitting the breadcrumb so that Fast-Path Detection's criticals check on the next invocation does not re-route bare `/clear → /orchestrate` back to Step 7. This hint-file write happens regardless of which option the user ultimately picks: if the user pastes option 1 (the wrapped `/clear → /orchestrate (/review-code ...)` form), Fast-Path Detection honors the wrapped inner command via the Wrapped Next-Command Output parsing rules and overrides the `step: 8` write. `/respond-to-review` is never rendered as an option here — review-code applies fixes during its own iterations.
+- **Case B (0 criticals, 0 highs — success):** see the Quality-Gate Pool subsection below and Task 15's mapping row for the 3-option success-path breadcrumb (recommended advance + 2 random quality gates). Case B wiring lands in commit 3.
+
+Render Case A options as bare commands stacked one per line per the Multi-Line Breadcrumb Format subsection. In strict mode, both options get the `--strict` token per Strict Mode Breadcrumbs. Edge: >50% non-feature commits interleaved -> warn.
 **Step 7 — Fix Findings:** review-code-summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
 - **Phase 1 (pre-confirmation):** Present `── Step 8: Complete ──` with Feature name, Status (Approved/Approved with suggestions), and "Ready to finalize?" No git baselines.
@@ -462,6 +467,53 @@ When a step has ≥2 alternative next-commands at a single exit point, the bread
 
 **Single-line exception inside multi-line blocks:** Randomly-selected quality-gate pool options (see Quality-Gate Pool subsection below) are rendered as single lines in the phase-boundary form `/clear → /<gate-name>`, one per line, alongside the recommended state-machine option. All lines in a multi-line block follow the same "one literal command per line" rule — there is no special per-option formatting.
 
+### Auto-Commit Verification
+
+Run this sequence **before** emitting the next-step breadcrumb at the following three transitions:
+
+- After `/implement` returns control to orchestrate (Step 5 post-implement).
+- After `/review-code` returns control to orchestrate (Step 6 post-review-code).
+- After Step 8 finalize logic completes inside orchestrate (post-confirmation).
+
+**Algorithm:**
+
+1. Run `git status --porcelain`.
+2. If output is **empty** (clean tree) → print `[git status: clean]` and proceed directly to the breadcrumb. No-op.
+3. If output contains **only untracked files** (every line starts with `??`) → skip auto-commit, print `warning: untracked files present, not auto-committing`, proceed to the breadcrumb. Untracked files may be intentional cruft and must not be silently swept into a checkpoint commit.
+4. If output contains **any modified or staged files** (any line starting with anything other than `??`) → run `git add -A && git commit -m "<message>"` using the templates below, then print the commit confirmation and proceed to the breadcrumb.
+
+**Commit message templates (literal — bake into emission logic):**
+
+| Trigger | Commit message template |
+|---|---|
+| After `/implement` returns with uncommitted modifications | `chore: post-implement checkpoint for <plan-filename>` |
+| After `/review-code` returns with uncommitted modifications | `chore: post-review-code checkpoint for <spec-filename>` |
+| After Step 8 finalize completes with uncommitted modifications | `chore: post-finalize checkpoint for <spec-filename>` |
+
+`<plan-filename>` and `<spec-filename>` are the **basenames only** — no directory path, no `.md` extension. Example: a plan at `docs/superpowers/plans/2026-04-07-foo-plan.md` yields `chore: post-implement checkpoint for 2026-04-07-foo-plan`.
+
+**Commit confirmation line (printed before the breadcrumb when a commit happens):**
+
+```
+[git status: N files modified, auto-committed as "<commit message>"]
+```
+
+**On commit failure** (e.g., pre-commit hook rejection):
+
+- Print the git error verbatim.
+- **Still emit the next-step breadcrumb**, but prepend a single warning line at the top of the breadcrumb output on its own line, followed by a blank line, followed by the breadcrumb commands:
+
+```
+**IMPORTANT** COMMIT FIRST, LAST COMMIT FAILED.
+
+/command-1 args
+/command-2 args
+```
+
+- The `**IMPORTANT** COMMIT FIRST, LAST COMMIT FAILED.` line is the first line of the warning-prepended breadcrumb output. A blank line separates it from the first command line. The breadcrumb commands follow below.
+- The breadcrumb-as-last-line guarantee still holds: the absolute last line of the response is the last command line of the breadcrumb. The warning is prepended at the top, not appended at the bottom.
+- Do NOT exit. The user is trusted to read the warning and choose commit-and-continue, override, or manually resolve.
+
 **Step-to-command mapping:**
 
 The table has three columns: **After Step** (case label — free to contain case-distinction prose like `criticals present` or `phase boundary advancing to Step 4`), **Standard** (literal command text for standard mode), and **Strict** (literal command text for strict mode). Output cells contain only literal `/command args` text — never conditional prose, never wrapper labels, never descriptions. When a step emits multiple options at one case, the options are stacked in the output cell using `<br>` as the line separator, rendered at runtime as one command per line per the Multi-Line Breadcrumb Format subsection above.
@@ -477,7 +529,7 @@ Rows 2, 3, 6, and 8 are split into one row per case (e.g., Step 6 has separate `
 | 3 (Respond to Review — clean, phase boundary advancing to Step 4) | `/clear → /orchestrate` | `/clear → /orchestrate --strict` |
 | 4 (Write Plan — plan saved, always 2 options) | `/orchestrate (/implement <plan_path>)`<br>`/orchestrate (/review-doc <plan_path>)` | `/orchestrate --strict (/implement <plan_path>)`<br>`/orchestrate --strict (/review-doc <plan_path>)` |
 | 5 (Implement — phase boundary advancing to Step 6) | `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` | `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
-| 6 (Code Review — criticals or highs remaining) | `/orchestrate` | `/orchestrate --strict` |
+| 6 (Code Review — criticals or highs remaining) | `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`<br>`/clear → /orchestrate` | `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)`<br>`/clear → /orchestrate --strict` |
 | 6 (Code Review — clean, phase boundary advancing to Step 8) | `/clear → /orchestrate` | `/clear → /orchestrate --strict` |
 | 7 (Fix Findings) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` | `/orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
 | 8 (Complete) | `/orchestrate` | `/orchestrate --strict` |
