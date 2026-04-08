@@ -1,8 +1,8 @@
 {
-  "_comment": "Technology layer additions — merge into root settings.json",
+  "_comment": "Technology layer additions — deep-merged into root .claude/settings.json by /scaffold Step B3.5. Only contributes extra allowedHosts. The typecheck hook is handled by the {{TYPECHECK_HOOK_COMMAND}} placeholder in root/.claude/settings.json (see references/placeholder-resolution.md).",
   "sandbox": {
     "network": {
-      "additionalHosts": [
+      "allowedHosts": [
         "stackoverflow.com",
         "developer.mozilla.org",
         "nodejs.org",
@@ -15,9 +15,5 @@
         "tailwindcss.com"
       ]
     }
-  },
-  "hooks": {
-    "_PostToolUse_root": "if [ -f apps/server/tsconfig.json ]; then (cd apps/server && npx tsc --noEmit 2>&1 | head -20); else npx tsc --noEmit 2>&1 | head -20; fi",
-    "_PostToolUse_package": "cd {{MONOREPO_ROOT}}/packages/{{PACKAGE_NAME}} && npx tsc --noEmit 2>&1 | head -20"
   }
 }

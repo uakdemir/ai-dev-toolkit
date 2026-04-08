@@ -1,4 +1,4 @@
-# Technology Layer — Node.js / Fastify / React
+## Technology Layer — Node.js / Fastify / React
 
 These instructions supplement the root and package CLAUDE.md files with technology-specific conventions and gotchas.
 
