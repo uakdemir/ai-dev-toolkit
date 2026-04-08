@@ -125,10 +125,8 @@ before auto-compact triggers...
 After the handoff doc is written, resume in a fresh session with the
 breadcrumb below.
 
-── Next ────────────────────────────────────────
 /orchestrate            ← if mode: standard (or no mode field)
 /orchestrate --strict   ← if mode: strict
-────────────────────────────────────────────────
 ```
 
 Pick exactly one of the two `/orchestrate` lines based on the hint file's `mode:` field (or the `--strict` flag from the current invocation if the hint file has not been written yet). Do NOT print both lines — the breadcrumb must be a single concrete command. The format above shows both options for documentation purposes only.
@@ -284,9 +282,9 @@ After --next-unit completes and produces a new single-unit spec, write hint
 to continue — it does not automatically advance to Step 2 in the same session.
 
 Note: The existing Step 1 logic uses `tmp/current-roadmap.md` for general feature tracking. Refactor roadmaps are separate files checked in addition to `tmp/current-roadmap.md`. Refactor roadmap checks take priority.
-**Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 2` or user override. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately.
+**Step 2 — Spec Review:** Spec exists, Status not "Approved"/"Approved with suggestions", or review not run. Present confirmation prompt with spec_path, then invoke `/review-doc {spec_path} --max-iterations 2` or user override. After `/review-doc` completes, emit a 2-option multi-line breadcrumb **regardless of the review's findings count**: option 1 is `/orchestrate (/review-doc <spec_path> --max-iterations 2)` (run additional review iterations — the recommended state-machine-correct path), option 2 is `/orchestrate (/implement <spec_path>)` (skip ahead — implement directly; escape hatch). `/respond-to-review` is intentionally NOT surfaced as a breadcrumb option — the review-doc loop's own fix phase already applies critical fixes during its iterations, so a separate respond-to-review step is redundant at this boundary. If the user picks option 2 and the spec has plan-recommendation signals (see spec 02), `/implement` may still show its plan-recommendation prompt; the user can edit the breadcrumb to append `--skip-plan-recommendation` to bypass it. Render both options as bare commands stacked one per line (no numbering, no descriptions) per the Multi-Line Breadcrumb Format subsection. In strict mode, both options get the `--strict` token per Strict Mode Breadcrumbs. Edge: clean review (zero criticals) -> update spec Status to "Approved" immediately, then still emit the same 2-option breadcrumb.
 **Step 3 — Respond to Review:** review-doc-summary.md Reviewed matches spec AND Critical>0. Invoke `/respond-to-review {round} {spec_path}` (round = count `## Round N` sections in `tmp/response_analysis.md` matching current spec + 1; default 1). Loop 2-3 until zero criticals. Edge: High>0 only -> print the informational message BEFORE the breadcrumb, then advance to Step 4 with the breadcrumb as the literal last line per the Exit Output Format subsection.
-**Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. When invoking superpowers:writing-plans, prepend to the dispatch prompt: "After saving the plan, do NOT present the Execution Handoff section. Return control to the caller. Orchestrate manages execution model selection at Step 5." If writing-plans still presents an Execution Handoff section, orchestrate ignores it and proceeds to Step 5. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
+**Step 4 — Write Plan:** Spec Approved, no matching plan. ADR extraction inline per `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`, then invoke `superpowers:writing-plans`. When invoking superpowers:writing-plans, prepend to the dispatch prompt: "After saving the plan, do NOT present the Execution Handoff section. Return control to the caller. Orchestrate manages execution model selection at Step 5." If writing-plans still presents an Execution Handoff section, orchestrate ignores it and proceeds to Step 5. After the plan file is saved, emit a 2-option multi-line breadcrumb: option 1 is `/orchestrate (/implement <plan_path>)` (implement the plan — recommended, since `/writing-plans` is the dedicated plan-authoring skill and produces high-quality output by default), option 2 is `/orchestrate (/review-doc <plan_path>)` (review the freshly-written plan first — optional extra layer). `<plan_path>` is the plan file just saved. Render both options as bare commands stacked one per line per the Multi-Line Breadcrumb Format subsection. In strict mode, both options get the `--strict` token per Strict Mode Breadcrumbs. Edge: extraction failure -> do not auto-proceed, offer: retry/skip ADRs/exit.
 **Step 5 — Implement:** Plan exists, implementation not confirmed complete. Step 5 is a delegating wrapper: orchestrate does NOT inline plan detection, task graph, or execution model dispatch — all of that lives in `/implement`. Read the `plan:` field from the hint file. If the `plan:` field is empty or the plan file does not exist, emit this error breadcrumb and route the user back to Step 4:
 
 ```
@@ -302,7 +300,7 @@ Edge: user explicitly states implementation is done -> advance to Step 6; 0 comm
 **Step 7 — Fix Findings:** review-code-summary.md Critical or High >0, commits match feature. Apply fixes, re-run `/review-code`. Loop 6-7 until clean. Edge: NOT `/respond-to-review` -- that is for doc reviews only.
 **Step 8 — Complete:** Review clean (zero critical/high) or user accepts remaining.
 - **Phase 1 (pre-confirmation):** Present `── Step 8: Complete ──` with Feature name, Status (Approved/Approved with suggestions), and "Ready to finalize?" No git baselines.
-- **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> print recommendations -> print "What's next?" prompt -> emit the breadcrumb (`/orchestrate` or `/orchestrate --strict` per mode) as the literal last line per the Exit Output Format subsection. The "What's next?" prompt and recommendations both appear BEFORE the breadcrumb.
+- **Phase 2 (post-confirmation):** Update hint to `finalized` -> Read references/quality-gates.md -> compute baselines -> update roadmap -> print recommendations -> emit the breadcrumb (`/orchestrate` or `/orchestrate --strict` per mode) as the literal last line per the Exit Output Format subsection. Recommendations appear BEFORE the breadcrumb; no trailing "What's next?" prose follows the breadcrumb.
 
 If a refactor roadmap exists with unchecked items:
   → Check roadmaps in this order: docs/monorepo-strategy/roadmap.md first,
@@ -391,19 +389,21 @@ Before emitting any breadcrumb, read the `mode:` field from `tmp/orchestrate-sta
 
 ## Exit Output Format
 
-Every step exit point that hands control back to the user MUST end with the breadcrumb as the literal last line(s) of the response. No prose, no commentary, no celebration text, no "next-step" hints may follow the breadcrumb. If you need to say something to the user, say it BEFORE the breadcrumb.
+Every step exit point that hands control back to the user MUST end with the breadcrumb as the literal last line(s) of the response. No prose, no commentary, no celebration text, no "next-step" hints, no decorative separator lines, no headers, no labels may follow (or wrap) the breadcrumb. If you need to say something to the user, say it BEFORE the breadcrumb.
 
 **Format at every exit:**
 
 ```
 [any informational output the step produces]
 
-── Next ────────────────────────────────────────
-<breadcrumb command per Step-to-command mapping, with --strict per Strict Mode Breadcrumbs>
-────────────────────────────────────────────────
+<breadcrumb command(s) per Step-to-command mapping, with --strict per Strict Mode Breadcrumbs>
 ```
 
-The closing rule line `────────────────────────────────────────────────` is the literal final line of the response. Nothing follows it. This applies to all 15 exit points enumerated in the audit list of the source spec, including Step 0 RED (which appends the breadcrumb after the auto-handoff prose — see "Step 0 RED auto-handoff" below).
+The breadcrumb itself is one or more bare command lines — no wrapper, no separator rules, no labels, no numbering. For single-option breadcrumbs this is one line. For multi-option breadcrumbs (see the Multi-Line Breadcrumb Format subsection under Wrapped Next-Command Output below) it is N lines, one literal command per line.
+
+The literal final line of the response is the last command line of the breadcrumb. Nothing follows it. This applies to all 15 exit points enumerated in the audit list of the source spec, including Step 0 RED (which appends the breadcrumb after the auto-handoff prose — see "Step 0 RED auto-handoff" below).
+
+**Why commands-only, no decoration:** The user copy-pastes the emitted commands into the next turn. When the conversation history contains literal commands verbatim (one per line), the history becomes a searchable audit trail that `session-handoff` can parse, orchestrate Fast-Path Detection can cross-reference against the hint file, and `git log` can correlate against by matching breadcrumb command arguments to commit messages. Any wrapper text, labels, or decorative separators pollute that audit trail and break the copy-paste flow.
 
 **When NOT to emit a breadcrumb:** see the "When NOT to emit a breadcrumb" subsection below.
 
@@ -420,38 +420,67 @@ When in doubt: ask "is the skill returning control to the shell after this outpu
 
 ## Wrapped Next-Command Output
 
-Every step's exit point outputs a breadcrumb for the user's message history:
+Every step's exit point ends the response with a breadcrumb — one or more literal next-commands, one per line, as the absolute final line(s) of the response. Single-option example:
 
 ```
-── Next ────────────────────────────────────────
 /orchestrate (/next-skill-command args)
-────────────────────────────────────────────────
 ```
 
-**Phase boundary breadcrumbs** use `/clear →` to recommend clearing context before continuing. This frees accumulated agent dispatch context between heavy phases (spec review cycle, implementation, code review cycle). The hint file persists all state needed for Fast-Path Detection to resume at the correct step.
+**Phase boundary breadcrumbs** prepend `/clear → ` to recommend clearing context before continuing. This frees accumulated agent dispatch context between heavy phases (spec review cycle, implementation, code review cycle). The hint file persists all state needed for Fast-Path Detection to resume at the correct step. Phase-boundary example:
 
 ```
-── Next ────────────────────────────────────────
 /clear → /orchestrate (/next-skill-command args)
-────────────────────────────────────────────────
 ```
 
 Phase boundaries: Steps 2-3 advancing to Step 4, Step 5 advancing to Step 6, Steps 6-7 advancing to Step 8. Steps looping within a phase (2↔3, 6↔7) do NOT recommend `/clear`.
 
+### Multi-Line Breadcrumb Format
+
+When a step has ≥2 alternative next-commands at a single exit point, the breadcrumb renders as stacked literal commands — one command per line — as the absolute final lines of the response. No header, no numbering, no descriptions, no separator lines, no conditional prose.
+
+**Example** (Step 2 emits 2 options after `/review-doc` completes, strict mode):
+
+```
+/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)
+/orchestrate --strict (/implement <spec_path>)
+```
+
+**Rules:**
+
+- Each line is a literal, copy-pasteable slash command identical in form to how it would look as a single-line breadcrumb.
+- Options are ordered top-to-bottom by the user's likely next action. The recommended option is first; escape hatches and alternatives follow.
+- No blank lines separate the commands themselves. A single blank line may appear between any informational output the step produces and the first breadcrumb line, but within the breadcrumb block all lines are contiguous.
+- The absolute last line of the response is the last option's command line. Nothing follows it.
+- The `--strict` propagation rule applies to every line: in strict mode, every `/orchestrate` token in every option becomes `/orchestrate --strict`. This includes wrapped and phase-boundary forms.
+- Case distinctions (criticals present, clean review, phase boundary, etc.) are Claude-facing decision logic that belong in Step body prose and the mapping table's "After Step" label column. They MUST NOT appear in the rendered breadcrumb output. The end user never sees conditional prose like `if criticals > 0 — Standard: X / Strict: Y`.
+
+**When NOT to use multi-line format:**
+
+- Single-recommendation step boundaries (e.g., Step 1 → Step 2, Step 5 → Step 6 normal completion, Step 8 next-cycle exit when no quality gates are surfaced). Single-line is simpler and unambiguous.
+- Mid-conversation prompts that are not step-boundary breadcrumbs.
+- Error exits with only one valid retry path.
+
+**Single-line exception inside multi-line blocks:** Randomly-selected quality-gate pool options (see Quality-Gate Pool subsection below) are rendered as single lines in the phase-boundary form `/clear → /<gate-name>`, one per line, alongside the recommended state-machine option. All lines in a multi-line block follow the same "one literal command per line" rule — there is no special per-option formatting.
+
 **Step-to-command mapping:**
 
-Each row shows the standard-mode form first; the strict-mode form is the same string with `--strict` inserted after `/orchestrate` (per the Strict Mode Breadcrumbs subsection above). Both forms are listed inline so the implementer never has to derive them.
+The table has three columns: **After Step** (case label — free to contain case-distinction prose like `criticals present` or `phase boundary advancing to Step 4`), **Standard** (literal command text for standard mode), and **Strict** (literal command text for strict mode). Output cells contain only literal `/command args` text — never conditional prose, never wrapper labels, never descriptions. When a step emits multiple options at one case, the options are stacked in the output cell using `<br>` as the line separator, rendered at runtime as one command per line per the Multi-Line Breadcrumb Format subsection above.
 
-| After Step | Next Command (standard / strict) |
-|---|---|
-| 1 (Brainstorm) | Standard: `/orchestrate (/review-doc <spec_path> --max-iterations 2)`<br>Strict: `/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)`<br>`<spec_path>` is the path of the newly created spec. If brainstorming did not produce a file, emit bare `/orchestrate` (or `/orchestrate --strict`) instead. |
-| 2 (Spec Review) | If criticals > 0 — Standard: `/orchestrate (/respond-to-review <round> <spec_path>)` / Strict: `/orchestrate --strict (/respond-to-review <round> <spec_path>)`<br>If criticals = 0 (phase boundary, advancing to Step 4) — Standard: `/clear → /orchestrate` / Strict: `/clear → /orchestrate --strict` |
-| 3 (Respond to Review) | If criticals > 0 — Standard: `/orchestrate (/review-doc <spec_path> --max-iterations 2)` / Strict: `/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)`<br>If criticals = 0 (phase boundary, advancing to Step 4) — Standard: `/clear → /orchestrate` / Strict: `/clear → /orchestrate --strict` |
-| 4 (Write Plan) | Standard: `/orchestrate`<br>Strict: `/orchestrate --strict`<br>(Step 5 requires its own analysis before recommending a specific command.) |
-| 5 (Implement, delegating wrapper to `/implement`) | Phase boundary — implementation complete.<br>Standard: `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`<br>Strict: `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
-| 6 (Code Review) | If findings (criticals or highs > 0) — Standard: `/orchestrate` / Strict: `/orchestrate --strict` (Fast-Path Detection routes to Step 7).<br>If no findings (phase boundary, advancing to Step 8) — Standard: `/clear → /orchestrate` / Strict: `/clear → /orchestrate --strict` |
-| 7 (Fix Findings) | Standard: `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)`<br>Strict: `/orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
-| 8 (Complete) | Standard: `/orchestrate`<br>Strict: `/orchestrate --strict`<br>(For next feature or new cycle.) |
+Rows 2, 3, 6, and 8 are split into one row per case (e.g., Step 6 has separate `criticals or highs remaining` and `clean review` rows) so each row's output cell is unambiguous.
+
+| After Step | Standard | Strict |
+|---|---|---|
+| 1 (Brainstorm — brainstorming produced a spec file) | `/orchestrate (/review-doc <spec_path> --max-iterations 2)` | `/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)` |
+| 1 (Brainstorm — brainstorming produced no spec file) | `/orchestrate` | `/orchestrate --strict` |
+| 2 (Spec Review — any result, always 2 options) | `/orchestrate (/review-doc <spec_path> --max-iterations 2)`<br>`/orchestrate (/implement <spec_path>)` | `/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)`<br>`/orchestrate --strict (/implement <spec_path>)` |
+| 3 (Respond to Review — criticals present) | `/orchestrate (/review-doc <spec_path> --max-iterations 2)` | `/orchestrate --strict (/review-doc <spec_path> --max-iterations 2)` |
+| 3 (Respond to Review — clean, phase boundary advancing to Step 4) | `/clear → /orchestrate` | `/clear → /orchestrate --strict` |
+| 4 (Write Plan — plan saved, always 2 options) | `/orchestrate (/implement <plan_path>)`<br>`/orchestrate (/review-doc <plan_path>)` | `/orchestrate --strict (/implement <plan_path>)`<br>`/orchestrate --strict (/review-doc <plan_path>)` |
+| 5 (Implement — phase boundary advancing to Step 6) | `/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` | `/clear → /orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
+| 6 (Code Review — criticals or highs remaining) | `/orchestrate` | `/orchestrate --strict` |
+| 6 (Code Review — clean, phase boundary advancing to Step 8) | `/clear → /orchestrate` | `/clear → /orchestrate --strict` |
+| 7 (Fix Findings) | `/orchestrate (/review-code <N> --against <spec_path> --max-iterations 3)` | `/orchestrate --strict (/review-code <N> --against <spec_path> --max-iterations 3)` |
+| 8 (Complete) | `/orchestrate` | `/orchestrate --strict` |
 
 **Parsing behavior:** When orchestrate receives `/orchestrate (/some-command args)`:
 
