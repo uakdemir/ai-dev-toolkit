@@ -29,6 +29,18 @@ This spec overhauls orchestrate to fix all four, refactors three sibling skills 
 5. **Single Responsibility Principle for sub-skills** — `review-doc`, `review-code`, and `implement` become dumb, composable workers; orchestrate composes phases on top.
 6. **Preserve standalone usability** — every sub-skill change is additive or backward compatible; standalone invocations of `/review-doc`, `/review-code`, and `/implement` keep working as today.
 
+## Success Criteria
+
+Verifiable conditions that define implementation complete:
+
+1. `/orchestrate --auto spec.md` runs a full 4-stage pipeline (spec-review, implement, code-review, verification) without any manual intervention on a clean repository.
+2. Main `SKILL.md` for orchestrate is ≤ 180 lines after the PR 2 rewrite.
+3. `/review-doc spec.md` (without `--fact-check`) works and defaults to `--fact-check false` (backward compatible, no error).
+4. `/review-doc spec.md`, `/review-code 3`, and `/implement spec.md` all work unchanged when called without `--auto` or `--run-id` flags.
+5. `orchestrate --auto` with no positional spec args exits immediately with a usage error (no interactive prompt).
+
+---
+
 ## Non-Goals
 
 - **Parallel spec processing.** Auto mode processes specs serially. Multiple specs in one invocation is convenience, not parallelism.
@@ -70,7 +82,7 @@ This spec overhauls orchestrate to fix all four, refactors three sibling skills 
 
 **Progressive disclosure** — the main SKILL.md is a thin router that loads only the references needed for the current invocation.
 
-**Four sub-skill refactors** are bundled into a single coordinated PR (Approach C below) because their interfaces are coupled through run-id threading.
+**Three sub-skill refactors** (review-doc, review-code, implement) are bundled into a single coordinated PR (Approach C below) because their interfaces are coupled through run-id threading. Orchestrate itself ships as PR 2.
 
 ---
 
@@ -102,9 +114,9 @@ skills/orchestrate/
         ├── pipeline-overview.md
         ├── auto-state-schema.md
         ├── stages/
-        │   ├── agent-i-spec-review.md
-        │   ├── agent-ii-implement.md
-        │   ├── agent-iii-code-review.md
+        │   ├── stage-i-spec-review.md
+        │   ├── stage-ii-implement.md
+        │   ├── stage-iii-code-review.md
         │   └── stage-iv-verification-gate.md
         └── failure-handling/
             ├── overview.md                     # failure matrix
@@ -166,7 +178,19 @@ Compared to today's 604-line monolith, the hot path drops by roughly 70%.
 **Positional args (`<spec...>`) under `--auto`:**
 - `orchestrate --auto spec1.md spec2.md` works
 - `orchestrate --auto specs/*.md` works (shell expands before orchestrate sees args)
-- `orchestrate --auto` with no positional args → interactive prompt for spec paths
+- `orchestrate --auto` with no positional args → argparse hard error:
+  ```
+  Error: --auto requires at least one spec path.
+  Usage: /orchestrate --auto <spec1> [<spec2> ...]
+  ```
+  This is consistent with the "no user prompt" invariant of auto mode — auto mode never asks for interactive input.
+
+**Pre-pipeline spec-path validation (hard errors at argparse time):** before processing the first spec — and before capturing `spec_baseline` — orchestrate verifies every positional spec arg is:
+  (a) an existing regular file (not a directory, not a symlink to a non-file, not missing),
+  (b) readable by the current process, and
+  (c) ends in `.md` or `.markdown`.
+
+Any failure short-circuits the run: orchestrate prints the full list of invalid paths with per-path reasons and exits with a non-zero argparse-style hard error. No spec is processed, no state file is written, no commits are made. This matches the "hard errors at argparse time" pattern already used for incompatible flag combinations (`--handoff + --auto`, `--use-roadmap + --auto`).
 
 ---
 
@@ -186,7 +210,7 @@ Compared to today's 604-line monolith, the hot path drops by roughly 70%.
 
 - **`--strict` flag and all strict-mode code paths** — strict becomes standard.
 - **Step 0 (Context Health Check)** — the estimation formula is unreliable and the check bloats context to measure context. Removed entirely.
-- **Step 8 (Structured Completion / git branch flow)** — removed from standard mode entirely. Users who want branch/PR hygiene invoke it themselves.
+- **Step 8 (Structured Completion / git branch flow)** — removed from standard mode entirely. Users who want branch/PR hygiene invoke it themselves. The quality gate recommendations Step 8 provided (convention-enforcer, test-audit, document-for-ai, consolidate) are permanently removed from standard mode; they are not re-homed elsewhere and are deferred to the Out of Scope / Future Work list.
 - **ADR extraction block inside Step 4 (Write Plan)** — deferred to a future documentation release. Step 4 itself remains — it still invokes `/writing-plans` — but the inline ADR extraction prelude (currently referencing `ai-dev-tools/skills/document-for-ai/references/adr-extraction.md`) is deleted. Step 4 becomes a thin wrapper around `/writing-plans` with no ADR pre-work.
 - **Auto-Commit Verification remediation** — the section that runs `git log {plan_hash}..HEAD | wc -l` to detect missing commits and fires a `chore: post-<step>-checkpoint for <plan>` commit as remediation is deleted from standard mode. The three templates (`post-implement`, `post-review-code`, `post-finalize`) go with it. Standard mode becomes **read-only on git state** — it only reads `git log` for Fast-Path Detection, never writes commits.
 
@@ -243,7 +267,7 @@ When passed, orchestrate loads `references/standard/session-handoff.md` and read
 
 Each spec is processed through the full pipeline before the next spec begins. No parallelism across specs.
 
-**No user prompt, no hint file protocol, no breadcrumbs.** Auto mode is a post-brainstorm batch run — the user has already selected the specs they want processed. Progress is communicated via **concise progress lines** (status-only, no interaction), one per stage transition.
+**No user prompt, no hint file protocol, no breadcrumbs.** Auto mode is a post-brainstorm batch run — the user has already selected the specs they want processed. Progress is communicated via **concise progress lines** (status-only, no interaction), one per stage transition. Format: `[auto] <spec-filename> > stage <i|ii|iii|iv> — <started|complete|failed>`. Example: `[auto] spec1.md > stage i — started`.
 
 ### Pipeline (per spec, four stages, serial)
 
@@ -251,7 +275,7 @@ Each spec is processed through the full pipeline before the next spec begins. No
 |---|---|---|---|
 | i | Spec-review two-phase | `/review-doc <spec> --fact-check false --max-iterations 3` (sonnet loop), then `/review-doc <spec> --fact-check true --model opus --max-iterations 2` (opus + fact-checker) | Yes — two serial sub-agent dispatches |
 | ii | Implement | `/implement <spec> --auto` — uses the narrowed 2-option algorithm | Yes — single dispatch (may spawn 1 helper internally) |
-| iii | Code-review loop | `/review-code <spec_baseline>` opus-only, up to 4 iters, commit after each successful iter | Yes — one dispatch per iter |
+| iii | Code-review loop | `/review-code <spec_baseline> --against <spec_path>` opus-only, up to 4 iters, commit after each successful iter | Yes — one dispatch per iter |
 | iv | Verification gate | Run tests if present, final commits, print completion log | No — orchestrate runs directly |
 
 ### Why no write-plan stage?
@@ -283,7 +307,7 @@ Standard mode still keeps `/writing-plans` available as a separate user-invocabl
 # Phase 1 — cheap sonnet exploration, no fact-check, up to 3 iters
 /review-doc <spec> --fact-check false --max-iterations 3 --run-id <id>
 
-# Phase 2 — rigorous opus + fact-check, up to 2 iters (mandatory pass)
+# Phase 2 — rigorous opus + fact-check, always runs (max 2 iters, may early-exit at 0 criticals per Option Y)
 /review-doc <spec> --fact-check true --model opus --max-iterations 2 --run-id <id>
 ```
 
@@ -318,7 +342,7 @@ The parallel helper cap is **max 1 helper ever** (per existing `implementation-s
 
 **Single phase, opus-only.** Code review has too much false-negative risk on sonnet for complex logic bugs; there's no cheap phase to delegate to.
 
-Each iteration invokes `/review-code <spec_baseline> --run-id <id>`. Because `spec_baseline` is set once at the start of agent i and never moves, every iteration reviews the **full scope of the spec** — from hash0 through current HEAD:
+Each iteration invokes `/review-code <spec_baseline> --against <spec_path> --run-id <id>`. The `--against` flag provides the spec contract so review-code can detect spec-drift and verify the implementation matches the original spec's requirements. Because `spec_baseline` is set once at the start of agent i and never moves, every iteration reviews the **full scope of the spec** — from hash0 through current HEAD:
 
 - Iter 1 reviews: hash0 → hash2 (implement work)
 - Iter 2 reviews: hash0 → hash2a (implement + iter 1 fixes)
@@ -330,7 +354,7 @@ This guarantees every iteration sees both original implementation quality AND an
 - Pre-fix criticals ≤ 1 → acceptable, treat as success
 - Pre-fix criticals > 1 → endless-loop failure (Q2 path)
 
-**Per-iteration commit invariant:** After every successful agent iii iter, orchestrate commits:
+**Per-iteration commit invariant:** After every successful agent iii iter, orchestrate commits. A successful iteration is defined as: the agent returned without exception AND at least one iteration log file was written (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json` exists). Malformed or empty JSON qualifies as successful under optimistic trust; the Q3 crash trigger fires if EITHER condition above fails (i.e. an exception was thrown OR the artifact file is missing).
 ```
 fix(auto): <spec-slug>: code-review iter <N> — address findings
 ```
@@ -340,8 +364,8 @@ This is non-optional and is the only place where auto mode adds its own commits 
 ### Stage iv — Verification gate
 
 **No agent dispatch.** Orchestrate runs this directly:
-1. Run test suite if one exists (this project has none — the step is a no-op)
-2. If tests produced fixes, commit: `chore(auto): <spec-slug>: verification fixes`
+1. **Stage iv is a no-op in this release** (this project has no test suite). Test-suite detection for other projects using this orchestrate is **Out of Scope / Future Work** — step 1 unconditionally does nothing in this release.
+2. If a future release introduces verification fixes, commit: `chore(auto): <spec-slug>: verification fixes`
 3. Print completion log line: `✓ <spec-slug> complete (spec_baseline..HEAD: N commits)`
 4. Advance to next spec or exit
 
@@ -364,12 +388,16 @@ implement_head: hash2          # set when agent ii (implement) completes
 last_iteration_head: hash2b    # updates after each successful code-review iter
                                # rollback target if code-review iter N>1 crashes
 
-current_iteration: 3
+current_phase: 1               # 1 = spec-review phase 1, 2 = spec-review phase 2; null outside agent i
+current_phase_iteration: 3     # iteration counter within current_phase; resets to 1 at each phase boundary
 ---
 ```
 
 **State enum:**
-- `spec-review-iter-{N}-complete`
+- `spec-review-phase-1-iter-{N}-complete` (agent i phase 1; N = 1..3)
+- `spec-review-phase-1-complete` (phase 1 fully done; phase 2 not yet started)
+- `spec-review-phase-2-iter-{N}-complete` (agent i phase 2; N = 1..2)
+- `spec-review-phase-2-complete` (phase 2 fully done; agent ii not yet dispatched)
 - `implementation-complete`
 - `code-review-iter-{N}-complete`
 - `finalized`
@@ -377,13 +405,33 @@ current_iteration: 3
 - `skipped-crash-{stage}` (Q3 case)
 - `halted-crash-implement` (Q3 case)
 
+**Intended state transition sequence (happy path):**
+
+```
+(start)
+  → spec-review-phase-1-iter-1-complete
+  → ... (up to iter 3)
+  → spec-review-phase-1-complete
+  → spec-review-phase-2-iter-1-complete
+  → ... (up to iter 2)
+  → spec-review-phase-2-complete
+  → implementation-complete          (agent ii validators passed)
+  → code-review-iter-1-complete
+  → ... (up to iter 4)
+  → finalized                        (stage iv done, advance to next spec)
+```
+
+Any Q2/Q3 failure transitions to the appropriate terminal `skipped-*` or `halted-*` state from wherever the failure occurred. Phase-1 and phase-2 terminal states exist so a crash between phases and the next stage's dispatch is unambiguously recorded.
+
 **No migration logic between `orchestrate-state.md` and `auto-state.md`.** They are independent state machines sharing only a directory. Standard mode never reads `auto-state.md`; auto mode never reads `orchestrate-state.md`.
+
+**Stale-state policy:** If `tmp/auto-state.md` already exists when `/orchestrate --auto` is invoked and its `state` field is not `finalized`, orchestrate prints a warning (`previous auto run detected at <state>; starting fresh`) and overwrites the file. If `state == finalized`, overwrite silently. There is no resume mechanism — stale state is always discarded.
 
 ---
 
 ## Sub-Skill Refactors (PR 1 — coupled as one unit)
 
-All four sub-skills refactor together in one PR because run-id threading must be consistent across them.
+All three sub-skills refactor together in one PR because run-id threading must be consistent across them.
 
 ### `review-doc` — SRP refactor
 
@@ -405,10 +453,10 @@ All four sub-skills refactor together in one PR because run-id threading must be
 
 | Flag | Default | Notes |
 |---|---|---|
-| `--model` | `sonnet` | `opus` requests 200K context (not 1M) for cost control |
-| `--fact-check` | **REQUIRED** | No default — caller must be explicit |
+| `--model` | `sonnet` | `opus` requests 200K context (not 1M) for cost control. Note: `--model` controls all dispatches in the invocation, including the fact-checker. Using `--model sonnet --fact-check true` runs the fact-checker at sonnet quality; for rigorous fact-checking use `--model opus`. |
+| `--fact-check` | `false` | Defaults to false (fact-check skipped); caller overrides to true when needed |
 | `--max-iterations` | 3 | Honors option Y early-exit when pre-fix criticals == 0 |
-| `--against` | current git ref | Unchanged from today |
+| `--against` | `HEAD` | Semantics: compares the input document against its version at the given ref, reviewing only the diff. Unchanged from today — see the existing `review-doc` SKILL.md for the full definition. |
 | `--effort` | `high` | Unchanged from today |
 | `--run-id` | none | Prefixes intermediary output files; optional (backward compatible) |
 
@@ -420,11 +468,15 @@ All four sub-skills refactor together in one PR because run-id threading must be
 # One invocation = one loop, one model, one fact-check setting
 for iter in 1..max_iterations:
     review_with(model)                  # reviewer: sonnet or opus
+    pre_fix_criticals = count(json)     # option Y: measured at review output, before fact-check
     if fact_check:
-        fact_check_with(model)          # appends fact-check issues BEFORE fix
-    pre_fix_criticals = count(json)     # option Y: measured at review output
-    fix_with(model)                     # fixer: sonnet or opus
-    if pre_fix_criticals == 0:
+        fact_check_with(model)          # appends fact-check issues; these are fixed in the same iter
+    total_criticals = count(json)       # re-count after fact-check (includes any fact-check-added criticals)
+    is_final_iter = (iter == max_iterations)
+    if total_criticals == 0 and not is_final_iter:
+        break                           # early-exit: no criticals, skip fix phase, skip remaining iters
+    fix_with(model)                     # fixer runs on final iter always (Q2 progress), or when total_criticals > 0
+    if total_criticals == 0:            # final iter, 0 criticals: clean exit after fixer
         break
 ```
 
@@ -435,7 +487,9 @@ for iter in 1..max_iterations:
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times
 5. Model flag controls all dispatches in that invocation, including the fact-checker
 
-**Tmp file output:** intermediary files move to `tmp/_reviews_errors/`. Standalone invocations without `--run-id` write to `tmp/_reviews_errors/review-doc.json` (un-prefixed, backward compatible). With `--run-id`, files are prefixed per the run-id convention (see Cross-Cutting Infrastructure).
+**Tmp file output:** intermediary files move to `tmp/_reviews_errors/`. Standalone invocations without `--run-id` write to `tmp/_reviews_errors/review-doc.json` (un-prefixed). Note: this is a **breaking change** from the current path `tmp/review-doc.json` — any tooling that reads `tmp/review-doc.json` directly must be updated. With `--run-id`, files are prefixed per the run-id convention (see Cross-Cutting Infrastructure). No dual-path fallback is provided. Each review-doc invocation writes a single output file — all iterations within the invocation overwrite the same file; only the last iteration's output persists on disk. Phase 1's file is `<run_id>-review-doc-phase1.json` and phase 2's file is `<run_id>-review-doc-phase2.json`; there are no per-iteration files.
+
+**Backward-compat clarification (reconciles Success Criteria #3, the `--run-id` note above, and this tmp-file-output paragraph):** `--run-id` and `--fact-check` flag additions are backward compatible at the CLI level — existing standalone invocations of `/review-doc spec.md` still parse and run unchanged, with `--fact-check` defaulting to false. The default output-file path relocation from `tmp/review-doc.json` to `tmp/_reviews_errors/review-doc.json` is a **breaking change for tooling that reads the JSON directly**. Standalone CLI invocations still succeed — only the output read-path moves.
 
 ### `review-code` — widening refactor
 
@@ -453,9 +507,18 @@ else:
     error
 ```
 
-Backward compatible. No new flags. Add `--run-id` for run-id threading.
+Backward compatible. Adds one new flag: `--run-id` for run-id threading. No other flags change.
 
-**Auto mode usage:** every code-review iteration invokes `/review-code <spec_baseline> --run-id <id>`, reviewing the full scope of the spec's work (implement + all prior iteration fixes).
+**Flags used by orchestrate auto mode's agent iii dispatch — fully enumerated:**
+
+| Flag | Status | Notes |
+|---|---|---|
+| `<positional>` (git ref) | widened in PR 1 | New "since" mode — accepts `spec_baseline` hash |
+| `--against <spec_path>` | **already exists today** on review-code (same semantics as review-doc: points at the contract document). No change in PR 1 beyond confirming it is wired into the auto-mode call path. |
+| `--run-id <id>` | new in PR 1 | Run-id threading |
+| `--model` | **not added** | Review-code already defaults to opus in its existing SKILL.md; orchestrate's agent iii relies on that default rather than introducing a `--model` flag. If review-code's default ever changes, agent iii must be revisited. |
+
+**Auto mode usage:** every code-review iteration invokes `/review-code <spec_baseline> --against <spec_path> --run-id <id>`, reviewing the full scope of the spec's work (implement + all prior iteration fixes). Opus is enforced by review-code's existing default — no per-call override.
 
 ### `implement` — `--auto` flag addition
 
@@ -483,7 +546,9 @@ The `task_count >= 4 AND coupling != HIGH` precondition is implicit — when tha
 **Does NOT replace existing behavior.** Without `--auto`, the interactive 4-option picker still works as today. `--auto` is additive and narrowing.
 
 **Scope touches:**
-- `ai-dev-tools/skills/implement/SKILL.md` — parse `--auto` flag, short-circuit picker, exclude options [2] and [3], thread `--run-id`
+- `ai-dev-tools/skills/implement/SKILL.md` — parse `--auto` flag, short-circuit picker, exclude options [2] and [3], thread `--run-id`. When `--auto` is passed, skip the Refactor-Unit Branch Handling pre-check entirely and proceed directly to the Normal-feature path.
+
+  **Standalone `/implement --auto` refactor-unit footgun:** running `/implement --auto` directly on a spec that would otherwise trigger the refactor-unit path silently uses the normal-feature path. Users who need refactor-unit handling must omit `--auto`. This is an intentional trade-off: auto mode prioritizes a narrow, deterministic dispatch surface, and orchestrate's own auto mode already rejects `--use-roadmap + --auto` at argparse time so the situation only arises for direct standalone callers of `/implement --auto`.
 - `ai-dev-tools/skills/implement/references/implementation-step.md` — note about auto mode's two-option restriction, threshold bumped 30% → 35%
 - Help text updated
 
@@ -537,8 +602,9 @@ Example: `k3m9p2q7_a1b2c3d4-review-doc-phase1.json`
 - `spec_hash`: generated once when orchestrate auto mode begins the pipeline for a spec. Shared across all stages and iterations within that spec's pipeline.
 - `dispatch_hash`: generated fresh for every individual agent dispatch. Retries (per Q3 retry-once rule) get a new dispatch_hash.
 
-**Propagation:** every agent dispatch includes the run-id in its prompt context:
+**Propagation:** every agent dispatch includes the run-id in two places: (1) the `--run-id` CLI flag (canonical — parsed by argparse, always wins), and (2) the override preamble which reinforces it for agent awareness:
 > "You are agent `<name>` for run `<run_id>`. Write your output to `tmp/_reviews_errors/<run_id>-<artifact>.json`."
+If the flag and the preamble ever conflict (e.g., due to a copy-paste error), the flag value takes precedence.
 
 **File layout example:**
 
@@ -553,7 +619,7 @@ tmp/_reviews_errors/
 └── ...
 ```
 
-**Standalone usage (no `--run-id`):** skills default to the un-prefixed filename (e.g. `review-doc.json`). Backward-compatible — standalone invocations still work as today and do not create run-id-prefixed files.
+**Standalone usage (no `--run-id`):** skills default to the un-prefixed filename inside `tmp/_reviews_errors/` (e.g. `tmp/_reviews_errors/review-doc.json`). Standalone invocations do not create run-id-prefixed files. This moves the output path from the previous `tmp/review-doc.json` location — a known breaking change for PR 1 callers.
 
 ---
 
@@ -579,16 +645,25 @@ Applies symmetrically to agent i (spec-review, text artifacts) and agent iii (co
 
 ### Q3 — Crash handling (stage-differentiated, retry-once)
 
+**Crash signal definition:** An agent crash is any of: (1) the agent dispatch throws an exception, (2) the agent times out after 10 minutes without returning, (3) the agent returns without writing its expected output artifact. Expected output artifacts per stage: agent i → `tmp/_reviews_errors/<run_id>-review-doc-phase{N}.json`; agent ii → at least one new commit since `spec_baseline` (verified by agent ii validators); agent iii → `tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`.
+
 **Retry-once rule:** On any agent crash, dispatch the same agent once more with identical inputs (fresh `dispatch_hash`). If retry succeeds, continue normally.
 
 **If retry also fails:**
 
 | Stage | Response | Rationale |
 |---|---|---|
-| Agent i (spec-review) | Skip spec + continue, no commit, log Error | Text artifacts are inert; spec file left as-is |
-| Agent ii (implement) | Commit wip + **HALT pipeline**, log Error | Uncommitted broken code could contaminate downstream specs; halt is the safe default |
+| Agent i (spec-review) | Skip spec + continue, no commit, log Error | Text artifacts are inert; spec file left as-is. If phase 1 already committed before phase 2 crashes, that commit is preserved — no rollback of phase 1 work. |
+| Agent ii (implement) | Commit wip + **HALT pipeline**, log Error (bookkeeping details below) | Uncommitted broken code could contaminate downstream specs; halt is the safe default |
 | Agent iii (code-review) iter 1 | Soft reset to `implement_head` + stash + skip + continue | Implement work preserved; only the failed iter 1 attempt is rewound |
 | Agent iii (code-review) iter N>1 | Soft reset to `last_iteration_head` + stash + skip + continue | All successful iterations preserved; only failed iter N rewound |
+
+**Agent ii crash-halt bookkeeping (exact rules):**
+1. **Wip commit.** Orchestrate stages every modified and untracked file and creates a commit using the template
+   `wip(auto): <spec-slug>: implement crashed after retry — see tmp/_reviews_errors/error-logs.md`.
+   If the working tree is already clean (agent crashed before writing anything), no wip commit is created and `implement_head` is left unset.
+2. **Auto-state transition.** `auto-state.md` transitions to `halted-crash-implement`. If a wip commit was created, `implement_head = HEAD` of the wip commit; otherwise `implement_head` remains unset and the state file records that explicitly.
+3. **Batch halt.** Any remaining specs in the batch are **not processed**. Orchestrate emits exactly one progress line `[auto] batch halted, N specs unprocessed` (where N is the count of untouched remaining specs) and exits non-zero after writing the Error entry.
 
 **Key invariants:**
 - `git reset --hard` is NOT used anywhere in auto mode
@@ -625,9 +700,13 @@ Agent dispatches can return "successfully" but produce wrong-shaped output (malf
 | **Agent iii** (code-review loop) | Optimistic trust | If iter N produces garbage, iter N+1 re-reads git state from scratch. Endless-loop cap (4 iters) bounds the downside. |
 
 **Agent ii validators** (run after implement returns, before advancing to agent iii):
-1. At least one commit made since `spec_baseline` — `git rev-list --count spec_baseline..HEAD > 0`
+1. At least one commit made since the implement dispatch began — orchestrate captures a local `pre_implement_head = HEAD` anchor immediately before dispatching agent ii (after phase 1/phase 2 commits have already landed), then validates `git rev-list --count pre_implement_head..HEAD > 0`. This distinguishes actual implement commits from earlier phase-commit noise between `spec_baseline` and implement start. `pre_implement_head` is a local variable — not a persisted anchor in `auto-state.md`.
 2. Spec file still exists (implement must not delete its input)
-3. Working tree is clean or has only expected artifacts — no random partial edits sitting uncommitted
+3. Working tree policy (uses `git status --porcelain`, which respects `.gitignore`):
+   - Untracked files inside `tmp/` — allowed
+   - Untracked files outside `tmp/` — validator failure
+   - Modified tracked files outside `tmp/` — validator failure
+   - `.gitignored` files anywhere — allowed (implicit: they do not appear in `git status --porcelain`)
 
 **On validator failure:** retry once (Q3 crash path). If retry fails, halt pipeline per Q3 crash-implement rule.
 
@@ -657,7 +736,7 @@ Commits in auto mode are load-bearing for rollback anchors. The cadence is not d
 | Stage iv verification | if anything changed | `chore(auto): <spec-slug>: verification fixes` | — |
 
 **Notes:**
-- Phase 1 / phase 2 / verification commits are conditional — skip if the fixer made zero changes. No empty commits.
+- Phase 1 / phase 2 / verification commits are conditional — skip if the fixer made zero changes. No empty commits. Change detection: orchestrate runs `git diff --quiet <spec_path>` after the agent returns; if exit code is 0, skip the commit. Change detection is intentionally scoped to the input spec file — review-doc's fixer modifies only the spec; changes to other files are unexpected and out of scope for orchestrate's phase commits.
 - Implement itself produces commits internally. Orchestrate does NOT add a checkpoint on top; it relies on the agent ii validators (`git rev-list --count spec_baseline..HEAD > 0`) to confirm commits happened. Validator failure → crash per Q3.
 - The per-iteration commit after agent iii is the one non-optional invariant — it's load-bearing for the `last_iteration_head` rollback anchor.
 
@@ -697,7 +776,7 @@ All four sub-skills move as one unit because run-id threading must be consistent
 - `ai-dev-tools/skills/implement/SKILL.md` and `references/implementation-step.md`
 - New infrastructure references for `tmp/_reviews_errors/` schema
 
-**Rationale for bundling:** none of these sub-skills have non-orchestrate heavy users today, so merging them in isolation gives near-zero production value. The four are coupled via run-id and share a new output directory. Separating them would create a window where some skills know about `tmp/_reviews_errors/` and others don't.
+**Rationale for bundling:** none of these sub-skills have non-orchestrate heavy users today, so merging them in isolation gives near-zero production value. The three are coupled via run-id and share a new output directory. Separating them would create a window where some skills know about `tmp/_reviews_errors/` and others don't.
 
 ### PR 2 — Orchestrate overhaul (assumes PR 1 has landed)
 
@@ -750,9 +829,9 @@ PR 2 invokes the new sub-skill interfaces without transitional flags because PR 
 - `ai-dev-tools/skills/orchestrate/references/standard/steps/step-1.md` through `step-7.md` (7 files, one per kept step)
 - `ai-dev-tools/skills/orchestrate/references/auto/pipeline-overview.md`
 - `ai-dev-tools/skills/orchestrate/references/auto/auto-state-schema.md`
-- `ai-dev-tools/skills/orchestrate/references/auto/stages/agent-i-spec-review.md`
-- `ai-dev-tools/skills/orchestrate/references/auto/stages/agent-ii-implement.md`
-- `ai-dev-tools/skills/orchestrate/references/auto/stages/agent-iii-code-review.md`
+- `ai-dev-tools/skills/orchestrate/references/auto/stages/stage-i-spec-review.md`
+- `ai-dev-tools/skills/orchestrate/references/auto/stages/stage-ii-implement.md`
+- `ai-dev-tools/skills/orchestrate/references/auto/stages/stage-iii-code-review.md`
 - `ai-dev-tools/skills/orchestrate/references/auto/stages/stage-iv-verification-gate.md`
 - `ai-dev-tools/skills/orchestrate/references/auto/failure-handling/overview.md`
 - `ai-dev-tools/skills/orchestrate/references/auto/failure-handling/retry-semantics.md`
@@ -788,6 +867,11 @@ PR 2 invokes the new sub-skill interfaces without transitional flags because PR 
 - Auto-Commit Verification section and `post-*-checkpoint` templates
 - Auto-load of `tmp/session-handoff.md` (moved behind `--handoff`)
 
+### Deleted reference files (PR 2)
+
+- `ai-dev-tools/skills/orchestrate/references/strict-mode.md` — references `--strict` only; dead after flag removal
+- `ai-dev-tools/skills/orchestrate/references/quality-gates.md` — references Step 8 only; dead after Step 8 removal
+
 ---
 
 ## Out of Scope / Future Work
@@ -797,6 +881,8 @@ PR 2 invokes the new sub-skill interfaces without transitional flags because PR 
 - **Parallel spec processing** — specs are processed serially in auto mode. Parallel processing would require a much more complex state model and is deferred.
 - **Test infrastructure integration** — this project has no test suite; stage iv verification is effectively a no-op. When tests are added to the project, stage iv becomes meaningful.
 - **`writing-plans` integration with auto mode** — explicitly removed for the reasons above. If downstream experience shows that specs entering auto mode benefit from a plan stage, it can be added back as a conditional stage i.5 in a future release.
+- **Step 8 quality gate recommendations** — convention-enforcer, test-audit, document-for-ai, and consolidate suggestions formerly provided by Step 8 are dropped from standard mode. No replacement in this release. Users invoke those skills directly when needed.
+- **Concurrent auto-mode runs against the same working tree** — only one auto-mode run per working tree is supported. Running two `/orchestrate --auto` sessions concurrently against the same repo is undefined behavior: both would race on `tmp/auto-state.md` and the shared three-hash rollback anchors, and the run-id scheme only protects per-artifact files under `tmp/_reviews_errors/`. Future work: a lockfile at `tmp/auto-state.lock` checked at startup. This matches the serial/self-contained stance stated in the Non-Goals section.
 
 ---
 
