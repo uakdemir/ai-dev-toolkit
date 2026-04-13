@@ -251,6 +251,21 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 9. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format).
 10. **Output summary report:** list all files created, subsystems covered, depth assigned to each, and any gaps where docs could not be generated.
 
+### Open Questions format
+
+Every generated doc may include an Open Questions section. Every claim in this section must include an evidence pointer (`file:line`).
+
+**Entry template:**
+
+```markdown
+N. **<One-line problem statement>**
+   - Evidence: `file.ts:123` — `<exact quoted snippet or signature>`
+   - Contradicted by: `other-file.ts:456` — `<exact quoted snippet>`
+   - Resolution path: <concrete next step, e.g., "audit DS3.ColumnProfile.nullRate">
+```
+
+**Suppression rule:** Do not generate an Open Question entry unless Phase 1 or Phase 2 produced at least one concrete `file:line` citation supporting the claim. If the extractor returned no output for the relevant files, or returned output but no specific `file:line` maps to the claim, the entry must be suppressed. Apply this filter immediately before writing each entry during the final doc assembly step (when Phase 1 and Phase 2 outputs are both complete).
+
 ---
 
 ## Mode: MIGRATE
