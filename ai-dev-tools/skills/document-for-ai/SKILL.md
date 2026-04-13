@@ -180,7 +180,7 @@ Override with `--extractor <serena|tsc|grep>`.
 ### Test file exclusion
 
 By default, test files are excluded from all generation outputs:
-- **Excluded patterns:** `**/*.test.*`, `**/__tests__/**`, `**/*.spec.*`
+- **Excluded patterns:** `**/*.test.*`, `**/__tests__/**`, `**/*.spec.*`, `**/test_*.py`, `**/*_test.py`, `**/tests/**`, `**/*_test.go`
 - **Affected outputs:** LoC counts, symbol indexes, file maps, import graphs, cross-cutting pattern detection.
 - **Override:** `--include-tests` flag includes test files in LoC counts and symbol indexes. Even with the override, test files are not counted toward subsystem detection thresholds (the ≥ 3 files heuristic).
 
@@ -216,8 +216,8 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 3. Fallback: any subdirectory of `src/` that contains ≥ 3 non-test `.py` files.
 
 **Go:**
-1. Directories containing at least one `.go` file (each such directory is a Go package).
-2. Fallback: any subdirectory of `cmd/` or `internal/` or `pkg/` that contains ≥ 3 non-test `.go` files.
+1. Directories under `cmd/`, `internal/`, or `pkg/` that contain at least one `.go` file.
+2. Fallback: any other directory containing ≥ 3 non-test `.go` files.
 
 **Rust:**
 1. Directories containing a `mod.rs` file within `src/`.

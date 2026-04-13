@@ -10,7 +10,7 @@ Use when `depth: L1` is assigned by the volatility assessment. L1 docs are struc
 
 Sections (all required — include section heading even if empty):
 
-- **File map**: Table listing every non-test file in the subsystem with its one-line purpose. Columns: `File | Purpose | LoC`. Sorted by directory, then alphabetically.
+- **File map**: Table listing every file in the subsystem (excluding test files by default; included when `--include-tests` is set) with its one-line purpose. Columns: `File | Purpose | LoC`. Sorted by directory, then alphabetically.
 - **Barrel surface**: All exported symbols from the subsystem's barrel/entry point file (e.g., `index.ts`, `mod.rs`, `__init__.py`). Table with columns: `Symbol | Type | Re-exported from`. If no barrel file exists, state "No barrel file — exports are per-file."
 - **Internal dependency graph**: Which files import which within the subsystem. Format as a list: `file.ts → imports from: [a.ts, b.ts]`. Sorted by number of dependencies (most dependent first).
 - **Symbol index**: Table of all exported symbols with their signatures and one-line purposes. Columns: `Symbol | File | Signature | Purpose`. Grouped by file. Include parameter types and return types in signatures.

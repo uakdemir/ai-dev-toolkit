@@ -47,12 +47,14 @@ Captures: exported names, source module.
 ^def\s+(\w+)\s*\(([^)]*)\)\s*(->\s*[^:]+)?:
 ```
 Captures: function name, parameters, return type hint.
+Filter: exclude names starting with `_`.
 
 **Class definitions:**
 ```
 ^class\s+(\w+)(\([^)]*\))?:
 ```
 Captures: class name, base classes.
+Filter: exclude names starting with `_`.
 
 **Module-level assignments (public):**
 ```
