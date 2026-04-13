@@ -175,12 +175,19 @@ Override with `--extractor <serena|tsc|grep>`.
 - Grep fallback has false negatives → the Open Questions section documents any file the extractor couldn't parse (`// parser-unknown: <reason>`).
 - All backends fail or return zero symbols → abort doc generation for this subsystem, log to `AI_INDEX.md` with extraction-failed row format (see AI_INDEX.md Format section).
 
+### Test file exclusion
+
+By default, test files are excluded from all generation outputs:
+- **Excluded patterns:** `**/*.test.*`, `**/__tests__/**`, `**/*.spec.*`
+- **Affected outputs:** LoC counts, symbol indexes, file maps, import graphs, cross-cutting pattern detection.
+- **Override:** `--include-tests` flag includes test files in LoC counts and symbol indexes. Even with the override, test files are not counted toward subsystem detection thresholds (the ≥ 3 files heuristic).
+
 ### Phase 1 — Cheap structural extraction (always runs)
 
-- Extract exported symbols and their signatures per file.
+- Extract exported symbols and their signatures per file (excluding test files unless `--include-tests`).
 - Extract one-line purpose from the nearest JSDoc/docstring or inferred from the signature + file name.
 - Build import graph (what imports what, which symbols are used where).
-- Count files, LoC (excluding test files: `**/*.test.*`, `**/__tests__/**`, `**/*.spec.*`), public-vs-internal ratio.
+- Count files, LoC (excluding test files unless `--include-tests`), public-vs-internal ratio.
 - Compute the L1 symbol index and the internal dependency graph.
 - Record `last_verified_symbol_count` (total exported symbols found).
 
