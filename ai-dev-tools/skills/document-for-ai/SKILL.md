@@ -145,20 +145,50 @@ Scan the docs directory for `.md` files. If no docs directory exists, scan the p
 
 ## Mode: GENERATE
 
-1. **Analyze codebase.** Identify entry points, modules, routes, and data models using the patterns from `references/tech-stacks.md` for the selected stack.
-2. **Determine needed doc types** using these heuristics:
-   - **architecture** — always generate for each discovered module.
-   - **api** — generate if endpoint or route files are found matching the stack's route/page patterns.
-   - **data-model** — generate if schema, model, or migration files are found matching the stack's data model patterns.
-   - **guide** — generate if setup scripts (`Makefile`, `docker-compose.yml`), test configs (`jest.config.*`, `pytest.ini`), or CI configs (`.github/workflows/`, `.gitlab-ci.yml`) are found.
-   - **troubleshooting** — generate if error-handling middleware, logging configurations, or known-issues/FAQ files are found.
-   > Note: A single matching file is sufficient to trigger generation of that doc type.
-3. **Load templates.** Read `references/doc-templates.md` for section structures and `references/frontmatter-schema.md` for required frontmatter fields.
-4. **Generate docs.** Create each doc using the matched template. Place files under `docs/{scope}/{purpose}.md`. Populate frontmatter with correct `scope`, `purpose`, `ai_keywords` (3-8 terms), `code_paths`, and `last_verified` set to today.
-5. **Generate per-module CLAUDE.md** files in each module directory.
-6. **Generate root CLAUDE.md** at the project root.
+Generation uses a two-phase scan architecture. Phase 1 extracts structural data cheaply. Phase 2 performs targeted deep reads only when specific triggers fire. The depth assigned by Step 1.7 (L1 or L2) determines which template sections are generated.
+
+### Structural extractor selection
+
+The skill exposes a pluggable `structural_extractor` interface. At skill invocation, select the backend:
+
+1. **SerenaExtractor** (preferred) — probe for Serena MCP: call `mcp.list_tools()`. Serena is available if ANY of these tool names appears: `get_symbols_overview`, `find_symbol`, `find_referencing_symbols` (OR check — any one match suffices). If the call fails, returns empty, or none match, Serena is unavailable.
+2. **TscDeclarationExtractor** — for TS projects when `tsc` is available in PATH and `tsconfig.json` exists in scope.
+3. **GrepExtractor** — fallback for any language. Uses patterns from `references/signature-patterns.md`.
+
+Override with `--extractor <serena|tsc|grep>`.
+
+**Failure modes:**
+- Serena available but fails partway → fall through to next backend for remaining files, log the switch.
+- Grep fallback has false negatives → the Open Questions section documents any file the extractor couldn't parse (`// parser-unknown: <reason>`).
+- All backends fail or return zero symbols → abort doc generation for this subsystem, log to `AI_INDEX.md` with extraction-failed row format (see AI_INDEX.md Format section).
+
+### Phase 1 — Cheap structural extraction (always runs)
+
+- Extract exported symbols and their signatures per file.
+- Extract one-line purpose from the nearest JSDoc/docstring or inferred from the signature + file name.
+- Build import graph (what imports what, which symbols are used where).
+- Count files, LoC (excluding test files: `**/*.test.*`, `**/__tests__/**`, `**/*.spec.*`), public-vs-internal ratio.
+- Compute the L1 symbol index and the internal dependency graph.
+- Record `last_verified_symbol_count` (total exported symbols found).
+
+**Token cap:** Phase 1 budgets ≤ 50k combined I/O tokens per subsystem of ≤ 50 files. If exceeded, split the subsystem by directory depth: partition files into subdirectory groups (one group per immediate child directory of the subsystem root). Each group becomes a sub-subsystem named `<subsystem>/<child-dir>` with `partial: true` in frontmatter and a cross-reference note. **Flat-subsystem fallback:** if no subdirectories exist, split files alphabetically into 2 groups. If a group still exceeds the cap, recursively split in half until every group fits. Name groups `<subsystem>/part-1`, `<subsystem>/part-2`, etc.
+
+### Phase 2 — Targeted deep reads (trigger-driven)
+
+Phase 2 only runs when a trigger is detected by Phase 1. See `references/phase2-triggers.md` for trigger detection logic and template mapping.
+
+**Token cap:** Phase 2 budgets ≤ 30k combined I/O tokens per subsystem. Enforcement is soft: if a trigger's evidence-gathering exceeds this, write the section with a `// budget exceeded — see source` footer (do not skip the section entirely).
+
+### Generation pipeline
+
+1. **Run Phase 1** with the selected extractor on each subsystem.
+2. **Run Phase 2** on each subsystem where triggers fired.
+3. **Load templates.** Read `references/doc-templates.md` for the appropriate depth template (L1 or L2) and `references/frontmatter-schema.md` for required frontmatter fields.
+4. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, and `regenerate_if`.
+5. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
+6. **Generate root CLAUDE.md** at the project root (same marker-based append).
 7. **Generate AI_INDEX.md** at the project root.
-8. **Output summary report:** list all files created, modules covered, and any gaps where docs could not be generated.
+8. **Output summary report:** list all files created, subsystems covered, depth assigned to each, and any gaps where docs could not be generated.
 
 ---
 
@@ -365,10 +395,12 @@ When an ADR status changes to Superseded or Deprecated:
 If a CLAUDE.md already exists at the target location:
 
 1. Read the existing file in full.
-2. Preserve all existing content exactly as written.
-3. Append generated sections under a `## AI-Generated Context` heading at the end of the file.
-4. Do not overwrite, reorder, or modify user-authored content.
-5. If the existing file already has an `## AI-Generated Context` section, replace only that section.
+2. Preserve all existing content above the generated marker exactly as written.
+3. On first generation: append `<!-- document-for-ai:generated-start -->`, generated content, and `<!-- document-for-ai:generated-end -->` at the end of the file.
+4. On subsequent runs: find `<!-- document-for-ai:generated-start -->` and replace everything between the start and end markers with new generated content.
+5. Do not overwrite, reorder, or modify user-authored content outside the markers.
+
+**Legacy migration:** If the existing file has an `## AI-Generated Context` heading (pre-rewrite format), replace it with the HTML comment markers on the first regeneration run.
 
 ---
 
@@ -400,4 +432,4 @@ Generate a lookup table with four columns:
 | Unmatched module | List closest matches from AI_INDEX.md, ask for clarification. |
 | Conflicting info between code and doc | Flag conflict with both doc's claim and code's reality. Don't auto-fix — present to user. |
 | Partial failure during generation | Write all completed docs to disk. Report failures with file paths. Continue with remaining work. |
-| Pre-existing CLAUDE.md | Preserve existing content. Append generated sections under `## AI-Generated Context`. |
+| Pre-existing CLAUDE.md | Preserve existing content. Append/replace between `<!-- document-for-ai:generated-start/end -->` markers. |

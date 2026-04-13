@@ -1,6 +1,41 @@
 # Doc Templates
 
-Six purpose-specific templates are available. Each template defines the section structure for a doc with that `purpose` value. The `purpose` frontmatter field must match one of the six template names exactly (except for the special-case `adr` template, which is never auto-detected from code analysis). Use the section descriptions below to know what content belongs in each section when generating or migrating a doc.
+Six purpose-specific templates plus two depth-specific variants (L1, L2) are available. The six purpose templates define section structure for docs with a matching `purpose` frontmatter field. The L1 and L2 variants define section structure based on the `depth` frontmatter field — they are used by the GENERATE mode's two-phase scan architecture when `depth` is set via the volatility assessment.
+
+---
+
+## L1 Template (depth: L1 — Structural Index)
+
+Use when `depth: L1` is assigned by the volatility assessment. L1 docs are structural indexes — symbols, signatures, and relationships. No narrative prose. Best for high-churn subsystems.
+
+Sections (all required — include section heading even if empty):
+
+- **File map**: Table listing every non-test file in the subsystem with its one-line purpose. Columns: `File | Purpose | LoC`. Sorted by directory, then alphabetically.
+- **Barrel surface**: All exported symbols from the subsystem's barrel/entry point file (e.g., `index.ts`, `mod.rs`, `__init__.py`). Table with columns: `Symbol | Type | Re-exported from`. If no barrel file exists, state "No barrel file — exports are per-file."
+- **Internal dependency graph**: Which files import which within the subsystem. Format as a list: `file.ts → imports from: [a.ts, b.ts]`. Sorted by number of dependencies (most dependent first).
+- **Symbol index**: Table of all exported symbols with their signatures and one-line purposes. Columns: `Symbol | File | Signature | Purpose`. Grouped by file. Include parameter types and return types in signatures.
+- **Cross-cutting patterns**: Patterns that appear across multiple files in the subsystem. Each entry: pattern name, files involved, brief description. Examples: caching patterns, error handling conventions, shared state mutations, enum/union switch-cases. May be empty — include the heading regardless.
+- **Open Questions**: Items that Phase 1 or Phase 2 extraction flagged as ambiguous or contradictory. Each entry must include an evidence pointer (`file:line`). See §4.9 in the spec for the entry template.
+
+---
+
+## L2 Template (depth: L2 — Architecture)
+
+Use when `depth: L2` is assigned by the volatility assessment. L2 docs are architecture docs — data flow, decisions, and integration points. Includes all L1 sections plus narrative prose sections. Best for stable subsystems.
+
+Sections (includes all L1 sections plus these additional sections):
+
+- **File map**: Same as L1.
+- **Barrel surface**: Same as L1.
+- **Internal dependency graph**: Same as L1.
+- **Symbol index**: Same as L1.
+- **Data flow**: How data moves through the subsystem. Numbered steps or a diagram. Include entry points, transformations, and exit points.
+- **Key decisions**: Architectural choices that shaped the design. Include rationale and trade-offs. Cross-reference ADRs where they exist.
+- **Integration points**: How this subsystem connects to others. List interfaces, events, or shared data exposed or consumed. Note dependency direction (inbound vs outbound).
+- **Cross-cutting patterns**: Same as L1.
+- **Open Questions**: Same as L1.
+
+**Token cap:** L2 narrative sections (Data flow, Key decisions, Integration points) are capped at 1,500 tokens per section. Total generated narrative must not exceed 6,000 tokens per doc.
 
 ---
 
