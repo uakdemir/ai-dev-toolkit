@@ -41,6 +41,7 @@ Reference files used throughout (do not inline their content — read them at th
 - `references/doc-templates.md` — template structures and mapping rules
 - `references/frontmatter-schema.md` — required frontmatter fields and validation
 - `references/volatility-assessment.md` — churn-rate algorithm, edge cases, git commands
+- `references/phase2-triggers.md` — Phase 2 trigger detection logic and template mapping
 - `references/audit-checklist.md` — scoring dimensions and priority formula
 - `references/adr-extraction.md` — ADR extraction algorithm (used by the `adr` command)
 
