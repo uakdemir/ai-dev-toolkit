@@ -7,16 +7,26 @@ description: "Use when the user wants to create, migrate, audit, or maintain AI-
 document-for-ai — Generate AI-optimized documentation
 
 USAGE
-  /document-for-ai [command] [path]
+  /document-for-ai [command] [path] [flags]
 
-PARAMETERS
+COMMANDS
   humanize [path]    Render AI docs for human readers
   adr <spec_path>    Extract architectural decisions from spec
 
+FLAGS
+  --scope <package>          Target package scope
+  --mode <generate|migrate|audit|update>   Force mode
+  --subsystems <all|list>    Batch: all subsystems or comma-separated list
+  --include-tests            Include test files in LoC counts and symbol indexes
+  --force-reclassify         Re-run volatility classification for existing docs
+  --extractor <serena|tsc|grep>   Override structural extractor selection
+
 EXAMPLES
-  /document-for-ai                   Generate CLAUDE.md and AI_INDEX.md
-  /document-for-ai humanize          Render docs for humans
-  /document-for-ai adr docs/spec.md  Extract ADRs from spec
+  /document-for-ai                                    Generate CLAUDE.md and AI_INDEX.md
+  /document-for-ai --scope calibration --subsystems all   Batch generate all subsystem docs
+  /document-for-ai --scope calibration/conversation/llm   Single subsystem
+  /document-for-ai humanize                           Render docs for humans
+  /document-for-ai adr docs/spec.md                   Extract ADRs from spec
 </help-text>
 
 If the user's arguments contain `--help`, output ONLY the text inside <help-text> tags above verbatim. Do not execute any skill logic.
@@ -43,6 +53,7 @@ Reference files used throughout (do not inline their content — read them at th
 - `references/volatility-assessment.md` — churn-rate algorithm, edge cases, git commands
 - `references/phase2-triggers.md` — Phase 2 trigger detection logic and template mapping
 - `references/signature-patterns.md` — grep-based signature extraction patterns (TS, Python, Go, Rust)
+- `references/cross-subsystem-resolution.md` — external import resolution and cross-subsystem pointers
 - `references/audit-checklist.md` — scoring dimensions and priority formula
 - `references/adr-extraction.md` — ADR extraction algorithm (used by the `adr` command)
 
@@ -181,16 +192,64 @@ Phase 2 only runs when a trigger is detected by Phase 1. See `references/phase2-
 
 **Token cap:** Phase 2 budgets ≤ 30k combined I/O tokens per subsystem. Enforcement is soft: if a trigger's evidence-gathering exceeds this, write the section with a `// budget exceeded — see source` footer (do not skip the section entirely).
 
+### Subsystem detection
+
+When invoked with `--subsystems all` (batch mode), detect subsystem boundaries automatically within the invocation scope. Heuristics are evaluated in order per language — a directory matching an earlier heuristic is not re-evaluated by later ones. Deduplication is by resolved absolute path.
+
+**TypeScript / JavaScript:**
+1. Directories containing a `mod.ts` / `index.ts` barrel within a package's `src/`.
+2. Sub-packages of a monorepo workspace (`packages/*/src/server/<subsystem>/`).
+3. Fallback: any subdirectory of `src/server/` or `src/client/` that contains ≥ 3 non-test files.
+
+**Python:**
+1. Directories containing an `__init__.py` file within the project's source root.
+2. Sub-packages of a monorepo workspace (`packages/*/<package_name>/<subsystem>/`).
+3. Fallback: any subdirectory of `src/` that contains ≥ 3 non-test `.py` files.
+
+**Go:**
+1. Directories containing at least one `.go` file (each such directory is a Go package).
+2. Fallback: any subdirectory of `cmd/` or `internal/` or `pkg/` that contains ≥ 3 non-test `.go` files.
+
+**Rust:**
+1. Directories containing a `mod.rs` file within `src/`.
+2. Fallback: any subdirectory of `src/` that contains ≥ 3 non-test `.rs` files.
+
+**Large-package safeguard:** if detected subsystem count exceeds 15, split into groups of ≤ 15 and process each group separately. Write the `AI_INDEX.md` header and warning before any group runs Phase 1, then process each group sequentially, appending module sections as each completes.
+
+### Batch orchestration
+
+- Detect all subsystem boundaries in the invocation scope.
+- For each subsystem: run volatility check (Step 1.7) → assign L1 or L2.
+- **Parallelism strategy:** when using Serena, run subsystems in parallel with concurrency ≤ 5. When using tsc or grep, run sequentially. In mixed sessions, run the Serena group in parallel (≤ 5) then the grep group sequentially.
+- Share the Phase 1 import graph across subsystems to resolve cross-subsystem pointers in a single pass (see `references/cross-subsystem-resolution.md`).
+- Run Phase 2 trigger-driven sections per subsystem.
+- Write all docs. Update `AI_INDEX.md` with subsystem → doc map.
+- **Batch failure recovery:** if a subsystem fails Phase 1 extraction, the batch continues. The failed subsystem is logged in `AI_INDEX.md` with the extraction-failed row format and skipped. All other subsystems proceed normally.
+- **Cost envelope:** for a package with 10 subsystems averaging 20 files each, total should fit in ~250k tokens (25k per subsystem × 10, plus ~20–30k for cross-subsystem scan).
+
+### Invocation flags
+
+```
+/document-for-ai --scope <package> --mode generate --subsystems all
+/document-for-ai --scope <package> --mode generate --subsystems <list>
+/document-for-ai --scope <package>/<subsystem> --mode generate
+--include-tests        Include test files in LoC counts and symbol indexes (default: excluded)
+--force-reclassify     Re-run volatility classification even for subsystems with existing depth
+--extractor <serena|tsc|grep>   Override automatic extractor selection
+```
+
 ### Generation pipeline
 
-1. **Run Phase 1** with the selected extractor on each subsystem.
-2. **Run Phase 2** on each subsystem where triggers fired.
-3. **Load templates.** Read `references/doc-templates.md` for the appropriate depth template (L1 or L2) and `references/frontmatter-schema.md` for required frontmatter fields.
-4. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, and `regenerate_if`.
-5. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
-6. **Generate root CLAUDE.md** at the project root (same marker-based append).
-7. **Generate AI_INDEX.md** at the project root.
-8. **Output summary report:** list all files created, subsystems covered, depth assigned to each, and any gaps where docs could not be generated.
+1. **Detect subsystems** (batch mode) or use the specified subsystem (single mode).
+2. **Run volatility assessment** (Step 1.7) for each subsystem.
+3. **Run Phase 1** with the selected extractor. In batch mode, share the import graph across subsystems.
+4. **Run Phase 2** on each subsystem where triggers fired.
+5. **Load templates.** Read `references/doc-templates.md` for the appropriate depth template (L1 or L2) and `references/frontmatter-schema.md` for required frontmatter fields.
+6. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, and `regenerate_if`.
+7. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
+8. **Generate root CLAUDE.md** at the project root (same marker-based append).
+9. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format).
+10. **Output summary report:** list all files created, subsystems covered, depth assigned to each, and any gaps where docs could not be generated.
 
 ---
 
@@ -419,6 +478,23 @@ Generate a lookup table with four columns:
 **Monorepo layout:** Group rows under module headers (`## Module: auth`, `## Module: payments`, etc.).
 
 **Single repo layout:** Flat table with no section headers.
+
+### Subsystem entries (batch mode)
+
+In batch mode, each subsystem gets its own `## Module: <subsystem-path>` header (one per subsystem, not one per package). When multiple subsystems belong to the same package, their `## Module:` sections are grouped contiguously under a comment line `<!-- package: <package-name> -->`.
+
+The `Doc` column contains the subsystem name. `Keywords` maps to `ai_keywords` from frontmatter. `Path` maps to the generated doc path.
+
+### Extraction-failed rows
+
+When a subsystem fails Phase 1 extraction, log it in AI_INDEX.md:
+
+| Doc | Purpose | Keywords | Path |
+|-----|---------|----------|------|
+| conversation/llm | extraction-failed | | — |
+<!-- extraction failed: Serena timeout after 30s, grep returned 0 symbols -->
+
+The failure row uses: subsystem path in the Doc column, `extraction-failed` in the Purpose column, empty Keywords cell, `—` in the Path column. An HTML comment on the next line records the reason.
 
 ---
 

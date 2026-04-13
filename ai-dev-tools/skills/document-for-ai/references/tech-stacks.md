@@ -87,3 +87,21 @@ repository root or in parent directories when operating inside a subdirectory.
 **Scope rule:** When a monorepo is detected and the AI is operating inside a package subdirectory,
 scope all GENERATE/UPDATE/AUDIT work to that package only. Generate module-level CLAUDE.md rather
 than a root-level one.
+
+---
+
+## Phase 1 Backend Preference per Stack
+
+Used by the structural extractor selection logic (see SKILL.md) to determine which backends are applicable for each tech stack.
+
+| Stack | Preferred | Fallback 1 | Fallback 2 |
+|---|---|---|---|
+| TypeScript / JavaScript | Serena MCP | `tsc --declaration` | Grep (`references/signature-patterns.md`) |
+| Python | Serena MCP | — | Grep |
+| Go | Serena MCP | — | Grep |
+| Rust | Serena MCP | — | Grep |
+
+**Notes:**
+- `tsc --declaration` is only available for TypeScript/JavaScript projects with a valid `tsconfig.json`.
+- Serena MCP is preferred for all stacks when available. The OR-check probe (`get_symbols_overview`, `find_symbol`, `find_referencing_symbols`) is stack-agnostic.
+- Grep patterns are language-specific — see `references/signature-patterns.md` for each language's patterns.
