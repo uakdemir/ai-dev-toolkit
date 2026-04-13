@@ -1,31 +1,36 @@
 ---
 name: review-doc
-description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles with model tiering. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
+description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
 # Review Doc
 
-Iterative document review with model tiering. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. In the final round, a sequential fact-checker verifies claims against the codebase. Produces a curated human-readable summary.
+Iterative document review. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. When `--fact-check true` is passed, a sequential fact-checker verifies claims against the codebase within each iteration (before the fixer, so fact-check findings get fixed in the same pass). Produces a curated human-readable summary.
 
-**Output:** `tmp/review-doc.json` (structured, machine-readable) + `tmp/review-doc-summary.md` (curated human summary, max 10 items + aggregates).
+**Output:** `tmp/_reviews_errors/review-doc.json` (structured, machine-readable) + `tmp/_reviews_errors/review-doc-summary.md` (curated human summary, max 10 items + aggregates). When `--run-id` is provided, files are prefixed: `tmp/_reviews_errors/<run_id>-review-doc.json`.
 
 ## Argument Parsing
 
 Parse arguments after `/review-doc`:
 
 ```
-/review-doc <path1> [path2 ...] [--against <ref-path>] [--max-model <model>] [--min-model <model>] [--max-iterations N] [--effort <level>] [--help]
+/review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
+            [--model <sonnet|opus>] --fact-check <true|false>
+            [--max-iterations N] [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
 
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
-| `--max-model` | opus | opus, sonnet, haiku | Final round: reviewer + fixer + fact-checker |
-| `--min-model` | sonnet | opus, sonnet, haiku | Early rounds: reviewer + fixer |
-| `--max-iterations` | 1 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
+| `--model` | sonnet | sonnet, opus | Controls all dispatches: reviewer, fixer, and fact-checker |
+| `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
+| `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Honors option Y early-exit when pre-fix criticals == 0 |
 | `--effort` | high | low, medium, high | Thoroughness level passed to all agents |
+| `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
+
+**Removed flags:** `--min-model`, `--max-model` (clean break, no backward compat shim).
 
 ### `--help` Output
 
@@ -35,32 +40,33 @@ When `--help` is passed, print the following and exit (no review runs):
 Usage: /review-doc <path1> [path2 ...] [flags]
        /review-doc <directory/> [flags]
 
-Iterative document review with model tiering. Dispatches a single merged
-reviewer for completeness, consistency, and implementability. Fixes issues
-automatically between rounds. Fact-checker runs sequentially in the final round.
-Accepts multiple files or a directory of .md files for cross-file review.
+Iterative document review. Dispatches a single merged reviewer for
+completeness, consistency, and implementability. Fixes issues automatically
+between rounds. Fact-checker runs when --fact-check true is passed.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
-  --max-model <model>     Final round: reviewer + fixer + fact-checker (default: opus)
-  --min-model <model>     Early rounds: reviewer + fixer      (default: sonnet)
-  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 1)
+  --model <model>         All dispatches: reviewer + fixer + fact-checker
+                                                             (default: sonnet)
+  --fact-check <bool>     Run fact-checker each iteration    (default: false)
+  --max-iterations N      Safety cap, 0=skip                 (default: 3)
   --effort <level>        Thoroughness: low, medium, high    (default: high)
+  --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
 
 Examples:
-  /review-doc docs/spec.md                               Single-pass review (default)
-  /review-doc docs/a.md docs/b.md docs/c.md              Review specific files as a set
-  /review-doc docs/monorepo-strategy/                    Review all .md files in directory
-  /review-doc docs/spec.md --max-iterations 3            Iterative review, up to 3 rounds
-  /review-doc docs/spec.md --against docs/plan.md        Review against reference document
-  /review-doc docs/spec.md --min-model haiku             Faster early rounds (lower quality)
+  /review-doc docs/spec.md                                  Default review
+  /review-doc docs/spec.md --fact-check true --model opus   Rigorous review
+  /review-doc docs/spec.md --max-iterations 3               Up to 3 rounds
+  /review-doc docs/spec.md --run-id k3m9p2q7_a1b2c3d4      Scoped output
 ```
 
 ## Setup
 
-1. Ensure `./tmp/` directory exists (create if needed).
-2. Delete stale files from prior runs: `./tmp/review-doc.json`, `./tmp/review-doc-summary.md`, `./tmp/review-doc-fix-report.json`, `./tmp/review-doc-iteration-*.md`.
+1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
+2. Delete stale files from prior runs:
+   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-iteration-*.md`
+   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
 
 ## Pre-Flight Checks
 
@@ -72,88 +78,44 @@ Examples:
 6. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
 7. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
 
-## Edge Case: `--max-iterations 0`
+## Review Loop
 
-Skip the loop entirely. Do not create any files (no review.json, no iteration logs). Print and exit:
+**`--max-iterations 0`:** Skip loop entirely. Output: `Review Doc Skipped / Reviewed: <docs> / No iterations run.`
 
-```
-Review Doc Skipped
-  Reviewed: <doc-paths comma-separated> (<N> files)
-  No iterations run. Document was not reviewed.
-```
+**`--max-iterations >= 1`:** Run the simplified loop below. There is no separate single-pass mode — `--max-iterations 1` is just one iteration of the same loop.
 
-For single file, keep `Reviewed: <doc-path>` (no count suffix).
-
-## Edge Case: `--max-iterations 1`
-
-Single-pass mode (default). Three agents dispatched sequentially at max-model:
-
-1. **Reviewer** — reads each document, applies the combined checklist, writes `tmp/review-doc.json` directly.
-2. **Fixer** — reads `tmp/review-doc.json`, applies fixes to the documents, writes `tmp/review-doc-fix-report.json` with dispositions. Hash verification before/after: if all hashes are unchanged after fixer, print `Warning: document was not modified. Proceeding to next step.` and continue.
-3. **Fact-checker** — reads `tmp/review-doc.json`, appends fact-check issues, rewrites the file.
-
-Then jump to Final Report. In single-pass mode, the Final Report step reads `tmp/review-doc-fix-report.json` to populate aggregate counts, same as in iterative mode.
-
-## Iteration Flow
-
-**Guard:** If `max_iterations == 1`, skip the loop below. Use the single-pass flow described above (Edge Case: --max-iterations 1).
-
-**State:** The orchestrator maintains `is_final_gate = false` before the loop.
-
-```
-While iteration <= max_iterations OR is_final_gate:
-
-  PRE-REVIEW PROMOTION:
-    If iteration == max_iterations AND NOT is_final_gate:
-      Set is_final_gate = true (this iteration runs as the final gate from the start)
-
-  REVIEW PHASE:
-    If NOT is_final_gate:
-      Dispatch 1 reviewer at min-model -> writes tmp/review-doc.json
-    If is_final_gate:
-      Dispatch 1 reviewer at max-model -> writes tmp/review-doc.json
-
-  VALIDATION:
-    Recount severities from issues array (do not trust counts from JSON)
-
-  STOP CHECK:
-    If critical_count == 0 AND NOT is_final_gate:
-      Set is_final_gate = true, continue to next iteration
-    If is_final_gate (regardless of critical_count):
-      Fall through to FIX PHASE and FACT-CHECK PHASE below, then exit loop to Final Report.
-
-  FIX PHASE:
-    If NOT is_final_gate:
-      Dispatch fixer at min-model
-    If is_final_gate:
-      Dispatch fixer at max-model
-    Hash verification (before/after)
-    Fix-report.json with dispositions
-
-  FACT-CHECK PHASE (final gate only):
-    Backup tmp/review-doc.json before fact-checker runs.
-    Dispatch fact-checker at max-model sequentially (after fixer completes).
-    If fact-checker fails, fall back to backup with warning.
-
-  ITERATION LOG -> tmp/review-doc-iteration-N.md
-  iteration += 1
+```python
+# One invocation = one loop, one model, one fact-check setting
+for iter in 1..max_iterations:
+    review_with(model)                  # reviewer agent at configured model
+    pre_fix_criticals = count(json)     # option Y: measured at review output, before fact-check
+    if fact_check:
+        fact_check_with(model)          # appends fact-check issues to json; same model
+    total_criticals = count(json)       # re-count after fact-check (includes fact-check-added criticals)
+    is_final_iter = (iter == max_iterations)
+    if pre_fix_criticals == 0 and not is_final_iter:
+        break                           # early-exit: no criticals, skip fix phase, skip remaining iters
+    if total_criticals == 0:            # final iter, 0 criticals: skip fixer, clean exit
+        break
+    fix_with(model)                     # fixer runs when total_criticals > 0
 ```
 
-The final gate runs at the last allowed iteration. Three trigger paths:
+**Key behavioral properties:**
+1. No phase logic, no tier promotion, no hidden final gate.
+2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
+3. Early exit only on `pre_fix_criticals == 0` (option Y — always measure at review output, before fact-check).
+4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--model` and `--fact-check` settings.
+5. `--model` controls ALL dispatches in that invocation, including the fact-checker. Using `--model sonnet --fact-check true` runs the fact-checker at sonnet quality.
 
-1. **Fast path (early termination, criticals = 0 before max):** If `critical_count == 0` in an early round (iteration N < max_iterations), `is_final_gate` flips to `true`, the next iteration runs as the final gate, and the loop ends early. Terminal output: e.g. `3/4` (if criticals hit zero at iteration 2 with cap 4, final gate runs as iteration 3).
-2. **Cap path (always-runs guarantee):** If criticals never reach zero before iteration `max_iterations`, that iteration is promoted to the final gate at the start of the loop body — meaning the reviewer, fixer, and fact-checker all run at max-model. Terminal output: `N/N`.
-3. **Fast path (criticals = 0 exactly at max iteration):** If `critical_count == 0` at iteration `max_iterations` and `is_final_gate` is not yet set, the STOP CHECK flips `is_final_gate = true` and continues; the final gate runs as iteration `max_iterations + 1` (exempt from cap). Terminal output: e.g. `5/4`.
-
-Either way, the user is guaranteed at least one max-model pass with fact-check before the loop exits, as long as `--max-iterations >= 1`. (Single-pass mode `--max-iterations 1` is already handled by the existing edge case path and is unchanged by this rule.)
-
-## Agent Dispatch (Early Rounds)
+## Agent Dispatch
 
 All `agents/` and `prompts/` paths in this section are relative to this skill's root directory (e.g., `ai-dev-tools/skills/review-doc/`).
 
-The orchestrator dispatches a single reviewer agent at min-model.
+### Reviewer
 
-Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>, model: <min-model>)`.
+The orchestrator dispatches a single reviewer agent at configured model.
+
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>, model: <model>)`.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value)
@@ -166,61 +128,42 @@ The dispatch prompt must include:
   For single file, use the same list format with one entry.
 - The `--against` reference path (if provided)
 
-No fact-checker in early rounds. Early rounds focus on structural/completeness issues that Sonnet handles well. Fact-checking on a noisy early draft wastes time.
+The reviewer writes `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active).
 
-## Agent Dispatch (Final Gate)
+### Fact-Checker (when `--fact-check true`)
 
-Three agents dispatched **sequentially** at max-model:
+Runs **after the reviewer, before the fixer** in each iteration. It is not terminal — the fixer follows to resolve any fact-check-added criticals.
 
-1. **Merged Reviewer** — read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt: `Agent(prompt: <reviewer-prompt>, model: <max-model>)`. The reviewer writes `tmp/review-doc.json`.
+Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` (or the run-id-prefixed variant). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
 
-2. **Fixer** — read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>, model: <max-model>)`. The fixer reads `tmp/review-doc.json`, applies fixes, writes `tmp/review-doc-fix-report.json`.
-
-3. **Codebase Fact-Checker** — backup `tmp/review-doc.json` first. Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <max-model>)`. The fact-checker reads `tmp/review-doc.json`, appends fact-check issues, sets `fact_check_claims` and `fact_check_accuracy`, rewrites the file. If the fact-checker fails, restore the backup and add a warning.
-
-All three run sequentially — each depends on the previous step's output.
-
-## Fixer
-
-Dispatched as a single Agent. Model depends on the round:
-- Early rounds: `Agent(prompt: <prompt>, model: <min-model>)` (Sonnet by default)
-- Final round: `Agent(prompt: <prompt>, model: <max-model>)` (Opus by default)
-
-Read `prompts/coder.md` for complete dispatch instructions.
-
-The orchestrator reads `tmp/review-doc.json`, extracts all issues grouped by severity (critical first, then high, then medium), and includes them in the Agent dispatch prompt as conversation context. The dispatch prompt must include:
-- All issues grouped by severity
-- The document paths list:
-  ```
-  Documents to review:
-  - path1.md
-  - path2.md
-  ```
-  For single file, use the same list format with one entry.
-- Reference document path (if `--against` provided)
-
-The fixer reads each document's content using the Read tool (not passed via dispatch context). Edits documents using the Edit tool for targeted fixes. Uses Write tool only for creating new files (like `tmp/review-doc-fix-report.json`).
-
-Produces `tmp/review-doc-fix-report.json` with dispositions for every issue:
-- `fixed` -- issue resolved
-- `deferred` -- out of scope, with reason
-- `pushed-back` -- reviewer finding is incorrect, with reason
-
-## Fact-Checker Dispatch
-
-The fact-checker runs **sequentially after the fixer** in the final round only. It is always terminal — no fix phase follows.
-
-Before dispatch, the orchestrator backs up `tmp/review-doc.json` (the reviewer+fixer output). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
-
-Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <max-model>)`.
+Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <model>)`.
 
 The fact-checker:
-1. Reads `tmp/review-doc.json`
+1. Reads `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`)
 2. Verifies claims against the codebase using Read/Grep/Glob tools
 3. Appends fact-check issues to the `issues` array with `category: "fact-check"`
 4. Populates `fact_check_claims` and computes `fact_check_accuracy`
 5. Recomputes `critical_count` and `high_count` from the full issues array
-6. Rewrites `tmp/review-doc.json`
+6. Rewrites the JSON file
+
+### Fixer
+
+Dispatched when `total_criticals > 0` after review (and optional fact-check).
+
+Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>, model: <model>)`.
+
+The dispatch prompt must include:
+- All issues grouped by severity
+- The document paths list
+- Reference document path (if `--against` provided)
+
+The fixer reads each document's content using the Read tool (not passed via dispatch context). Edits documents using the Edit tool for targeted fixes. Uses Write tool only for creating new files.
+
+Produces `tmp/_reviews_errors/review-doc-fix-report.json` (or `<run_id>-review-doc-fix-report.json`) with dispositions for every issue:
+- `fixed` -- issue resolved
+- `deferred` -- out of scope, with reason
+- `pushed-back` -- reviewer finding is incorrect, with reason
+
 
 ## Hash Verification
 
@@ -233,14 +176,14 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 
 | File | Purpose | Consumer |
 |---|---|---|
-| `tmp/review-doc.json` | Structured JSON from last iteration | `/respond-to-review`, machines |
-| `tmp/review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
-| `tmp/review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
-| `tmp/review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
+| `tmp/_reviews_errors/[<run_id>-]review-doc.json` | Structured JSON from last iteration | `/respond-to-review`, machines |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
 
 ## Review Summary Format
 
-The orchestrator generates `tmp/review-doc-summary.md` directly during the Final Report step. Format:
+The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly during the Final Report step. Format:
 
 ```markdown
 # Review Summary
@@ -286,8 +229,8 @@ Review Doc Complete
   Remaining: 0 Critical | 2 High | 1 Medium
   Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed
   Fact-check: X/Y claims accurate (Z%)
-  Summary: tmp/review-doc-summary.md
-  Full review: tmp/review-doc.json
+  Summary: tmp/_reviews_errors/[<run_id>-]review-doc-summary.md
+  Full review: tmp/_reviews_errors/[<run_id>-]review-doc.json
 ```
 
 The `Reviewed:` line supports three formats:
@@ -299,7 +242,7 @@ The `Reviewed:` line supports three formats:
 
 When the loop completes (final gate passes or max iterations exhausted):
 
-1. The orchestrator generates `tmp/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
+1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (see Status Logic below).
 4. Print terminal output (see Terminal Output above).
@@ -309,7 +252,7 @@ When the loop completes (final gate passes or max iterations exhausted):
 
 **Trigger:** Status is "Approved with suggestions" (high/medium issues remain, zero criticals).
 
-After printing the terminal output, auto-triage each remaining issue from `tmp/review-doc.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
+After printing the terminal output, auto-triage each remaining issue from `tmp/_reviews_errors/review-doc.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
 
 **Auto-triage rules (per issue):**
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly to the document — surgical edits only.
@@ -334,7 +277,7 @@ Applied: N | Deferred: N | Pushed back: N
 
 If any fixes were applied, commit with: `fix(review-doc): apply N review suggestions`.
 
-After all issues are processed, update `tmp/review-doc-summary.md` with final dispositions and reprint the terminal output with updated counts.
+After all issues are processed, update `tmp/_reviews_errors/review-doc-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
 **Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first):
 
@@ -371,7 +314,7 @@ The orchestrator maintains the following state across the loop:
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 
-After each fix phase, parse `tmp/review-doc-fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/review-doc.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
+After each fix phase, parse `tmp/_reviews_errors/review-doc-fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/_reviews_errors/review-doc.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
 
 ## Status Logic
 
@@ -383,16 +326,16 @@ First match wins:
 
 ## Iteration Log Format
 
-Write to `tmp/review-doc-iteration-N.md` after each iteration:
+Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 
 ```markdown
 # Iteration N
 
-**Reviewer model:** min-model or max-model
-**Agents:** 1 (merged reviewer) or 1 + fact-checker (final round)
-**Fixer model:** min-model or max-model
+**Reviewer model:** <configured model>
+**Agents:** 1 (merged reviewer) or 1 + fact-checker (when --fact-check true)
+**Fixer model:** <configured model>
 **Issues found:** X critical, Y high, Z medium
-**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, final gate triggered" | "0 criticals, loop complete" | "Last allowed iteration, final gate triggered" | "Fix phase failed: <error>"
+**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, early exit" | "0 criticals, loop complete" | "Max iterations reached" | "Fix phase failed: <error>"
 **Issues fixed:** [category] [severity] at [location]
 **Issues deferred:** [category] [severity] at [location] -- reason
 **Issues pushed back:** [category] [severity] at [location] -- reason
@@ -401,7 +344,7 @@ Write to `tmp/review-doc-iteration-N.md` after each iteration:
 
 ## JSON Schema
 
-The review-doc schema for `tmp/review-doc.json` validation reference:
+The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation reference:
 
 ```json
 {
@@ -449,4 +392,4 @@ The review-doc schema for `tmp/review-doc.json` validation reference:
 }
 ```
 
-Note: `fact_check_claims` is only populated on the final-gate round (when the codebase fact-checker runs). On early rounds (no fact-checker), set `fact_check_claims: []` and `fact_check_accuracy: 100`.
+Note: `fact_check_claims` is only populated when `--fact-check true` is passed. When `--fact-check false` (default), set `fact_check_claims: []` and `fact_check_accuracy: 100`.
