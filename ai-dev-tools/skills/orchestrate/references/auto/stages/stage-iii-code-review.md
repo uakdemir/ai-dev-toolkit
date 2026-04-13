@@ -29,10 +29,11 @@ If pre-fix criticals == 0 at any iteration → skip remaining iterations, advanc
 
 After every successful agent iii iteration, orchestrate:
 1. Stages: `git add -u && git add -- . ':!tmp/'`
-2. Commits: `fix(auto): <spec-slug>: code-review iter <N> — address findings`
-3. Updates `last_iteration_head = HEAD` in `auto-state.md`
+2. Checks: `git diff --cached --quiet` — if exit code 0 (nothing staged), skip the commit but still update `last_iteration_head = HEAD`. This handles the 0-criticals early-exit case where the review found no issues and no fix phase ran.
+3. Commits (if staged changes exist): `fix(auto): <spec-slug>: code-review iter <N> — address findings`
+4. Updates `last_iteration_head = HEAD` in `auto-state.md`
 
-This commit is load-bearing for rollback anchors.
+This commit is load-bearing for rollback anchors. The hash update in step 4 always runs regardless of whether a commit was created.
 
 **Successful iteration definition:** agent returned without exception AND iteration log file exists (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`).
 
