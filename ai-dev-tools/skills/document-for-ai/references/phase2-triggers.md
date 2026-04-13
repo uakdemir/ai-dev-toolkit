@@ -91,6 +91,8 @@ When changing <this subsystem>, you will almost always need to touch or verify s
 - In **batch mode**, the shared cross-subsystem import graph provides reverse-dependency data for full population.
 - In **single-subsystem mode**, populate via reverse grep: `grep -rn "<symbol_name>" <package_src_root> --include="*.ts"` (or language-appropriate globs). Mark results as `"approximate — run batch mode for complete coverage"`.
 
+**Sibling docs not yet generated:** When referenced sibling subsystems lack L1 docs, the Cross-subsystem pointers section still generates with resolved import paths. Mark such entries as `(doc not yet generated)` in the "Where it lives" column rather than failing or omitting the section.
+
 **Important:** this section names external symbols and files but does NOT document their signatures. Signatures live in the sibling's own L1 doc. The goal is "prevent missed edits," not "eliminate external reads."
 
 ---

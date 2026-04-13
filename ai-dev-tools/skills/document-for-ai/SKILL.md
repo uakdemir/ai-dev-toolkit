@@ -123,7 +123,7 @@ For each detected subsystem, classify its documentation depth (L1 or L2) based o
    0.15 – 0.40   → L2
    < 0.15        → L2 (with deeper data-flow sections)
    ```
-5. **L1 → L2 promotion:** requires explicit user request. Automatic downgrade does not happen.
+5. **L1 → L2 promotion:** requires explicit user request. Automatic promotion does not happen.
 
 Set `depth`, `volatility`, `volatility_measured`, and `churn_rate` in the generated doc's frontmatter (see `references/frontmatter-schema.md`).
 
@@ -174,6 +174,8 @@ Override with `--extractor <serena|tsc|grep>`.
 - Serena available but fails partway → fall through to next backend for remaining files, log the switch.
 - Grep fallback has false negatives → the Open Questions section documents any file the extractor couldn't parse (`// parser-unknown: <reason>`).
 - All backends fail or return zero symbols → abort doc generation for this subsystem, log to `AI_INDEX.md` with extraction-failed row format (see AI_INDEX.md Format section).
+
+**Content constraint:** Never guess file content beyond what structural extraction exposes. If the selected extractor can't surface a value, mark the slot as `// unknown — see source` rather than inventing content.
 
 ### Test file exclusion
 
@@ -252,7 +254,7 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 3. **Run Phase 1** with the selected extractor. In batch mode, share the import graph across subsystems.
 4. **Run Phase 2** on each subsystem where triggers fired.
 5. **Load templates.** Read `references/doc-templates.md` for the appropriate depth template (L1 or L2) and `references/frontmatter-schema.md` for required frontmatter fields.
-6. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, and `regenerate_if`.
+6. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. **Narrative cap:** never hand-generate more than 6,000 tokens of narrative per doc. L2 narrative sections are capped at 1,500 tokens/section. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, and `regenerate_if`.
 7. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
 8. **Generate root CLAUDE.md** at the project root (same marker-based append).
 9. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format).
@@ -505,7 +507,7 @@ Generate a lookup table with four columns:
 
 In batch mode, each subsystem gets its own `## Module: <subsystem-path>` header (one per subsystem, not one per package). When multiple subsystems belong to the same package, their `## Module:` sections are grouped contiguously under a comment line `<!-- package: <package-name> -->`.
 
-The `Doc` column contains the subsystem name. `Keywords` maps to `ai_keywords` from frontmatter. `Path` maps to the generated doc path.
+Each subsystem entry uses the same four-column table format (`Doc | Purpose | Keywords | Path`) as the main AI_INDEX.md table. The `Doc` column contains the subsystem name. `Keywords` maps to `ai_keywords` from frontmatter. `Path` maps to the generated doc path.
 
 ### Extraction-failed rows
 

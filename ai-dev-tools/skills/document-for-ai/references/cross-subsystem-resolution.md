@@ -60,7 +60,7 @@ When only one subsystem is being generated (not batch mode), the shared import g
 
 Generated doc files are written to `<package-root>/docs/ai/<subsystem-name>.md`.
 
-**Path derivation:** the subsystem name is derived from its path relative to the package's `src/` directory, with path separators replaced by hyphens.
+**Path derivation:** the subsystem name is derived from its path relative to its detected parent context directory (e.g., `src/server/` or `src/client/`), with path separators replaced by hyphens.
 
 Examples:
 - `packages/calibration/src/server/conversation/llm/` → `packages/calibration/docs/ai/conversation-llm.md`
