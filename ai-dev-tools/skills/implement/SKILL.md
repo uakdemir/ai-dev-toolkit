@@ -6,7 +6,7 @@ description: "Use when the user wants to execute a written implementation plan o
 <help-text>
 /implement — execute a plan or spec
 
-Usage: /implement [path] [--model single|subagent|parallel]
+Usage: /implement [path] [--model single|subagent|parallel] [--auto] [--run-id <id>]
 
 Arguments:
   path             Plan or spec file to implement. If omitted, uses the
@@ -16,6 +16,10 @@ Arguments:
                      subagent = subagent-per-task
                      parallel = parallel helper agents
                    (clear-context is interactive-only — use the picker)
+  --auto           Non-interactive dispatch: narrows to {single, parallel}.
+                   Excludes options [2] subagent-per-task and [3] clear-context.
+                   Skips refactor-unit pre-check.
+  --run-id <id>    Run-id threaded to dispatched sub-agents via override preamble.
   --help           Show this help
 
 Examples:
@@ -25,7 +29,7 @@ Examples:
   /implement docs/plans/baz.md --model parallel # skip the picker
 </help-text>
 
-Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--model` is present, validate its value against the set `{single, subagent, parallel}` — reject `clear-context` with the exact error from Edge Case 7 below. If `--skip-plan-recommendation` is present, suppress the Step C spec recommendation prompt for this invocation only (see Step C).
+Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--model` is present, validate its value against the set `{single, subagent, parallel}` — reject `clear-context` with the exact error from Edge Case 7 below. If `--skip-plan-recommendation` is present, suppress the Step C spec recommendation prompt for this invocation only (see Step C). If `--auto` is present, set auto mode active for this invocation. `--auto` is incompatible with `--model clear-context` (Edge Case 7 already covers this). `--auto` + `--model` is valid — `--model` overrides the auto algorithm's choice. If `--run-id <id>` is present, store the run-id for threading to dispatched sub-agents.
 
 # implement
 
@@ -102,6 +106,12 @@ Then exit. Do not auto-dispatch either option.
 
 ## Step D — Dispatch with Execution Model
 
+### `--auto` Mode Pre-check
+
+If `--auto` is active:
+1. **Skip the Refactor-Unit Branch Handling pre-check entirely.** Proceed directly to the Normal-feature path. Rationale: auto mode prioritizes a narrow, deterministic dispatch surface. Users who need refactor-unit handling must omit `--auto`.
+2. After building the task graph, use the narrowed 2-option algorithm instead of the 4-option picker (see below).
+
 ### Refactor-Unit Branch Handling (pre-check)
 
 Before building the task graph, perform this refactor-unit check (moved verbatim from the previous `orchestrate/SKILL.md` Step 5):
@@ -125,6 +135,14 @@ Load `references/implementation-step.md` (which transitively loads `references/t
 1. Build the task graph from the plan (per `references/task-graph.md`).
 2. Compute the execution model recommendation (per `references/implementation-step.md` Execution Model Recommendation section).
 3. **If `--model` flag was provided** → short-circuit the picker, dispatch directly with that model. The preamble block in `implementation-step.md` Override Dispatch section is still prepended.
+3.5. **If `--auto` flag is active (and `--model` is NOT provided):**
+   Use the narrowed 2-option algorithm:
+   ```
+   IF parallelism_ratio >= 0.35  → dispatch option [4]: single-agent + 1 parallel helper
+   ELSE                           → dispatch option [1]: single-agent
+   ```
+   Options [2] subagent-per-task and [3] clear-context are **excluded**.
+   Skip the picker presentation — dispatch directly.
 4. **Else** → present the 4-option dispatch picker exactly as defined in `references/implementation-step.md`:
    ```
    [1] Single-agent <(recommended) if applicable>

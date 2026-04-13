@@ -39,8 +39,8 @@ assigned or no more pairs can be formed.
 P = number of parallel pairs
 parallelism_ratio = P / task_count
 
-If parallelism_ratio >= 0.30 → option [4] is eligible
-If parallelism_ratio < 0.30  → not eligible, fall through to single-agent
+If parallelism_ratio >= 0.35 → option [4] is eligible
+If parallelism_ratio < 0.35  → not eligible, fall through to single-agent
 ```
 
 Note: `parallelism_ratio` is a proxy for time savings (fraction of parallelisable tasks), not a wall-clock measurement.
@@ -83,6 +83,8 @@ The "Parallelism yield" line is shown only when the yield check ran (task_count 
 
 Any input other than 1, 2, 3, or 4 re-presents the options.
 
+**Auto mode (`--auto` flag):** When auto mode is active, the picker is not presented. The dispatch narrows to two options only: `{single-agent, single-agent + parallel helper}`. The threshold is the same (0.35). Options [2] and [3] are excluded. See `implement/SKILL.md` for the `--auto` algorithm.
+
 **Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit. Mode is persisted in the hint file; if mode was activated via `--strict` flag only and no hint file mode is set, the new session will prompt for mode selection again.
 
 ---
@@ -113,7 +115,13 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    attempts to fix. If still failing after 2 retries, mark the task
    as BLOCKED and continue to the next task. Report all blocked
    tasks when execution completes.
+
+6. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
+   artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
+   is active. This is for traceability in multi-agent pipelines.
 ```
+
+Override 6 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
 
 Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip.
 
@@ -147,7 +155,13 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    attempts. If still failing after 2 retries, mark the task as
    BLOCKED and continue to the next task. Report all blocked tasks
    when execution completes.
+
+6. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
+   artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
+   is active. This is for traceability in multi-agent pipelines.
 ```
+
+Override 6 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
 
 **If user selected [4] Single-agent + parallel helper**, dispatch to `superpowers:executing-plans` with this preamble prepended:
 
@@ -182,7 +196,13 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    has not returned output after the main agent completes its own
    task, proceed without the helper's result and take ownership of
    the helper's task.
+
+6. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
+   artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
+   is active. This is for traceability in multi-agent pipelines.
 ```
+
+Override 6 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
 
 Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip. The parallel helper override (5) is unique to option [4]; option [1] does not include it.
 
