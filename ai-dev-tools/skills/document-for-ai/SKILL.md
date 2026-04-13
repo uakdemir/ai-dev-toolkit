@@ -31,16 +31,32 @@ Execute these steps in order. Each step feeds into the next:
 
 1. **Tech Stack Selection** — determine which file patterns to scan.
 2. **Scope Detection** — detect monorepo boundaries and scope work appropriately.
-3. **Mode Detection** — determine whether to generate, migrate, audit, or update.
-4. **Execute Mode** — run the selected mode's workflow.
-5. **Output** — generate CLAUDE.md hierarchy, AI_INDEX.md, and summary report.
+3. **Volatility Assessment** — classify each subsystem as L1 or L2 based on git churn history.
+4. **Mode Detection** — determine whether to generate, migrate, audit, or update.
+5. **Execute Mode** — run the selected mode's workflow (GENERATE uses two-phase scan architecture).
+6. **Output** — generate CLAUDE.md hierarchy, AI_INDEX.md, and summary report.
 
 Reference files used throughout (do not inline their content — read them at the indicated step):
 - `references/tech-stacks.md` — file patterns, monorepo detection, stack conventions
 - `references/doc-templates.md` — template structures and mapping rules
 - `references/frontmatter-schema.md` — required frontmatter fields and validation
+- `references/volatility-assessment.md` — churn-rate algorithm, edge cases, git commands
 - `references/audit-checklist.md` — scoring dimensions and priority formula
 - `references/adr-extraction.md` — ADR extraction algorithm (used by the `adr` command)
+
+---
+
+## L1 / L2 / L3 Documentation Framework
+
+The depth framework governs how much detail each generated doc contains. Depth is assigned per subsystem based on volatility (see Step 1.7: Volatility Assessment).
+
+| Level | What it captures | Cost | Churn resistance | Best for |
+|---|---|---|---|---|
+| **L1: Structural index** | Exported symbols, signatures, one-line purposes, cross-cutting patterns, file/dir map | Low (20–40% of L2) | High — survives refactors that don't rename files/symbols | Volatile subsystems, internal scaffolding |
+| **L2: Architecture** | Data flow, key decisions, integration points, constraints, ADR cross-refs | Medium | Medium — survives refactors that don't change topology | Stable modules, public API contracts, schema |
+| **L3: Implementation detail** | Method-by-method logic, edge cases, invariants | High | Low — breaks on most refactors | **NOT auto-generated.** Stays in source comments + git blame. |
+
+**Key principle:** L1 is not "shallow L2." It is a fundamentally different artifact. L1 gives a bug-fixer a precise map of the subsystem without teaching them how the code works. That trade-off is correct for high-churn code because architectural narrative goes stale faster than symbol indexes do.
 
 ---
 
@@ -76,6 +92,27 @@ Detect monorepo structure before proceeding to mode detection.
 3. If a monorepo is detected and CWD is inside a package subdirectory, scope all subsequent work to that package only. Generate module-level CLAUDE.md, not root-level.
 4. If a monorepo is detected and CWD is at the repo root, ask the user: "Scope to entire monorepo or a specific package?"
 5. If no monorepo is detected, skip this step and proceed with the full project.
+
+---
+
+## Step 1.7: Volatility Assessment
+
+For each detected subsystem, classify its documentation depth (L1 or L2) based on git churn history. Read `references/volatility-assessment.md` for the full algorithm and edge cases.
+
+**Quick summary:**
+1. **Existing-doc pre-check:** if an existing doc has a `depth` field → preserve existing depth (skip classification). Override with `--force-reclassify`.
+2. **Zero-history guard:** 0 total commits → default to L2.
+3. **Thin-history guard:** < 20 total commits → default to L2.
+4. **Compute churn_rate:**
+   ```
+   churn_rate = commits_90d / total_commits_ever
+   > 0.40        → L1
+   0.15 – 0.40   → L2
+   < 0.15        → L2 (with deeper data-flow sections)
+   ```
+5. **L1 → L2 promotion:** requires explicit user request. Automatic downgrade does not happen.
+
+Set `depth`, `volatility`, `volatility_measured`, and `churn_rate` in the generated doc's frontmatter (see `references/frontmatter-schema.md`).
 
 ---
 

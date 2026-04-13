@@ -13,6 +13,29 @@ code_paths: [src/auth/, src/middleware/auth.ts]
 ---
 ```
 
+## Extended Example (with volatility fields)
+
+```yaml
+---
+scope: calibration
+subsystem: conversation/llm
+purpose: architecture
+depth: L1
+volatility: high
+volatility_measured: 2026-04-08
+churn_rate: 0.47
+code_paths:
+  - packages/calibration/src/server/conversation/llm/
+ai_keywords: [LLM, conversation, prompt, completion]
+last_verified: 2026-04-08
+last_verified_symbol_count: 42
+regenerate_if:
+  - code_paths_commits_since_last_verified > 10
+  - symbol_count_diff > 0.15
+  - volatility_class_changed
+---
+```
+
 ## Field Definitions
 
 - `scope` (required): Module or area name. Must match a module name used consistently across docs.
@@ -21,6 +44,13 @@ code_paths: [src/auth/, src/middleware/auth.ts]
 - `dependencies` (optional): Other modules/areas this doc's subject depends on.
 - `last_verified` (required): ISO date when this doc was last verified against the code it describes.
 - `code_paths` (required): File paths or directories this doc covers. Entries are literal paths. Directories (trailing `/`) match all files recursively within. Glob patterns are not supported. Used by UPDATE mode to find affected docs.
+- `subsystem` (required when depth is set): Subsystem path from the package root. Identifies which subsystem this doc covers within the package scope.
+- `depth` (optional): `L1` or `L2`. Documentation depth level assigned by the volatility assessment algorithm. See `references/volatility-assessment.md`. L1 = structural index (symbols, signatures), L2 = architecture (data flow, decisions). L3 is never auto-generated.
+- `volatility` (optional): `high`, `medium`, `low`, or `unknown`. Derived from `churn_rate`. See `references/volatility-assessment.md` for the mapping.
+- `volatility_measured` (optional): ISO date when volatility was last measured.
+- `churn_rate` (optional): Raw `commits_90d / total_commits_ever` ratio. `null` for zero-history or thin-history subsystems. Stored for audit trail.
+- `last_verified_symbol_count` (optional): Total exported symbol count at `last_verified` time. Used to compute `symbol_count_diff` for staleness detection.
+- `regenerate_if` (optional): List of machine-readable staleness signals. Hints for audit mode and the runtime trust-but-verify rule. Not enforced by the skill itself. Common signals: `code_paths_commits_since_last_verified > 10`, `symbol_count_diff > 0.15`, `volatility_class_changed`.
 - `status` (required when `purpose: adr`, not applicable to other doc types): One of: `Proposed`, `Accepted`, `Superseded`, `Deprecated`. **This is the single authoritative source for ADR status.** The body's Status line and the index table's Status column are display copies derived from this field. When status changes, update frontmatter first; body and index are updated to match.
 - `spec_source` (required when `purpose: adr`, not applicable to other doc types): Path to the spec this ADR was extracted from. Enables UPDATE mode to detect when a spec changes and re-check the ADR. Example: `docs/superpowers/specs/2026-03-28-feature-design.md`.
 
