@@ -334,7 +334,7 @@ Options [2] subagent-per-task and [3] clear-context are **excluded** from auto m
 - Option [2] introduces multi-agent coordinator complexity and a larger failure surface
 - Option [3] (clear-context) is meaningless in auto mode because the calling context is already fresh (orchestrate just dispatched)
 
-The parallel helper cap is **max 1 helper ever** (per existing `implementation-step.md:178`).
+The parallel helper cap is **max 1 helper ever** (per existing `implementation-step.md:177`).
 
 **Threshold raised from 30% → 35%:** parallel helper has real dispatch overhead and fallback complexity; 5 extra percentage points excludes marginal cases where "technically parallelizable but not meaningfully faster" would otherwise trigger the code path. Applies to standalone `/implement` as well — no reason to differ.
 
@@ -350,16 +350,16 @@ Each iteration invokes `/review-code <spec_baseline> --against <spec_path> --run
 
 This guarantees every iteration sees both original implementation quality AND any regressions introduced by earlier fixes. Delta-only review (from `last_iteration_head`) was rejected because it would miss fix-introduced regressions.
 
-**Up to 4 iterations** (endless-loop cap). Endless-loop measurement happens at iter 4's REVIEW output, pre-fix (option Y):
+**Up to 4 iterations** (endless-loop cap) with early exit: if pre-fix criticals == 0 at any iteration, skip remaining iterations and advance to stage iv. Endless-loop measurement happens at iter 4's REVIEW output, pre-fix (option Y):
 - Pre-fix criticals ≤ 1 → acceptable, treat as success
 - Pre-fix criticals > 1 → endless-loop failure (Q2 path)
 
-**Per-iteration commit invariant:** After every successful agent iii iter, orchestrate commits. A successful iteration is defined as: the agent returned without exception AND at least one iteration log file was written (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json` exists). Malformed or empty JSON qualifies as successful under optimistic trust; the Q3 crash trigger fires if EITHER condition above fails (i.e. an exception was thrown OR the artifact file is missing).
+**Per-iteration commit invariant:** After every successful agent iii iter, orchestrate stages all tracked-file modifications and new files outside `tmp/` (i.e. `git add -u && git add -- . ':!tmp/'`), then commits. A successful iteration is defined as: the agent returned without exception AND at least one iteration log file was written (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json` exists). Malformed or empty JSON qualifies as successful under optimistic trust; the Q3 crash trigger fires if EITHER condition above fails (i.e. an exception was thrown OR the artifact file is missing).
 ```
 fix(auto): <spec-slug>: code-review iter <N> — address findings
 ```
 
-This is non-optional and is the only place where auto mode adds its own commits on top of agent-produced commits. The commit creates the hash2a/hash2b/hash2c anchor chain that makes granular rollback possible.
+This is non-optional and load-bearing for the `last_iteration_head` rollback anchor. The commit creates the hash2a/hash2b/hash2c anchor chain that makes granular rollback possible.
 
 ### Stage iv — Verification gate
 
@@ -425,7 +425,7 @@ Any Q2/Q3 failure transitions to the appropriate terminal `skipped-*` or `halted
 
 **No migration logic between `orchestrate-state.md` and `auto-state.md`.** They are independent state machines sharing only a directory. Standard mode never reads `auto-state.md`; auto mode never reads `orchestrate-state.md`.
 
-**Stale-state policy:** If `tmp/auto-state.md` already exists when `/orchestrate --auto` is invoked and its `state` field is not `finalized`, orchestrate prints a warning (`previous auto run detected at <state>; starting fresh`) and overwrites the file. If `state == finalized`, overwrite silently. There is no resume mechanism — stale state is always discarded.
+**Stale-state policy:** If `tmp/auto-state.md` already exists when `/orchestrate --auto` is invoked and its `state` field is not `finalized`, orchestrate prints a warning (`previous auto run detected at <state>; starting fresh`) and overwrites the file. If `state == finalized`, overwrite silently. If the file exists but is unparseable (malformed YAML frontmatter), treat it as stale and overwrite with the same warning. There is no resume mechanism — stale state is always discarded.
 
 ---
 
@@ -473,11 +473,11 @@ for iter in 1..max_iterations:
         fact_check_with(model)          # appends fact-check issues; these are fixed in the same iter
     total_criticals = count(json)       # re-count after fact-check (includes any fact-check-added criticals)
     is_final_iter = (iter == max_iterations)
-    if total_criticals == 0 and not is_final_iter:
+    if pre_fix_criticals == 0 and not is_final_iter:
         break                           # early-exit: no criticals, skip fix phase, skip remaining iters
-    fix_with(model)                     # fixer runs on final iter always (Q2 progress), or when total_criticals > 0
-    if total_criticals == 0:            # final iter, 0 criticals: clean exit after fixer
+    if total_criticals == 0:            # final iter, 0 criticals: skip fixer (nothing to fix), clean exit
         break
+    fix_with(model)                     # fixer runs on final iter when total_criticals > 0 (Q2 progress)
 ```
 
 **Key behavioral properties:**
@@ -487,7 +487,7 @@ for iter in 1..max_iterations:
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times
 5. Model flag controls all dispatches in that invocation, including the fact-checker
 
-**Tmp file output:** intermediary files move to `tmp/_reviews_errors/`. Standalone invocations without `--run-id` write to `tmp/_reviews_errors/review-doc.json` (un-prefixed). Note: this is a **breaking change** from the current path `tmp/review-doc.json` — any tooling that reads `tmp/review-doc.json` directly must be updated. With `--run-id`, files are prefixed per the run-id convention (see Cross-Cutting Infrastructure). No dual-path fallback is provided. Each review-doc invocation writes a single output file — all iterations within the invocation overwrite the same file; only the last iteration's output persists on disk. Phase 1's file is `<run_id>-review-doc-phase1.json` and phase 2's file is `<run_id>-review-doc-phase2.json`; there are no per-iteration files.
+**Tmp file output:** intermediary files move to `tmp/_reviews_errors/`. Standalone invocations without `--run-id` write to `tmp/_reviews_errors/review-doc.json` (un-prefixed). Note: this is a **breaking change** from the current path `tmp/review-doc.json` — any tooling that reads `tmp/review-doc.json` directly must be updated. With `--run-id`, files are prefixed per the run-id convention (see Cross-Cutting Infrastructure). No dual-path fallback is provided. Each review-doc invocation writes a single output file — all iterations within the invocation overwrite the same file; only the last iteration's output persists on disk. Phase 1's file is `<run_id>-review-doc-phase1.json` and phase 2's file is `<run_id>-review-doc-phase2.json`; there are no per-iteration files. Review-doc itself has no phase awareness — orchestrate embeds the phase suffix into the `--run-id` value it passes (e.g. `k3m9p2q7_a1b2c3d4-phase1`), so review-doc simply prefixes its output filename with the run-id as-is.
 
 **Backward-compat clarification (reconciles Success Criteria #3, the `--run-id` note above, and this tmp-file-output paragraph):** `--run-id` and `--fact-check` flag additions are backward compatible at the CLI level — existing standalone invocations of `/review-doc spec.md` still parse and run unchanged, with `--fact-check` defaulting to false. The default output-file path relocation from `tmp/review-doc.json` to `tmp/_reviews_errors/review-doc.json` is a **breaking change for tooling that reads the JSON directly**. Standalone CLI invocations still succeed — only the output read-path moves.
 
@@ -499,7 +499,7 @@ for iter in 1..max_iterations:
 **Detection logic:**
 
 ```python
-if arg.isdigit() and len(arg) <= 6:
+if arg.isdigit() and len(arg) <= 6:  # len <= 6: no reasonable commit-count exceeds ~999,999; git short hashes default to 7+ chars
     mode = "count"
 elif git("rev-parse", "--verify", arg) succeeds:
     mode = "since"
@@ -636,16 +636,18 @@ All failure-handling logic lives under `references/auto/failure-handling/` and l
 - **≤1 critical remaining** → acceptable, treat as success, continue pipeline normally
 - **>1 criticals remaining** → endless-loop failure:
   1. Commit wip: `wip(auto): <spec>: <spec-review|code-review> endless-loop at iter <N> — see tmp/_reviews_errors/error-logs.md`
-  2. Append the unresolved criticals to the spec file itself (so user can review post-run)
+  2. Append unresolved criticals (asymmetric by stage):
+     - **Agent i (spec-review):** append criticals to the spec file itself (so user can review post-run)
+     - **Agent iii (code-review):** append criticals to `tmp/_reviews_errors/<run_id>-unresolved-criticals.md` (code-level findings do not belong in the spec)
   3. Log a Warning to `tmp/_reviews_errors/error-logs.md`
   4. Mark spec `skipped-endless-loop` in `auto-state.md`
   5. Continue to next spec
 
-Applies symmetrically to agent i (spec-review, text artifacts) and agent iii (code-review, code artifacts).
+Applies to both agent i (spec-review) and agent iii (code-review), with the asymmetric output target defined in step 2.
 
 ### Q3 — Crash handling (stage-differentiated, retry-once)
 
-**Crash signal definition:** An agent crash is any of: (1) the agent dispatch throws an exception, (2) the agent times out after 10 minutes without returning, (3) the agent returns without writing its expected output artifact. Expected output artifacts per stage: agent i → `tmp/_reviews_errors/<run_id>-review-doc-phase{N}.json`; agent ii → at least one new commit since `spec_baseline` (verified by agent ii validators); agent iii → `tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`.
+**Crash signal definition:** An agent crash is any of: (1) the agent dispatch throws an exception, (2) the agent times out after 10 minutes without returning, (3) the agent returns without writing its expected output artifact. Expected output artifacts per stage: agent i → `tmp/_reviews_errors/<run_id>-review-doc-phase{N}.json`; agent ii → at least one new commit since `pre_implement_head` (verified by agent ii validators); agent iii → `tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`.
 
 **Retry-once rule:** On any agent crash, dispatch the same agent once more with identical inputs (fresh `dispatch_hash`). If retry succeeds, continue normally.
 
@@ -653,10 +655,10 @@ Applies symmetrically to agent i (spec-review, text artifacts) and agent iii (co
 
 | Stage | Response | Rationale |
 |---|---|---|
-| Agent i (spec-review) | Skip spec + continue, no commit, log Error | Text artifacts are inert; spec file left as-is. If phase 1 already committed before phase 2 crashes, that commit is preserved — no rollback of phase 1 work. |
+| Agent i (spec-review) | Skip spec + continue, no commit, log Error | Text artifacts are inert; spec file left as-is. If phase 1 already committed before phase 2 crashes, that commit is preserved — no rollback of phase 1 work. The partially-reviewed spec (with phase 1 fixes committed) persists on disk; the user can re-invoke `/orchestrate --auto` on the same spec to re-run the full pipeline from scratch, starting a new `spec_baseline` from the current HEAD. |
 | Agent ii (implement) | Commit wip + **HALT pipeline**, log Error (bookkeeping details below) | Uncommitted broken code could contaminate downstream specs; halt is the safe default |
-| Agent iii (code-review) iter 1 | Soft reset to `implement_head` + stash + skip + continue | Implement work preserved; only the failed iter 1 attempt is rewound |
-| Agent iii (code-review) iter N>1 | Soft reset to `last_iteration_head` + stash + skip + continue | All successful iterations preserved; only failed iter N rewound |
+| Agent iii (code-review) iter 1 | Soft reset to `implement_head` + stash + skip + continue, state → `skipped-crash-code-review` | Implement work preserved; only the failed iter 1 attempt is rewound |
+| Agent iii (code-review) iter N>1 | Soft reset to `last_iteration_head` + stash + skip + continue, state → `skipped-crash-code-review` | All successful iterations preserved; only failed iter N rewound |
 
 **Agent ii crash-halt bookkeeping (exact rules):**
 1. **Wip commit.** Orchestrate stages every modified and untracked file and creates a commit using the template
@@ -737,7 +739,7 @@ Commits in auto mode are load-bearing for rollback anchors. The cadence is not d
 
 **Notes:**
 - Phase 1 / phase 2 / verification commits are conditional — skip if the fixer made zero changes. No empty commits. Change detection: orchestrate runs `git diff --quiet <spec_path>` after the agent returns; if exit code is 0, skip the commit. Change detection is intentionally scoped to the input spec file — review-doc's fixer modifies only the spec; changes to other files are unexpected and out of scope for orchestrate's phase commits.
-- Implement itself produces commits internally. Orchestrate does NOT add a checkpoint on top; it relies on the agent ii validators (`git rev-list --count spec_baseline..HEAD > 0`) to confirm commits happened. Validator failure → crash per Q3.
+- Implement itself produces commits internally. Orchestrate does NOT add a checkpoint on top; it relies on the agent ii validators (`git rev-list --count pre_implement_head..HEAD > 0`) to confirm commits happened. Validator failure → crash per Q3.
 - The per-iteration commit after agent iii is the one non-optional invariant — it's load-bearing for the `last_iteration_head` rollback anchor.
 
 ### Standard mode — Option Z (user-driven with breadcrumb nudges)
@@ -761,7 +763,7 @@ Approach C groups changes by coupling, not by skill.
 
 ### PR 1 — Cross-cutting infrastructure + sub-skill refactors
 
-All four sub-skills move as one unit because run-id threading must be consistent across them.
+All three sub-skills move as one unit because run-id threading must be consistent across them.
 
 **Contents:**
 - `tmp/_reviews_errors/` folder + `error-logs.md` schema
@@ -889,7 +891,7 @@ PR 2 invokes the new sub-skill interfaces without transitional flags because PR 
 ## Summary
 
 - **10 design sections**, every decision traced to the brainstorm file (`tmp/orchestrate-overhaul-brainstorm.md`), every Q1–Q12 resolved.
-- **Two PRs** (Approach C): cross-cutting infrastructure + four sub-skill refactors land together; orchestrate overhaul lands second.
+- **Two PRs** (Approach C): cross-cutting infrastructure + three sub-skill refactors land together; orchestrate overhaul lands second.
 - **Non-goals explicit:** no parallel specs, no cross-session auto-resume, no test infrastructure, no ADR extraction — all deferred.
 
 **Decisions taken:** two modes only (standard default, `--auto` new); `--strict` removed entirely; progressive disclosure for SKILL.md; 4-stage auto pipeline (spec-review two-phase → implement → code-review → verification); no write-plan stage; `/implement --auto` narrowed to `{single, parallel 1-helper}`; parallelism threshold 30% → 35%; three-hash rollback model (`spec_baseline` / `implement_head` / `last_iteration_head`); non-destructive rollback via `git reset --soft` + stash; asymmetric unusable-output policy (optimistic agents i/iii, strict agent ii); Option Y critical measurement at REVIEW output; Option Z standard-mode commit cadence with `/commit` breadcrumbs; run-id double-hash `{spec_hash}_{dispatch_hash}`; `tmp/_reviews_errors/` shared directory; hard errors for `--handoff + --auto` and `--use-roadmap + --auto`.
