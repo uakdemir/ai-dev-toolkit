@@ -1,5 +1,10 @@
 # Stage iii: Code Review Loop
 
+> **GATE CHECK — MANDATORY**
+> Read `tmp/auto-state.md`. Verify `state` is `implementation-complete`.
+> If it is NOT, you have skipped stage ii (implement). **STOP. Go back and execute stage ii first.**
+> Do not proceed under any circumstances if this gate fails.
+
 Single phase, opus-only. Up to 4 iterations with early exit.
 
 ---
@@ -52,3 +57,9 @@ At iter 4's REVIEW output, pre-fix:
 Optimistic trust. Orchestrate does NOT validate review JSON for agent iii. Missing or malformed → treat as "no criticals" and advance. Residual criticals caught by the next iteration.
 
 **Exception:** If iter 4 JSON is unreadable, assume critical count = 0 (fail open).
+
+---
+
+## Next Stage
+
+When stage iii is complete (all iterations done or early-exited on 0 criticals), load and execute `references/auto/stages/stage-iv-verification-gate.md`.

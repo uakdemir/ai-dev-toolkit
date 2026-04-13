@@ -1,5 +1,10 @@
 # Stage iv: Verification Gate
 
+> **GATE CHECK — MANDATORY**
+> Read `tmp/auto-state.md`. Verify `state` matches `code-review-iter-{N}-complete` for some N.
+> If it does NOT, you have skipped stage iii (code review). **STOP. Go back and execute stage iii first.**
+> Do not proceed under any circumstances if this gate fails.
+
 No agent dispatch. Orchestrate runs this directly.
 
 ---

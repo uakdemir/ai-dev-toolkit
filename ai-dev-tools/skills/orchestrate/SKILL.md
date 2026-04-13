@@ -112,16 +112,12 @@ User modifications to inner command before pasting → dispatch verbatim. Receiv
 
 ## Per-Spec Pipeline
 
-Load `references/auto/pipeline-overview.md` for the 4-stage pipeline.
+Load `references/auto/pipeline-overview.md` for the 4-stage pipeline overview.
 
 For each spec:
 1. Generate `spec_hash` (8-char base36) for run-id prefix.
 2. Set `spec_baseline = HEAD`.
-3. Execute stages i → iv serially per stage references:
-   - `references/auto/stages/stage-i-spec-review.md`
-   - `references/auto/stages/stage-ii-implement.md`
-   - `references/auto/stages/stage-iii-code-review.md`
-   - `references/auto/stages/stage-iv-verification-gate.md`
+3. Load and execute `references/auto/stages/stage-i-spec-review.md`. Each stage file directs you to the next stage upon completion — do NOT skip ahead or look up stage file paths yourself.
 4. On any failure → load `references/auto/failure-handling/overview.md` + specific handler.
 
 ## Error Logs

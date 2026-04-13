@@ -51,3 +51,11 @@ Applies ONLY to phase 2's final iteration (not phase 1):
 Phase 1's exit state is irrelevant for the endless-loop check.
 
 **Bounded worst case:** 3 + 2 = 5 review dispatches per spec.
+
+---
+
+## Next Stage
+
+When stage i is complete (both phases done, commits made if applicable), update `tmp/auto-state.md` state to `spec-review-phase-2-complete`, then load and execute `references/auto/stages/stage-ii-implement.md`.
+
+**Do NOT skip this step. Do NOT proceed to implementation without loading the stage ii file.**

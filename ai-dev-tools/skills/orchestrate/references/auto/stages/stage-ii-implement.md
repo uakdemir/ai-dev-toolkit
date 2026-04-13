@@ -1,5 +1,10 @@
 # Stage ii: Implement
 
+> **GATE CHECK — MANDATORY**
+> Read `tmp/auto-state.md`. Verify `state` is `spec-review-phase-2-complete`.
+> If it is NOT, you have skipped stage i (spec review). **STOP. Go back and execute stage i first.**
+> Do not proceed under any circumstances if this gate fails.
+
 Dispatches `/implement <spec> --auto --run-id <id>`.
 
 ---
@@ -59,3 +64,11 @@ On success: set `implement_head = HEAD` in `auto-state.md`, transition to `imple
 |---|---|
 | Main agent crash | Retry once → halt (Q3 crash-implement) |
 | Helper hang/crash | Main agent absorbs helper's tasks (existing executing-plans behavior) |
+
+---
+
+## Next Stage
+
+When stage ii is complete (validators passed, `implement_head` set), update `tmp/auto-state.md` state to `implementation-complete`, then load and execute `references/auto/stages/stage-iii-code-review.md`.
+
+**Do NOT skip this step. The code review stage is mandatory.**
