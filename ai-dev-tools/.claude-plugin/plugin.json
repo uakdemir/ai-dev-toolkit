@@ -1,6 +1,6 @@
 {
   "name": "ai-dev-tools",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "AI-optimized documentation generation, monorepo refactoring strategy, architectural layer enforcement, convention enforcement, API contract enforcement, and development cycle orchestration",
   "author": {
     "name": "ai-dev-tools"
