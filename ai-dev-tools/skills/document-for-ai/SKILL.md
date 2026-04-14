@@ -19,6 +19,7 @@ FLAGS
   --subsystems <all|list>    Batch: all subsystems or comma-separated list
   --include-tests            Include test files in LoC counts and symbol indexes
   --force-reclassify         Re-run volatility classification for existing docs
+  --depth <auto|L1|L2>       Force depth for every subsystem in scope (default: auto)
   --extractor <serena|tsc|grep>   Override structural extractor selection
 
 EXAMPLES
@@ -113,17 +114,18 @@ Detect monorepo structure before proceeding to mode detection.
 For each detected subsystem, classify its documentation depth (L1 or L2) based on git churn history. Read `references/volatility-assessment.md` for the full algorithm and edge cases.
 
 **Quick summary:**
-1. **Existing-doc pre-check:** if an existing doc has a `depth` field → preserve existing depth (skip classification). Override with `--force-reclassify`.
-2. **Zero-history guard:** 0 total commits → default to L2.
-3. **Thin-history guard:** < 20 total commits → default to L2.
-4. **Compute churn_rate:**
+1. **User depth override:** if `--depth L1` or `--depth L2` is set → use that depth for every subsystem in the current scope. Skip all remaining pre-checks and classification. Set `volatility: "user-override"` and `churn_rate: null` in frontmatter.
+2. **Existing-doc pre-check:** if an existing doc has a `depth` field → preserve existing depth (skip classification). Override with `--force-reclassify`.
+3. **Zero-history guard:** 0 total commits → default to L2.
+4. **Thin-history guard:** < 20 total commits → default to L2.
+5. **Compute churn_rate:**
    ```
    churn_rate = commits_90d / total_commits_ever
    > 0.40        → L1
    0.15 – 0.40   → L2
    < 0.15        → L2 (with deeper data-flow sections)
    ```
-5. **L1 → L2 promotion:** requires explicit user request. Automatic promotion does not happen.
+6. **L1 → L2 promotion:** requires explicit user request — pass `--depth L2` on a subsequent invocation to force promotion. Automatic promotion does not happen.
 
 Set `depth`, `volatility`, `volatility_measured`, and `churn_rate` in the generated doc's frontmatter (see `references/frontmatter-schema.md`).
 
@@ -244,6 +246,7 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 /document-for-ai --scope <package>/<subsystem> --mode generate
 --include-tests        Include test files in LoC counts and symbol indexes (default: excluded)
 --force-reclassify     Re-run volatility classification even for subsystems with existing depth
+--depth <auto|L1|L2>   Force depth for every subsystem in scope; bypasses classification (default: auto)
 --extractor <serena|tsc|grep>   Override automatic extractor selection
 ```
 

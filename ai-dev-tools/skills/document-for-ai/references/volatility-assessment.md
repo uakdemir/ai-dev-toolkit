@@ -6,7 +6,25 @@ Algorithm for classifying subsystem documentation depth (L1 vs L2) based on git 
 
 ## Pre-checks (in order)
 
-### 1. Existing-doc pre-check
+### 1. User depth override
+
+If the invocation passed `--depth L1` or `--depth L2`, that depth applies to every subsystem in the current scope. Skip all remaining pre-checks, skip the classification algorithm, and do not run any git commands for churn measurement.
+
+- `--depth L1` → every subsystem in scope generates at L1.
+- `--depth L2` → every subsystem in scope generates at L2 (Phase 2 runs unconditionally regardless of trigger detection).
+- `--depth auto` (default) → fall through to the remaining pre-checks and classification algorithm.
+
+The override preempts both the existing-doc pre-check AND the automatic classification. Use this to force uniform depth across a package (e.g., `--scope packages/foo --depth L1`) or to request an explicit L1→L2 promotion without introducing a separate mechanism. Implies regeneration of any existing doc in scope — no separate `--force-reclassify` is required.
+
+Set frontmatter to:
+```yaml
+depth: L1                  # or L2, per the flag value
+volatility: user-override
+volatility_measured: <today>
+churn_rate: null
+```
+
+### 2. Existing-doc pre-check
 
 Before running the classification algorithm, check if an existing doc for this subsystem already has a `depth` field in its frontmatter.
 
@@ -16,11 +34,11 @@ Before running the classification algorithm, check if an existing doc for this s
 
 The algorithm below only applies to subsystems with no existing doc (or when `--force-reclassify` is passed).
 
-### 2. Zero-history guard
+### 3. Zero-history guard
 
 If `total_commits_touching_paths_ever == 0`, treat the subsystem as L2. Do not attempt to compute `churn_rate`. Set `volatility` to `"unknown"` and `churn_rate` to `null` in frontmatter.
 
-### 3. Thin-history guard
+### 4. Thin-history guard
 
 If `total_commits_touching_paths_ever < 20`, treat the subsystem as L2. Do not compute `churn_rate`. Volatility-based routing only kicks in when there is enough data to compute a meaningful rate. Set `volatility` to `"unknown"` and `churn_rate` to `null` in frontmatter.
 
@@ -56,13 +74,14 @@ churn_rate < 0.15        → L2 with deeper data-flow sections
 | 0.15 – 0.40 | `medium` | L2 |
 | < 0.15 | `low` | L2 (with deeper data-flow sections) |
 | zero/thin history | `unknown` | L2 |
+| `--depth` flag set | `user-override` | L1 or L2 per flag |
 
 ---
 
 ## Edge cases
 
 - **Low symbol count:** A subsystem with > 0.40 churn but < 5 exported symbols still gets L1. The doc is cheap to generate, and a volatile surface is exactly where staleness bites. Do not prematurely optimize by skipping.
-- **L1 → L2 promotion:** If a subsystem is classified L1 and on a subsequent invocation its churn_rate drops below 0.15, keep it at L1. Promotion to L2 requires an explicit user request. Sudden depth changes confuse readers.
+- **L1 → L2 promotion:** If a subsystem is classified L1 and on a subsequent invocation its churn_rate drops below 0.15, keep it at L1 — automatic promotion never happens. To promote, re-invoke with `--depth L2`, which is the explicit user-request mechanism. Sudden depth changes confuse readers; requiring an explicit flag makes the change intentional.
 
 ---
 
