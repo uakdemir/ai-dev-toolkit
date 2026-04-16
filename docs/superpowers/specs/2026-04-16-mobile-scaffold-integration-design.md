@@ -389,7 +389,15 @@ cd my-app
   placeholder, resolved at bootstrap time by prompting the user for a path
   or URL to their stack decisions document. Default: omitted (the line is
   dropped from the generated file if the user leaves it blank). This prevents
-  broken file references in generated projects.
+  broken file references in generated projects. **Canonical template layout:**
+  the placeholder MUST sit on its own line with no inline prose, so
+  line-dropping cleanly removes only the placeholder line. The lead-in
+  text ("Stack decisions reference:") sits on the preceding line and
+  remains intact even when the placeholder is blank — this is an
+  acceptable harmless artefact (a lead-in with no target below it).
+  Template authors who find this noisy may additionally drop the lead-in
+  line by restructuring the template; the spec does NOT require the
+  lead-in to be removed when the placeholder is blank.
 - Folder-as-module convention explanation
 - Pointer to `lib/<sdk>/CLAUDE.md` for per-SDK guidance
 - "Read `CLAUDE.local.md` if present" trailer line
@@ -412,10 +420,18 @@ All placeholders resolved during bootstrap are stored in the manifest `placehold
 - `sandbox.network.allowedHosts` (matching the existing
   `node-fastify-react` convention — this is the JSON path used by the
   sandbox allowlist; do NOT write to a top-level `network.allowedHosts`
-  key): `expo.dev`, `docs.expo.dev`, `react.dev`, `reactnative.dev`,
-  `supabase.com`, `posthog.com`, `revenuecat.com`, `onesignal.com`,
-  `branch.io`, `adjust.com`, `sentry.io`, `bunny.net`, `crowdin.com`,
-  `deepl.com`
+  key):
+  - **Common infrastructure** (inherited across all stacks):
+    `registry.npmjs.org`, `github.com`, `api.github.com`,
+    `raw.githubusercontent.com` (needed for `npm install`, Expo
+    package installs that pull from GitHub, and documentation fetches).
+  - **Stack-specific** (Expo stack): `expo.dev`, `docs.expo.dev`,
+    `react.dev`, `reactnative.dev`, `supabase.com`, `posthog.com`,
+    `revenuecat.com`, `onesignal.com`, `branch.io`, `adjust.com`,
+    `sentry.io`, `bunny.net`, `crowdin.com`, `deepl.com`.
+  The technology layer adds provider-doc subdomains (see
+  `technology/.claude/settings.json` below) that the root layer does
+  not already cover.
 
 ### `.claude/hotspots.md`
 - Common edit hotspots: `app/`, `lib/<sdk>/`, `features/<name>/`
@@ -915,14 +931,31 @@ Section 3 (root layer) plus the Expo package-layer placeholder table
 - This convention applies to ALL stacks (not just expo) — it's a general
   scaffold improvement.
 - **Trailer is baked into template source files, not injected at write
-  time.** Every `templates/<stack>/**/CLAUDE.md` file in the repo must
-  already contain the trailer on disk. This keeps the refresh diff
-  algorithm (Change 5) simple: the substituted template already includes
-  the trailer, so byte-comparison against the on-disk file matches
-  without special handling. Template authors are responsible for keeping
-  the trailer present in every scaffold-shipped CLAUDE.md (root,
-  technology, package, and every `technology/lib/<sdk>/CLAUDE.md`) —
-  verified during template authoring, not at scaffold runtime.
+  time.** The trailer lives on CLAUDE.md files that are written
+  standalone (i.e., that the user opens directly as the final on-disk
+  CLAUDE.md) — NOT on fragments that are appended into another
+  CLAUDE.md at write time. Concretely:
+  - **Trailer present at rest:** root-layer `CLAUDE.md`
+    (`templates/<stack>/root/CLAUDE.md`), package-layer `CLAUDE.md`
+    (`templates/node-fastify-react/package/CLAUDE.md`,
+    `templates/expo/package/CLAUDE.md` — each package-layer CLAUDE.md
+    is a standalone on-disk file, not an appended fragment), and every
+    direct-write technology file such as
+    `templates/expo/technology/lib/<sdk>/CLAUDE.md`.
+  - **Trailer ABSENT at rest:** `templates/<stack>/technology/CLAUDE.md`
+    (per Change 3 Rule 1, this file is APPENDED to the root-layer
+    `CLAUDE.md` after substitution — the root layer already supplies
+    the trailer at the bottom, so including a second trailer in the
+    technology fragment would produce duplicate trailer blocks in the
+    generated project-root CLAUDE.md).
+  This keeps the refresh diff algorithm (Change 5) simple: the
+  substituted template (single-layer) or reconstructed pipeline output
+  (multi-layer CLAUDE.md: root with trailer + technology without
+  trailer = on-disk file with a single trailer at the end) already
+  matches the expected byte content without special handling.
+  Template authors are responsible for keeping the trailer present in
+  every scaffold-shipped standalone CLAUDE.md and absent from the
+  technology-layer `CLAUDE.md` fragment.
 
 `★ Insight ─────────────────────────────────────`
 - Mandatory `--stack` (Change 2) is a small breaking change but eliminates a

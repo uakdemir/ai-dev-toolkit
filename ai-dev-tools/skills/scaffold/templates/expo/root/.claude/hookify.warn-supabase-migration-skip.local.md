@@ -2,15 +2,16 @@
 name: warn-supabase-migration-skip
 enabled: true
 event: bash
-pattern: supabase\s+(db\s+push|sql)
+pattern: supabase\s+db\s+(push|execute|reset)\b
 action: warn
 ---
 
 **Supabase schema change without a migration file.**
 
-Applying schema changes via `supabase db push` or raw `supabase sql`
-bypasses migration history. Without a migration file, teammates and
-production cannot reproduce the change.
+Applying schema changes via `supabase db push`, `supabase db execute`,
+or `supabase db reset` without a committed migration file bypasses
+migration history. Without a migration file, teammates and production
+cannot reproduce the change.
 
 Correct flow:
 1. Edit the schema (via `supabase migration new <name>` or hand-write

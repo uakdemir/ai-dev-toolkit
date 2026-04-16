@@ -2,15 +2,16 @@
 name: block-secret-commits
 enabled: true
 event: write
-pattern: (secret|\.env$|eas\.json)
+pattern: (^|/)(\.env(\.[^.]+)?|.*secret.*\.(ya?ml|json|env))$
 action: block
 ---
 
-**Blocked: potential secret in a tracked file.**
+**Blocked: potential secret file.**
 
-Files matching `*secret*`, `*.env`, or `eas.json` are high-risk for
-leaking credentials. Do NOT commit hardcoded API keys, access tokens,
-or credentials to these files.
+Files matching `.env`, `.env.*`, or names containing `secret` with a
+yaml/json/env extension are high-risk for leaking credentials. Do NOT
+commit hardcoded API keys, access tokens, or credentials to these
+files.
 
 Correct patterns:
 - Build-time secrets → `eas secret:create` (EAS Secrets), referenced
@@ -20,5 +21,9 @@ Correct patterns:
 - Local development → `.env.local` (gitignored) + `expo-env` or
   `react-native-dotenv` for local-only use.
 
-If this write is a legitimate reference to a secret NAME (not value),
-proceed manually. Otherwise, cancel and use EAS Secrets.
+Note: `eas.json` is NOT blocked here — every Expo project must author
+and maintain `eas.json` (build profiles, submit config, `$SECRET_NAME`
+references). A separate `warn` hook (`warn-eas-json-secrets`) flags
+literal secret VALUES inside `eas.json`. If you need to block at
+commit-time, use a pre-commit secret scanner (e.g., gitleaks) rather
+than a write-time block.

@@ -2,7 +2,7 @@
 name: warn-native-edits
 enabled: true
 event: write
-pattern: ^(ios|android)/
+pattern: (^|/)(ios|android)/
 action: warn
 ---
 

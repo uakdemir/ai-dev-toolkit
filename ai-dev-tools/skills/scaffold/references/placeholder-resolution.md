@@ -15,7 +15,13 @@ Authoritative list of every `{{PLACEHOLDER}}` marker used across the three templ
 
 ## Placeholder table
 
-| Placeholder | Example | Used in | Source | Default |
+Columns use the contract names consumed by the `/scaffold` old-manifest
+migration logic: `placeholder_name` (the `{{IDENTIFIER}}` token with
+braces, for ease of scanning), `resolution_source`, and `default_value`.
+The extra `example` and `used_in` columns are informational and ignored
+by migration.
+
+| placeholder_name | example | used_in | resolution_source | default_value |
 |---|---|---|---|---|
 | `{{PROJECT_NAME}}` | `MyApp` | root/CLAUDE.md | prompt-bootstrap, config | basename of cwd |
 | `{{PROJECT_DESCRIPTION}}` | `AI-powered analytics platform` | root/CLAUDE.md | prompt-bootstrap, config | (empty, user must type) |

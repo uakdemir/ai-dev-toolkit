@@ -1,17 +1,14 @@
 {
-  "_comment": "Technology layer additions — deep-merged into root .claude/settings.json by /scaffold. Adds provider doc subdomains not covered by the root layer's top-level domains. Claude Code allowlist matches exact strings (no wildcard / suffix match), so subdomains must be listed explicitly.",
+  "_comment": "Technology layer additions — deep-merged into root .claude/settings.json by /scaffold. Adds provider doc subdomains not already covered by the root layer's top-level domain entries. Claude Code allowlist matches exact strings (no wildcard / suffix match), so subdomains must be listed explicitly. Do NOT duplicate entries already in the root layer (e.g., docs.expo.dev, posthog.com, supabase.com) — deep-merge concatenates arrays.",
   "sandbox": {
     "network": {
       "allowedHosts": [
-        "docs.expo.dev",
         "docs.revenuecat.com",
         "docs.onesignal.com",
         "docs.sentry.io",
-        "supabase.com",
         "docs.supabase.com",
         "help.branch.io",
         "help.adjust.com",
-        "posthog.com",
         "eu.posthog.com"
       ]
     }

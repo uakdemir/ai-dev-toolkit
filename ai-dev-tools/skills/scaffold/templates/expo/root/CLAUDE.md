@@ -13,7 +13,9 @@ This is a single-package **Expo (React Native)** app. Core pieces:
   `adjust` (attribution), `sentry` (crash + error),
   `i18n` (expo-localization + i18next), `supabase` (BaaS client).
 
-Stack decisions reference: {{STACK_DECISIONS_DOC_PATH}}
+Stack decisions reference:
+
+{{STACK_DECISIONS_DOC_PATH}}
 
 ## Folder-as-module convention
 

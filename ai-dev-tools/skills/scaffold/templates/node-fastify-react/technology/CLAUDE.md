@@ -127,7 +127,3 @@ Add these to `settings.json` sandbox network allowlist:
 "pnpm.io",
 "tailwindcss.com"
 ```
-
----
-Project-specific or personal AI guidance not managed by the scaffold lives
-in `CLAUDE.local.md` next to this file. Read it if present.

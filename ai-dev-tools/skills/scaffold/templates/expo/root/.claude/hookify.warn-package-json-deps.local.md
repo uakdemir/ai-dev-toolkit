@@ -2,7 +2,7 @@
 name: warn-package-json-deps
 enabled: true
 event: write
-pattern: ^package\.json$
+pattern: (^|/)package\.json$
 action: warn
 ---
 

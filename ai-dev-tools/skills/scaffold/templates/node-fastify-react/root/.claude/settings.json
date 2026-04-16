@@ -22,6 +22,7 @@
     }
   },
   "permissions": {
+    "_comment_precedence": "deny takes precedence over allow in Claude Code permission resolution — the Bash(*) wildcard in `allow` is intentionally broad, and the specific `deny` entries below (git push, etc.) ARE honored. If you remove Bash(*), you must explicitly allow every bash command the project needs.",
     "allow": [
       "Edit",
       "Write",

@@ -80,7 +80,3 @@ mobile-specific conventions.
   shipping a native change to invalidate old OTA bundles.
 - **Store submission:** `eas submit` after a production build, once
   the store listing is ready.
-
----
-Project-specific or personal AI guidance not managed by the scaffold lives
-in `CLAUDE.local.md` next to this file. Read it if present.

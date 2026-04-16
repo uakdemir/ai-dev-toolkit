@@ -2,7 +2,7 @@
 name: warn-app-json-edits
 enabled: true
 event: write
-pattern: ^app\.json$
+pattern: (^|/)app\.json$
 action: warn
 ---
 

@@ -111,8 +111,7 @@ If neither `--bootstrap` nor `--add-package` is present, infer the mode from the
 | cwd is empty (or contains only `.git/`) and `--stack` not given | n/a | exit with error listing the allowlist (`["node-fastify-react", "dotnet-mvc-react", "expo"]`) |
 | cwd is empty (or contains only `.git/`) and `--stack` is given | `--bootstrap` | Proceed as bootstrap with that stack |
 | cwd contains `.scaffold-manifest.yaml` (any stack) | `--add-package` | Prompt: `"Add a new package/feature? Enter name (or Ctrl-C to cancel):"`, then proceed as `--add-package <answer>`. Stack is read from the manifest. |
-| cwd contains `pnpm-workspace.yaml` OR `turbo.json` without manifest | `--add-package` (node-fastify-react) | Prompt for name; treat stack as `node-fastify-react`. Error if manifest is missing and user did not pass `--bootstrap`. |
-| Neither (random non-empty directory) | error | Print: `"Cannot infer scaffold mode. Specify --bootstrap --stack <name> or --add-package <name>."` and exit |
+| Neither (non-empty directory, no manifest) | error | Print: `"Cannot infer scaffold mode. Specify --bootstrap --stack <name> or --add-package <name>."` and exit. A monorepo marker (`pnpm-workspace.yaml` / `turbo.json`) without a `.scaffold-manifest.yaml` does NOT infer a stack — Change 2 mandates explicit `--stack` on bootstrap. |
 
 **Do not print `--help` on plain invocation.** `--help` is only shown when explicitly requested.
 
@@ -430,9 +429,14 @@ files:
 Manifests written by prior `/scaffold` versions use a bare-string `files:` list and have no `template_version`, no `placeholders:`. On the first `--bootstrap --force` or `--add-package` call against such a manifest, the scaffold:
 
 1. Infers `template_version: 1.0.0` for the pinned stack (only `node-fastify-react` is plausible — other stacks did not exist before).
-2. Rewrites each bare-string `files:` entry as `{ path: <string>, source_layer: <inferred> }`. The layer is inferred by matching the path against known template files:
-   - Paths matching root-layer templates (`CLAUDE.md`, `.claude/settings.json`, `.claude/hotspots.md`, `.claude/hookify.*.local.md`) → `source_layers: [root, technology]` for CLAUDE.md and settings.json (multi-layer by construction), `source_layer: root` for the rest, `source_layer: technology` for `hookify.warn-db-push.local.md`.
-   - Paths matching `packages/*/` → `source_layer: package`.
+2. Rewrites each bare-string `files:` entry as `{ path: <string>, source_layer: <inferred> }`. The layer is inferred by probing the current stack's template tree, in this order, and recording the first hit's layer (this removes any hard-coded filename list and extends cleanly as new stacks/hookify rules are added):
+   - **Multi-layer special cases (checked first):** if the path is `CLAUDE.md` or `.claude/settings.json`, assign `source_layers: [root, technology]` (multi-layer by construction per Change 3 rules 1 and 2).
+   - **Package-scoped paths:** if the path starts with the stack's `add_package_target_dir` (`packages/` for `node-fastify-react`, `features/` for `expo`), assign `source_layer: package`.
+   - **Template-tree probe (general rule):** otherwise, check for the first layer that contains a file at the matching relative path:
+     - `templates/<stack>/root/<path>` → `source_layer: root`
+     - `templates/<stack>/technology/<path>` → `source_layer: technology`
+     - `templates/<stack>/package/<path>` → `source_layer: package`
+   - If no layer contains the path, keep the entry as-is with a warning: `"Could not infer source_layer for '<path>' — leaving unassigned. Refresh will treat this as orphaned (D)."`. The explicit basename check for `CLAUDE.local.md` (user-owned, never in the manifest) still applies: such entries should not appear in any old-format manifest and are discarded if they do.
 3. **Placeholder recovery.** Old-format manifests have no `placeholders:` map; the scaffold cannot run the byte-compare diff until placeholder values are known. The scaffold prompts interactively for every placeholder in the stack's authoritative placeholder list.
 
    For `node-fastify-react`, the authoritative list lives at `ai-dev-tools/skills/scaffold/references/placeholder-resolution.md`. The migration logic reads this file under the following schema contract — each placeholder documented in the reference MUST expose:
