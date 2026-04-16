@@ -56,20 +56,31 @@ user-owned) so refresh-on-template-update is safe and non-destructive.
 
 Verifiable conditions that define implementation complete:
 
-1. `npx create-expo-app my-app && cd my-app && /scaffold --bootstrap --stack expo`
+1. `npx create-expo-app my-app && cd my-app && /scaffold --bootstrap --stack expo --force`
    writes only AI governance files (CLAUDE.md, .claude/, hookify rules,
    `lib/<sdk>/CLAUDE.md` placeholders) without touching Expo-owned files.
-2. `/scaffold --add-package revenuecat --stack expo` (or inferred from manifest)
-   creates `lib/revenuecat/CLAUDE.md` for an SDK boundary, not a
-   `packages/revenuecat/` workspace.
+2. `/scaffold --add-package revenuecat` (or inferred from manifest)
+   creates `features/revenuecat/CLAUDE.md` (not `packages/revenuecat/`
+   workspace). Note: `lib/revenuecat/CLAUDE.md` is written during bootstrap
+   from the technology layer, not by `--add-package`.
 3. `/scaffold --bootstrap` with no `--stack` and no manifest exits with a
    usage error listing the allowlist.
 4. `/scaffold --bootstrap --stack node-fastify-react` continues to produce the
-   pre-existing monorepo layout byte-for-byte (no regressions).
+   pre-existing monorepo layout (no regressions in package structure, settings,
+   or file paths); the only permitted delta is the `CLAUDE.local.md` trailer
+   appended to all scaffold-written `CLAUDE.md` files per Change 6.
 5. `CLAUDE.local.md` is auto-loaded by Claude Code in the same hierarchical
    manner as `CLAUDE.md` (verified empirically — see Verification Gate below).
 6. `template_version` field appears in every new `.scaffold-manifest.yaml`,
    and refresh logic detects template drift.
+7. `/scaffold --add-package <name>` (or `--bootstrap --force`) against a
+   project with an old-format manifest (bare-string `files:` list) rewrites
+   the manifest to the new object schema, infers `template_version: 1.0.0`
+   for the stack, and prints a one-line migration notice — without losing any
+   existing file entries.
+8. `/scaffold --bootstrap --stack dotnet-mvc-react` exits immediately with
+   the error message "stack registered, templates pending" and writes no
+   files.
 
 ---
 
@@ -107,8 +118,11 @@ Before any implementation work begins, empirically verify:
 1. Create a tmp directory with `CLAUDE.md` ("scaffold-owned") and
    `CLAUDE.local.md` ("user-owned") at root, plus a nested folder with both.
 2. Start a Claude Code session inside the nested folder.
-3. Confirm via `/memory` or by asking Claude what guidance it sees that BOTH
-   files at BOTH levels are loaded.
+3. In `CLAUDE.local.md` at the root level, write a unique sentinel string
+   (e.g., `GATE_MARKER_LOCAL: confirmed`). Ask Claude to list all guidance
+   keywords it was given. If `GATE_MARKER_LOCAL` appears in the response,
+   the gate passes; otherwise it fails. This gives a binary, deterministic
+   outcome.
 
 **Outcome paths:**
 - **Confirmed:** Proceed with the spec as written. The scaffold/user split
@@ -119,9 +133,9 @@ Before any implementation work begins, empirically verify:
   and `CLAUDE.local.md` using whatever inclusion mechanism Claude Code
   actually supports (verbatim include, file pointer, or instructional
   reference, in that order of preference). The thin `CLAUDE.md` becomes
-  the user-owned file in this fallback. Sections 1, 5, and the manifest
-  schema must be updated to reflect the chosen mechanism before
-  implementation.
+  the user-owned file in this fallback. Sections 1, 4 (Change 6), 5, and
+  the manifest schema must be updated to reflect the chosen mechanism
+  before implementation.
 
 This gate is non-negotiable. The whole refresh story collapses if the loading
 behaviour is misunderstood.
@@ -213,17 +227,20 @@ Three workflows, scaled to lifecycle stage:
 ```
 npx create-expo-app my-app
 cd my-app
-/scaffold --bootstrap --stack expo
+/scaffold --bootstrap --stack expo --force
 ```
 
 - `create-expo-app` writes Expo skeleton (App.tsx, app.json, eas.json,
   babel.config.js, tsconfig.json, package.json, .gitignore).
-- `/scaffold --bootstrap --stack expo` writes ONLY:
-  - Root `CLAUDE.md`
-  - `.claude/settings.json` (root + technology layers deep-merged)
+- `/scaffold --bootstrap --stack expo --force` writes ONLY:
+  - Root `CLAUDE.md` (root layer + technology layer `CLAUDE.md` appended)
+  - `.claude/settings.json` (root layer + technology layer deep-merged)
   - `.claude/hotspots.md`
   - `.claude/hookify.*.local.md` (mobile-tuned rules)
-  - All eight `lib/<sdk>/CLAUDE.md` placeholders
+  - All eight `lib/<sdk>/CLAUDE.md` placeholders — these originate from
+    the technology layer (`templates/expo/technology/lib/<sdk>/CLAUDE.md`)
+    and are written as direct-write targets (not merge targets) to
+    `<project>/lib/<sdk>/CLAUDE.md`
   - `.scaffold-manifest.yaml` listing every file written
 - Bootstrap fails if Expo skeleton is not detected (no `app.json` and no
   `package.json` with `expo` dependency) → error: "Run `create-expo-app`
@@ -240,6 +257,12 @@ cd my-app
 - For `node-fastify-react` stack, behaviour is unchanged — writes
   `packages/matching/CLAUDE.md` and `packages/matching/.claude/settings.json`.
 - Per-stack `target_dir` mapping is defined in the stack's `stack.yaml`.
+- For `expo` stack, `--add-package` always targets `features/<name>/`
+  exclusively. SDK names (`revenuecat`, `supabase`, etc.) are valid feature
+  names — passing them creates `features/revenuecat/CLAUDE.md` alongside
+  the existing `lib/revenuecat/CLAUDE.md` (different directories, no
+  conflict). The scaffold prints a notice: "Note: lib/<name>/ already
+  exists as a scaffold-managed SDK boundary." so the user is aware.
 
 ## C. Refresh on template update
 
@@ -275,13 +298,25 @@ cd my-app
 ### `CLAUDE.md` (root)
 - Project overview placeholder
 - Stack summary (Expo + Supabase + 8 SDKs)
-- Reference to `tmp/2026-04-16-mobile-stack-decisions-design.md` style doc
-  (linked, not embedded — single source of truth)
+- Reference to stack decisions doc — templated as `{{STACK_DECISIONS_DOC_PATH}}`
+  placeholder, resolved at bootstrap time by prompting the user for a path
+  or URL to their stack decisions document. Default: omitted (the line is
+  dropped from the generated file if the user leaves it blank). This prevents
+  broken file references in generated projects.
 - Folder-as-module convention explanation
 - Pointer to `lib/<sdk>/CLAUDE.md` for per-SDK guidance
 - "Read `CLAUDE.local.md` if present" trailer line
 - Mobile-specific defaults: TypeScript strict, Expo Router file conventions,
   no native code without `expo prebuild`
+
+**Expo bootstrap placeholder table (root + technology layers):**
+
+| Placeholder | Resolution source | Default | Config YAML key |
+|---|---|---|---|
+| `{{PROJECT_NAME}}` | `--bootstrap` interactive prompt | directory basename | `project_name` |
+| `{{STACK_DECISIONS_DOC_PATH}}` | `--bootstrap` interactive prompt | (omitted if blank — line dropped from output) | `stack_decisions_doc_path` |
+
+All placeholders resolved during bootstrap are stored in the manifest `placeholders:` map so refresh can re-substitute if the template wording changes.
 
 ### `.claude/settings.json` (root)
 - `permissions` defaults
@@ -319,6 +354,18 @@ Contents: feature scope description, expected file structure
 (`<name>.screen.tsx`, `<name>.store.ts`, `<name>.types.ts`),
 links to relevant `lib/<sdk>/` modules.
 
+**Expo package-layer placeholder table:**
+
+| Placeholder | Resolution source | Default |
+|---|---|---|
+| `{{FEATURE_NAME}}` | `--add-package <name>` argument | (required — no default) |
+| `{{FEATURE_DESCRIPTION}}` | `--add-package` interactive prompt | "Feature description TBD" |
+| `{{RELATED_SDKS}}` | `--add-package` interactive prompt (comma-separated SDK names) | "" |
+
+All three placeholders are stored in the manifest `placeholders:` map under
+the feature's file entry so refresh can re-substitute if the template
+wording changes.
+
 ## Technology layer (`templates/expo/technology/`)
 
 ### `technology/CLAUDE.md`
@@ -333,8 +380,12 @@ Appended to root `CLAUDE.md` after substitution. Covers:
 - Build/release flow (EAS Build, EAS Update for OTA)
 
 ### `technology/.claude/settings.json`
-- Expo-specific PostToolUse hooks
-- Additional `network.allowedHosts` for Expo docs and SDK provider docs
+- No additional PostToolUse hooks beyond the root-layer typecheck hook.
+  This file contributes only `network.allowedHosts` entries not already
+  present in the root layer (e.g., provider doc subdomains such as
+  `docs.revenuecat.com`, `docs.onesignal.com`, `docs.sentry.io`).
+- Additional `network.allowedHosts` for Expo SDK provider doc subdomains
+  not covered by the root layer's top-level domain entries.
 
 ### `technology/lib/<sdk>/CLAUDE.md` (eight files)
 Each placeholder describes:
@@ -409,10 +460,32 @@ template_version: 0.0.0
   reuses the pinned stack).
 - `--add-package` reads stack from manifest. Manifest missing → error:
   "Not a scaffolded project. Run `--bootstrap --stack <name>` first."
+- `--stack` is not accepted in `--add-package` mode → error: "stack is read
+  from the manifest; `--stack` is only valid with `--bootstrap`."
 - Allowlist: `["node-fastify-react", "dotnet-mvc-react", "expo"]`. Any other
   value → error listing valid options.
 - Removes the previous default `node-fastify-react` behaviour. **Breaking
   change** — acceptable per user direction at this stage.
+- **Mode-inference table update:** The existing SKILL.md table row
+  "cwd is empty → `--bootstrap` → Proceed as bootstrap (default stack:
+  node-fastify-react)" must be updated to:
+  "cwd is empty and `--stack` not given → exit with error listing the
+  allowlist." There is no interactive stack prompt and no deprecation
+  period — hard cutover.
+
+**`--yes` flag (SKILL.md argument table):** Add `--yes` to the SKILL.md
+argument parsing table with the following definition:
+- Flag: `--yes`
+- Scope: applies to all `Proceed? [y/N]` confirmation prompts in `--bootstrap
+  --force` (refresh confirmation) and the `--force` overwrite confirmation in
+  Step B1.
+- Behaviour: skips all interactive confirmations and proceeds automatically.
+- Use case: non-interactive execution by AI agents or automation scripts.
+
+**Migration note:** Users or automations that invoke `/scaffold --bootstrap`
+without `--stack` will receive the allowlist error. This is a hard cutover;
+add `--stack node-fastify-react` to any existing scripts to restore the
+previous behaviour.
 
 ## Change 3 — Generalised technology layer mirroring
 
@@ -425,6 +498,16 @@ Currently the technology layer assumes `node-fastify-react` shape. Generalise:
 - Existing `technology/CLAUDE.md` append + `.claude/settings.json` deep-merge
   rules stay unchanged.
 
+**Technology layer dispatch algorithm (canonical):**
+
+| Technology file path | Write rule |
+|---|---|
+| `technology/CLAUDE.md` | Append to project root `CLAUDE.md` after placeholder substitution |
+| `technology/.claude/settings.json` | Deep-merge into project `.claude/settings.json` |
+| All other files under `technology/` | Direct write to the same relative path in the project root (e.g., `technology/lib/revenuecat/CLAUDE.md` → `<project>/lib/revenuecat/CLAUDE.md`) |
+
+This three-rule algorithm is the canonical specification for SKILL.md.
+
 ## Change 4 — Per-stack `--add-package`
 
 Behaviour now switches on `stack.yaml.add_package_target_dir`:
@@ -435,8 +518,11 @@ Behaviour now switches on `stack.yaml.add_package_target_dir`:
 
 Validation:
 - `node-fastify-react`: monorepo root check via `pnpm-workspace.yaml` or
-  `turbo.json` (existing).
+  `turbo.json` (existing). Collision check: if `packages/<name>/` already
+  exists → error "package <name> already exists."
 - `expo`: project root check via `app.json` or `package.json[dependencies.expo]`.
+  Collision check: if `features/<name>/` already exists → error "feature
+  <name> already exists — remove or rename it before re-adding."
 
 ## Change 5 — `template_version` in manifest + structured file entries
 
@@ -454,12 +540,33 @@ and prints a one-line notice.
 stack: expo
 template_version: 1.0.0
 created: 2026-04-16T10:23:00Z
+placeholders:
+  PROJECT_NAME: my-app
+  STACK_DECISIONS_DOC_PATH: ''  # empty string means user left prompt blank; line is dropped from generated file
 files:
   - path: CLAUDE.md
   - path: .claude/settings.json
   - path: features/matching/CLAUDE.md
     write_once: true
 ```
+
+The `placeholders:` map records every `{{PLACEHOLDER}}` value used during
+the bootstrap or add-package run — for ALL stacks. At refresh time the
+scaffold determines whether a file has changed using the following exact
+order: (1) load the template file content; (2) substitute all stored
+placeholder values from the manifest; (3) compare the substituted content
+byte-for-byte against the on-disk file — if they differ, mark `M`; if the
+on-disk file is absent, mark `A`. This eliminates spurious diff noise from
+placeholder tokens. If a new template version introduces a new placeholder
+that has no stored value, the scaffold prompts for it before diffing and
+stores the answer in the manifest.
+
+**Scope across stacks:** ALL placeholders resolved during bootstrap and
+add-package — for all stacks — must be stored in `placeholders:`. For
+`node-fastify-react`, the authoritative placeholder list is
+`references/placeholder-resolution.md`. For `expo`, the authoritative list
+is the Expo bootstrap placeholder table in Section 3 (root layer) plus the
+Expo package-layer placeholder table (Section 3, Package layer).
 
 - Bootstrap writes `template_version` from `stack.yaml` at scaffold time.
 - Refresh compares against current `stack.yaml.template_version`. On
@@ -514,8 +621,8 @@ Each `templates/<stack>/stack.yaml` carries a `template_version: X.Y.Z`:
 
 Behaviour:
 1. Read manifest. Compare `template_version` to `stack.yaml.template_version`.
-2. If equal → "No template updates available. Use `--force` only when you
-   want to re-apply current templates."
+2. If equal → "No template updates available (manifest version matches
+   current template). All scaffold-owned files are already up to date."
 3. If different → print summary (legend: `M` = modified, `A` = added,
    `D` = deleted/no-longer-in-template, `-` = skipped):
    ```
@@ -531,6 +638,26 @@ Behaviour:
    ```
 4. On `y` → apply changes, update manifest's `template_version`.
 5. On `n` → exit clean, no changes.
+6. Pass `--yes` to skip the confirmation prompt and apply automatically.
+   `/scaffold --bootstrap --force --yes` is the non-interactive form
+   suitable for AI agents or automation. Without `--yes`, the `Proceed?
+   [y/N]` prompt blocks on interactive input.
+
+### D-file (deleted/no-longer-in-template) behaviour
+
+When a file appears in the project manifest but no longer exists in the
+current template (legend entry `D`), the scaffold treats it as **orphaned**.
+A file is considered deleted from the template when its path is present in
+the project manifest but no file exists at the corresponding template path
+(`templates/<stack>/root/<rel-path>`, `templates/<stack>/technology/<rel-path>`,
+or `templates/<stack>/package/<rel-path>`) after stripping the layer prefix
+per Change 3's dispatch rules.
+- The file is NOT deleted from disk automatically.
+- The summary lists it as `D` with the note "(orphaned — no longer in
+  template; remove manually if no longer needed)".
+- The manifest entry for the file is removed after the user confirms (`y`),
+  so future refreshes no longer track it.
+- The user is responsible for removing the file from disk if desired.
 
 No 3-way merge UI. Users with hand-edited scaffold-owned files
 (`CLAUDE.md`, `.claude/settings.json`) lose their hand edits — that's the
@@ -556,7 +683,18 @@ changes likely. Review the changelog at:
   ai-dev-tools/skills/scaffold/templates/<stack>/CHANGELOG.md
 ```
 
+If `CHANGELOG.md` is absent, the warning line reads instead:
+```
+WARNING: Major template version bump (1.x → 2.x) — changelog not found at
+  ai-dev-tools/skills/scaffold/templates/<stack>/CHANGELOG.md
+  Review the template diff manually.
+```
+
 A `CHANGELOG.md` per stack documents what each version added/changed/removed.
+It is authored manually by the scaffold maintainer as part of every version
+bump (not generated). Minimum format: a version header (`## vX.Y.Z`) followed
+by a bullet list of added/changed/removed items. The initial `CHANGELOG.md`
+for each stack must be created as part of the v1.0.0 implementation.
 
 `★ Insight ─────────────────────────────────────`
 - The `write_once` flag is the lightest possible mechanism for "scaffold
@@ -606,5 +744,5 @@ Explicitly excluded from this implementation:
 
 **Hard prerequisite before implementation:** Verify `CLAUDE.local.md`
 auto-loading behaviour in Claude Code. If unconfirmed, the spec switches to
-the `CLAUDE.scaffold.md` + thin `CLAUDE.md` import pattern (Sections 1, 5,
-and the manifest schema all change).
+the `CLAUDE.scaffold.md` + thin `CLAUDE.md` import pattern (Sections 1, 4
+(Change 6), 5, and the manifest schema all change).
