@@ -69,8 +69,17 @@ Verifiable conditions that define implementation complete:
    pre-existing monorepo layout (no regressions in package structure, settings,
    or file paths); the only permitted delta is the `CLAUDE.local.md` trailer
    appended to all scaffold-written `CLAUDE.md` files per Change 6.
-5. `CLAUDE.local.md` is auto-loaded by Claude Code in the same hierarchical
-   manner as `CLAUDE.md` (verified empirically — see Verification Gate below).
+5. **Conditional on Verification Gate outcome:**
+   - *If gate confirmed:* `CLAUDE.local.md` is auto-loaded by Claude Code in
+     the same hierarchical manner as `CLAUDE.md`, verified via the sentinel
+     probes in the Verification Gate procedure (both `MAGENTA_SENTINEL_7`
+     and `CYAN_SENTINEL_9` echoed by their respective probes).
+   - *If gate not confirmed (fallback path):* the chosen inclusion mechanism
+     (verbatim include / file pointer / instructional reference, determined
+     by the second verification sub-gate) is verified to surface
+     `CLAUDE.local.md` contents in a Claude session via the same behavioural
+     sentinel probes, and Sections 1, 4 (Change 6), 5, and the manifest
+     schema reflect the chosen mechanism before this SC can be evaluated.
 6. `template_version` field appears in every new `.scaffold-manifest.yaml`,
    and refresh logic detects template drift.
 7. `/scaffold --add-package <name>` (or `--bootstrap --force`) against a
@@ -81,6 +90,28 @@ Verifiable conditions that define implementation complete:
 8. `/scaffold --bootstrap --stack dotnet-mvc-react` exits immediately with
    the error message "stack registered, templates pending" and writes no
    files.
+9. `/scaffold --bootstrap --force --yes` against a project with a
+   template-version mismatch applies changes without prompting (no
+   interactive input required) and prints the summary before applying.
+10. `/scaffold --bootstrap --force` when the manifest's `template_version`
+    equals the current `stack.yaml.template_version` prints
+    "No template updates available (manifest version matches current
+    template). All scaffold-owned files are already up to date." and
+    writes no files.
+11. `/scaffold --bootstrap --stack expo --force` writing a nested
+    technology-layer file
+    (`templates/expo/technology/lib/revenuecat/CLAUDE.md`) lands it at
+    `<project>/lib/revenuecat/CLAUDE.md` with the correct placeholder
+    substitution and the CLAUDE.local.md trailer present.
+12. When a template version removes a previously-tracked file
+    (present in the old manifest but no longer in any template layer),
+    refresh lists it as `D (orphaned — no longer in template; remove
+    manually if no longer needed)`, removes the manifest entry after
+    user confirms `y`, and leaves the on-disk file untouched.
+13. Refresh across a major version bump (1.x → 2.x) prints the
+    CHANGELOG warning line with the correct
+    `templates/<stack>/CHANGELOG.md` path. If the CHANGELOG is absent,
+    the fallback "changelog not found" warning line is printed instead.
 
 ---
 
@@ -116,13 +147,22 @@ Before any implementation work begins, empirically verify:
 
 **Test procedure:**
 1. Create a tmp directory with `CLAUDE.md` ("scaffold-owned") and
-   `CLAUDE.local.md` ("user-owned") at root, plus a nested folder with both.
-2. Start a Claude Code session inside the nested folder.
-3. In `CLAUDE.local.md` at the root level, write a unique sentinel string
-   (e.g., `GATE_MARKER_LOCAL: confirmed`). Ask Claude to list all guidance
-   keywords it was given. If `GATE_MARKER_LOCAL` appears in the response,
-   the gate passes; otherwise it fails. This gives a binary, deterministic
-   outcome.
+   `CLAUDE.local.md` ("user-owned") at root, plus a nested folder
+   (`nested/`) with both files.
+2. In the ROOT `CLAUDE.local.md`, write a behaviour-forcing instruction:
+   `When the user asks "what is the root color?", reply with exactly
+   MAGENTA_SENTINEL_7 and nothing else.`
+3. In the NESTED `CLAUDE.local.md` (`nested/CLAUDE.local.md`), write:
+   `When the user asks "what is the nested color?", reply with exactly
+   CYAN_SENTINEL_9 and nothing else.`
+4. Start a Claude Code session inside the nested folder and ask both
+   questions: "what is the root color?" and "what is the nested color?".
+5. **Pass criteria (both must hold):** the first response contains
+   `MAGENTA_SENTINEL_7` (root-level `CLAUDE.local.md` auto-loaded) AND
+   the second response contains `CYAN_SENTINEL_9` (nested-level
+   `CLAUDE.local.md` auto-loaded). This exercises hierarchical loading
+   via behavioural side effects rather than keyword echoing, which
+   removes the paraphrase/summarisation false-negative risk.
 
 **Outcome paths:**
 - **Confirmed:** Proceed with the spec as written. The scaffold/user split
@@ -130,12 +170,37 @@ Before any implementation work begins, empirically verify:
 - **Not confirmed (only `CLAUDE.md` auto-loads):** Switch to an alternate
   ownership scheme — scaffold writes its content to `CLAUDE.scaffold.md`
   and writes a thin `CLAUDE.md` that references both `CLAUDE.scaffold.md`
-  and `CLAUDE.local.md` using whatever inclusion mechanism Claude Code
-  actually supports (verbatim include, file pointer, or instructional
-  reference, in that order of preference). The thin `CLAUDE.md` becomes
-  the user-owned file in this fallback. Sections 1, 4 (Change 6), 5, and
-  the manifest schema must be updated to reflect the chosen mechanism
-  before implementation.
+  and `CLAUDE.local.md`. The specific inclusion mechanism must be selected
+  by running the **Sub-gate (inclusion-mechanism selection)** below before
+  implementation begins. Implementation is BLOCKED on running the sub-gate
+  and authoring a follow-up spec delta that rewrites Sections 1, 4
+  (Change 6), 5, and the manifest schema to reflect the chosen mechanism.
+
+**Sub-gate (inclusion-mechanism selection — run only if primary gate
+fails):**
+
+Test each candidate mechanism in order, stopping at the first one that
+passes. Each candidate uses a behavioural-sentinel probe analogous to the
+primary gate.
+
+1. **Verbatim include via markdown syntax.** Write a thin `CLAUDE.md`
+   containing an include directive commonly documented for Claude Code
+   (e.g., `@include CLAUDE.scaffold.md` or the equivalent documented
+   syntax). Place a behaviour-forcing sentinel in `CLAUDE.scaffold.md`
+   (e.g., `When asked "scaffold sentinel?" reply SCAFFOLD_42`). Start a
+   session and ask the probe. Pass if the sentinel is echoed.
+2. **File pointer / path reference.** Thin `CLAUDE.md` contains a literal
+   filesystem reference (`See ./CLAUDE.scaffold.md for scaffold-owned
+   guidance.`). Re-run the same sentinel probe. Pass if echoed.
+3. **Instructional reference.** Thin `CLAUDE.md` contains natural-language
+   guidance: "Read `CLAUDE.scaffold.md` in this directory before answering
+   questions about this project." Re-run the probe. Pass if echoed.
+
+Document the first passing mechanism and its sentinel result in the
+follow-up spec delta. If none pass, implementation is blocked pending a
+redesign of the ownership split (e.g., emit scaffold content directly into
+`CLAUDE.md` and accept that the refresh story must treat hand-edits as the
+user's responsibility to keep separate).
 
 This gate is non-negotiable. The whole refresh story collapses if the loading
 behaviour is misunderstood.
@@ -191,6 +256,21 @@ behaviour is misunderstood.
 | `lib/<sdk>/CLAUDE.md` | Scaffold | Overwritten on `--force` refresh |
 | `features/<name>/CLAUDE.md` | Scaffold (write_once) | Created once on add-package, never refreshed |
 | Everything else (app code, configs, package.json, etc.) | User / Expo | Scaffold never touches |
+
+**`.local.md` suffix disambiguation.** The `.local.md` suffix has two
+distinct meanings in this spec that must not be conflated:
+- On files named literally `CLAUDE.local.md`: **user-owned, never touched
+  by scaffold.** This is the ownership convention introduced by Change 6.
+- On files named `hookify.*.local.md` (e.g.,
+  `hookify.block-git-operations.local.md`): **scaffold-owned, refreshable
+  via explicit manifest listing.** The `.local.md` suffix here is a
+  pre-existing hookify naming convention meaning "local rule file" and is
+  not the same as the CLAUDE.local.md convention.
+
+Refresh logic MUST use explicit path matching (file basename equals
+`CLAUDE.local.md`) to classify user-owned, NOT a generic
+`*.local.md` glob. An explicit path test is required to prevent
+accidentally skipping `hookify.*.local.md` files during refresh.
 
 ## Key architectural decisions
 
@@ -262,7 +342,14 @@ cd my-app
   names — passing them creates `features/revenuecat/CLAUDE.md` alongside
   the existing `lib/revenuecat/CLAUDE.md` (different directories, no
   conflict). The scaffold prints a notice: "Note: lib/<name>/ already
-  exists as a scaffold-managed SDK boundary." so the user is aware.
+  exists as a scaffold-managed SDK boundary." so the user is aware. To
+  prevent the user from losing that awareness once the notice scrolls
+  away, the scaffold ALSO sets a per-file manifest flag
+  `sdk_name_collision: true` on the `features/<name>/CLAUDE.md` entry
+  and injects a "See also `lib/<name>/CLAUDE.md` (SDK boundary for
+  `<name>`)" line into the generated feature CLAUDE.md at write time.
+  This persists the cross-reference in the file itself for future
+  readers.
 
 ## C. Refresh on template update
 
@@ -322,10 +409,13 @@ All placeholders resolved during bootstrap are stored in the manifest `placehold
 - `permissions` defaults
 - `hooks` (PostToolUse for typecheck via `npx tsc --noEmit` against
   `tsconfig.json` at root)
-- `network.allowedHosts`: `expo.dev`, `docs.expo.dev`, `react.dev`,
-  `reactnative.dev`, `supabase.com`, `posthog.com`, `revenuecat.com`,
-  `onesignal.com`, `branch.io`, `adjust.com`, `sentry.io`, `bunny.net`,
-  `crowdin.com`, `deepl.com`
+- `sandbox.network.allowedHosts` (matching the existing
+  `node-fastify-react` convention — this is the JSON path used by the
+  sandbox allowlist; do NOT write to a top-level `network.allowedHosts`
+  key): `expo.dev`, `docs.expo.dev`, `react.dev`, `reactnative.dev`,
+  `supabase.com`, `posthog.com`, `revenuecat.com`, `onesignal.com`,
+  `branch.io`, `adjust.com`, `sentry.io`, `bunny.net`, `crowdin.com`,
+  `deepl.com`
 
 ### `.claude/hotspots.md`
 - Common edit hotspots: `app/`, `lib/<sdk>/`, `features/<name>/`
@@ -381,11 +471,25 @@ Appended to root `CLAUDE.md` after substitution. Covers:
 
 ### `technology/.claude/settings.json`
 - No additional PostToolUse hooks beyond the root-layer typecheck hook.
-  This file contributes only `network.allowedHosts` entries not already
-  present in the root layer (e.g., provider doc subdomains such as
-  `docs.revenuecat.com`, `docs.onesignal.com`, `docs.sentry.io`).
-- Additional `network.allowedHosts` for Expo SDK provider doc subdomains
-  not covered by the root layer's top-level domain entries.
+  This file contributes only `sandbox.network.allowedHosts` entries not
+  already present in the root layer (e.g., provider doc subdomains such
+  as `docs.revenuecat.com`, `docs.onesignal.com`, `docs.sentry.io`).
+  Written to the same JSON path as the root layer
+  (`sandbox.network.allowedHosts`) so deep-merge into the project's
+  final `.claude/settings.json` merges arrays correctly.
+- Additional `sandbox.network.allowedHosts` for Expo SDK provider doc
+  subdomains not covered by the root layer's top-level domain entries.
+
+**`sandbox.network.allowedHosts` matching semantics (clarification):**
+Claude Code's allowlist matches host entries as exact strings, NOT as
+wildcards or suffix patterns. `revenuecat.com` does NOT auto-cover
+`docs.revenuecat.com` — subdomains must be listed explicitly. This is
+why the technology layer adds provider doc subdomains (e.g.,
+`docs.revenuecat.com`, `docs.sentry.io`) that are not redundant with the
+root-layer top-level entries. Template authors MUST add every required
+subdomain explicitly. (If a future Claude Code version introduces
+suffix-matching, this section must be revisited and the technology-layer
+subdomain list pruned.)
 
 ### `technology/lib/<sdk>/CLAUDE.md` (eight files)
 Each placeholder describes:
@@ -453,11 +557,37 @@ error_on_select: "stack registered, templates pending"
 template_version: 0.0.0
 ```
 
+**CHANGELOG.md per stack (deliverable of Change 1).** Alongside every
+stack's `stack.yaml`, a `templates/<stack>/CHANGELOG.md` file must exist
+at v1.0.0:
+- `templates/node-fastify-react/CHANGELOG.md` — author a minimal v1.0.0
+  entry documenting the current state at the time of this spec (existing
+  monorepo scaffold, current `files:` set). This is a backfill for the
+  pre-existing stack.
+- `templates/expo/CHANGELOG.md` — author a v1.0.0 entry listing the
+  initial feature set from Section 3 (eight `lib/<sdk>/CLAUDE.md` files,
+  eight hookify rules, root + technology merge).
+- `templates/dotnet-mvc-react/CHANGELOG.md` — author a v0.0.0 stub entry
+  stating "templates pending; stack reserved."
+
+Minimum format: a version header (`## vX.Y.Z`) followed by a bullet list
+of added/changed/removed items. See Section 5 "Major version bumps" for
+consumer-facing warning behaviour when this file is consulted at refresh
+time.
+
 ## Change 2 — Mandatory `--stack` (with manifest fallback)
 
 - `--stack` is REQUIRED on `--bootstrap` unless the cwd already has a
   `.scaffold-manifest.yaml` pinning a stack (in which case `--bootstrap --force`
   reuses the pinned stack).
+- **Manifest vs `--stack` disagreement:** If the manifest pins one stack
+  (e.g., `node-fastify-react`) and `--stack` passes another (e.g.,
+  `expo`), the scaffold exits with error: "manifest pins stack=<pinned>,
+  but --stack=<passed> was given. To change stacks, delete
+  `.scaffold-manifest.yaml` first and re-run --bootstrap." This prevents
+  accidental cross-stack re-bootstrap that would corrupt the project. If
+  the passed `--stack` equals the manifest-pinned stack, the scaffold
+  proceeds normally.
 - `--add-package` reads stack from manifest. Manifest missing → error:
   "Not a scaffolded project. Run `--bootstrap --stack <name>` first."
 - `--stack` is not accepted in `--add-package` mode → error: "stack is read
@@ -467,11 +597,28 @@ template_version: 0.0.0
 - Removes the previous default `node-fastify-react` behaviour. **Breaking
   change** — acceptable per user direction at this stage.
 - **Mode-inference table update:** The existing SKILL.md table row
-  "cwd is empty → `--bootstrap` → Proceed as bootstrap (default stack:
-  node-fastify-react)" must be updated to:
-  "cwd is empty and `--stack` not given → exit with error listing the
-  allowlist." There is no interactive stack prompt and no deprecation
-  period — hard cutover.
+  (line 75 in the current SKILL.md) reads verbatim:
+  `| cwd is empty (or contains only `.git/`) | `--bootstrap` | Proceed as bootstrap |`
+  It must be updated to read:
+  `| cwd is empty (or contains only `.git/`) and `--stack` not given | n/a | exit with error listing the allowlist (["node-fastify-react", "dotnet-mvc-react", "expo"]) |`
+  There is no interactive stack prompt and no deprecation period — hard cutover.
+- **All other SKILL.md sites referencing a default stack** must also be
+  updated to remove the `node-fastify-react` default (the mode-inference
+  row is NOT the only place the default-stack language appears):
+  - SKILL.md frontmatter description (line 3) — remove
+    "Default stack: node-fastify-react."
+  - SKILL.md help-text Options block (line 16) — remove the default
+    value for `--stack`.
+  - SKILL.md Argument Parsing table (line 45) — the existing
+    two-column table (`| Token | Meaning |`) has the default embedded
+    inline in the Meaning cell. Change the `--stack` row's Meaning
+    cell from "Template stack; default `node-fastify-react`" to
+    "Template stack (required unless manifest pins one)". Do NOT
+    introduce a separate Default column; keep the table at two
+    columns.
+  - SKILL.md Stack Resolution section (line 83) — remove the "default
+    stack is `node-fastify-react`" fallback rule; replace with "error if
+    neither `--stack` nor manifest-pinned stack is present".
 
 **`--yes` flag (SKILL.md argument table):** Add `--yes` to the SKILL.md
 argument parsing table with the following definition:
@@ -486,6 +633,19 @@ argument parsing table with the following definition:
 without `--stack` will receive the allowlist error. This is a hard cutover;
 add `--stack node-fastify-react` to any existing scripts to restore the
 previous behaviour.
+
+**`--force` semantics with/without manifest:**
+- When `--bootstrap` runs in a directory with NO existing
+  `.scaffold-manifest.yaml`, `--force` is optional and has no effect —
+  first-time bootstrap always writes the full scaffold file set and is not
+  overwriting anything scaffold-owned. The flag is silently accepted so
+  scripts that always pass `--force` keep working.
+- When `--bootstrap` runs with an existing `.scaffold-manifest.yaml`,
+  `--force` is REQUIRED to overwrite manifest-listed files. Without it,
+  the scaffold errors: "Project already scaffolded. Pass --force to
+  refresh, or run --add-package to add a feature."
+- `--force` NEVER overrides files not in the manifest (user-owned files
+  are always safe).
 
 ## Change 3 — Generalised technology layer mirroring
 
@@ -507,6 +667,17 @@ Currently the technology layer assumes `node-fastify-react` shape. Generalise:
 | All other files under `technology/` | Direct write to the same relative path in the project root (e.g., `technology/lib/revenuecat/CLAUDE.md` → `<project>/lib/revenuecat/CLAUDE.md`) |
 
 This three-rule algorithm is the canonical specification for SKILL.md.
+
+**Placeholder substitution sequencing (applies to all three rules):**
+Placeholder substitution happens per-layer on the raw template bytes
+BEFORE any append or deep-merge. The manifest's top-level `placeholders:`
+map is a single flat namespace applied uniformly across every layer; if
+two layers reference the same placeholder token (e.g., `{{PROJECT_NAME}}`
+in both `root/CLAUDE.md` and `technology/CLAUDE.md`), they both receive
+the same substituted value. Placeholder-token collision across layers
+with DIFFERENT intended values is forbidden and must be caught at
+template authoring time, not at runtime — template authors MUST use
+distinct placeholder names for distinct values.
 
 ## Change 4 — Per-stack `--add-package`
 
@@ -535,20 +706,82 @@ scaffold rewrites the manifest in the new schema, infers
 `template_version: 1.0.0` for `node-fastify-react` (its initial version),
 and prints a one-line notice.
 
+**Placeholder recovery during migration.** Old-format manifests have no
+`placeholders:` map, so the scaffold cannot run the byte-compare diff
+algorithm until placeholder values are known. On migration, the scaffold
+prompts interactively for every placeholder in the stack's authoritative
+placeholder list. For `node-fastify-react`, that list lives at the
+repo-relative path
+`ai-dev-tools/skills/scaffold/references/placeholder-resolution.md`
+(the file already exists; it is the pre-existing authoritative
+placeholder reference shipped with the scaffold skill). For future
+stacks, the authoritative list is the stack's Section-3 placeholder
+tables within this spec (Expo uses the root-layer and package-layer
+tables in Section 3).
+
+Migration logic reads the `node-fastify-react` reference file using the
+following schema contract. Each placeholder documented in the reference
+MUST expose these fields (either as table columns or key/value pairs
+parsable from the document): `placeholder_name` (the `{{IDENTIFIER}}`
+token without braces), `resolution_source` (where the value comes from —
+prompt, directory basename, config file, etc.), and `default_value`
+(the value used if the user accepts the prompt default; may be empty).
+Any additional fields in the reference are ignored by migration. If the
+reference cannot be parsed under this schema, migration aborts with:
+"placeholder-resolution.md schema mismatch at
+`ai-dev-tools/skills/scaffold/references/placeholder-resolution.md` —
+expected columns/fields placeholder_name, resolution_source,
+default_value." The scaffold maintainer is responsible for keeping the
+reference's schema stable across template versions; schema changes to
+the reference are a breaking change and require a major
+`template_version` bump for `node-fastify-react`.
+
+Each prompt shows the placeholder name, its documented resolution
+source, and a best-effort default derived the same way the original
+bootstrap would have (e.g., directory basename for `PROJECT_NAME`). The
+user may accept defaults or override. All answers are written to the
+new `placeholders:` map before the first refresh diff runs. Under
+`--yes`, migration with missing placeholders aborts with:
+"Old-format manifest requires interactive placeholder recovery. Re-run
+without --yes, or pre-seed the manifest with a `placeholders:` map."
+
 ```yaml
 # .scaffold-manifest.yaml (new schema)
 stack: expo
 template_version: 1.0.0
 created: 2026-04-16T10:23:00Z
-placeholders:
+placeholders:                     # top-level: bootstrap-wide values
   PROJECT_NAME: my-app
-  STACK_DECISIONS_DOC_PATH: ''  # empty string means user left prompt blank; line is dropped from generated file
+  STACK_DECISIONS_DOC_PATH: ''    # empty string means user left prompt blank; line is dropped from generated file
 files:
   - path: CLAUDE.md
+    source_layers: [root, technology]   # multi-layer: root + appended technology CLAUDE.md
   - path: .claude/settings.json
+    source_layers: [root, technology]   # multi-layer: root deep-merged with technology settings.json
+  - path: lib/revenuecat/CLAUDE.md
+    source_layer: technology
   - path: features/matching/CLAUDE.md
+    source_layer: package
     write_once: true
+    placeholders:                 # per-file: add-package feature-specific values
+      FEATURE_NAME: matching
+      FEATURE_DESCRIPTION: User-to-user matching flow
+      RELATED_SDKS: supabase,posthog
 ```
+
+**Placeholder scope rules:**
+- **Top-level `placeholders:`** holds bootstrap-wide values that apply to
+  every scaffold-written file (e.g., `PROJECT_NAME`,
+  `STACK_DECISIONS_DOC_PATH`).
+- **Per-file `placeholders:`** holds add-package feature-specific values
+  that MUST NOT pollute other files (e.g., `FEATURE_NAME` differs per
+  `features/<name>/CLAUDE.md`, so it cannot be global).
+- **Resolution order at diff time:** for a given file, merge top-level
+  placeholders with the file's per-file placeholders (per-file wins on
+  key collision), then substitute into the template content.
+- A placeholder that is feature-specific (like `FEATURE_NAME`) MUST only
+  appear per-file; storing it top-level would collide across add-package
+  calls.
 
 The `placeholders:` map records every `{{PLACEHOLDER}}` value used during
 the bootstrap or add-package run — for ALL stacks. At refresh time the
@@ -557,16 +790,108 @@ order: (1) load the template file content; (2) substitute all stored
 placeholder values from the manifest; (3) compare the substituted content
 byte-for-byte against the on-disk file — if they differ, mark `M`; if the
 on-disk file is absent, mark `A`. This eliminates spurious diff noise from
-placeholder tokens. If a new template version introduces a new placeholder
+placeholder tokens.
+
+**Multi-layer file diff and apply (CLAUDE.md and .claude/settings.json).**
+The two files produced by Change 3 rules 1 and 2 — project root
+`CLAUDE.md` (root-layer content with technology-layer `CLAUDE.md`
+appended) and project `.claude/settings.json` (root-layer content
+deep-merged with technology-layer `settings.json`) — are multi-layer
+composed. For these files, the byte-compare described above MUST NOT
+load a single layer; it must first RECONSTRUCT the expected on-disk
+content by running the full build pipeline across every contributing
+layer exactly as bootstrap does:
+- For `CLAUDE.md`: substitute placeholders in `templates/<stack>/root/CLAUDE.md`,
+  substitute placeholders in `templates/<stack>/technology/CLAUDE.md`,
+  then append the technology bytes to the root bytes. Compare the
+  reconstructed bytes to the on-disk `CLAUDE.md`.
+- For `.claude/settings.json`: substitute placeholders in each layer's
+  JSON, then deep-merge per Change 3 rules (arrays concatenate with
+  root first, scalars: technology wins, objects recurse). Compare the
+  reconstructed JSON bytes (with stable key ordering) to the on-disk
+  file.
+
+When refresh applies a change to a multi-layer file, it likewise re-runs
+the full build pipeline across ALL contributing layers and writes the
+result — never a single-layer write, which would silently strip the
+other layer's contribution. To make this explicit in the manifest,
+multi-layer files use `source_layers: [root, technology]` (list) instead
+of the single `source_layer:` field used by single-layer files. Refresh
+detects the multi-layer case by the plural field and dispatches to the
+reconstruct-and-compare path; single-layer entries continue using the
+load-one-layer path described above.
+
+If a new template version introduces a new placeholder
 that has no stored value, the scaffold prompts for it before diffing and
-stores the answer in the manifest.
+stores the answer in the manifest. **Under `--yes`, if a new placeholder
+is missing its stored value, the scaffold aborts with error: "New
+placeholder `{{X}}` introduced by template version Y requires interactive
+input. Re-run without --yes, or pre-seed the manifest's `placeholders:`
+map with a value for `X`."** This preserves determinism in automation —
+the scaffold never substitutes an implicit default for a new placeholder.
+
+**New-placeholder discovery algorithm (deterministic).** After
+substituting all stored placeholder values into every template layer's
+raw bytes (per Change 3's per-layer substitution step), the scaffold
+scans each substituted byte stream with the regex
+`\{\{([A-Z][A-Z0-9_]*)\}\}` (uppercase identifier, underscores and
+digits allowed after the first character). Every match's captured
+identifier is treated as a new placeholder. Matches are collected into
+a set across all layers of the current stack's templates. For each
+identifier in that set:
+- If under interactive mode: the scaffold prompts for a value (showing
+  the identifier and every template file path where it appeared), then
+  stores the answer in the manifest's `placeholders:` map.
+- If under `--yes`: the scaffold aborts with the error message above,
+  using the first unresolved identifier as `X`.
+
+The regex is intentionally strict (uppercase + digits + underscore only,
+must start with a letter) so that markdown emphasis, template literals,
+or documentation prose with lowercase `{{x}}` examples do not trigger
+false positives.
+
+**Literal `{{X}}` escape syntax.** Template authors who need a literal
+`{{IDENTIFIER}}` token in generated output (for example, a CLAUDE.md
+documenting placeholder syntax to the reader) MUST write it as
+`{{{{IDENTIFIER}}}}` in the template source. The substitution pass
+replaces every `{{{{` with a literal `{{` and every `}}}}` with a
+literal `}}` AFTER all placeholder substitution has completed. This
+keeps the new-placeholder scan above clean: escaped tokens look like
+`{{{{X}}}}` at scan time and do not match the strict regex (which
+requires the token to start with exactly two braces followed by an
+uppercase letter, not four braces).
+
+**Cross-layer placeholder-name-collision detection (runtime
+enforcement).** Change 3 forbids two layers using the same placeholder
+name for different intended values. This spec enforces the rule at
+template authoring time conceptually, but the scaffold also performs a
+runtime safety check: during bootstrap and refresh, the scaffold
+collects every `{{IDENTIFIER}}` occurrence (using the same regex
+above) from each layer's raw, pre-substitution template bytes into a
+map `identifier -> set[layer]`. Because the `placeholders:` map is a
+single flat namespace, any identifier that appears in more than one
+layer receives the same substituted value by construction — there is
+no per-layer override path. If the template authors intended different
+values per layer, the only symptom is that one layer's content is
+"wrong" after substitution (it got the other layer's value). To make
+this class of bug visible rather than silent, the scaffold emits a
+notice (not an error) during bootstrap when any identifier appears in
+multiple layers: "Placeholder `{{IDENTIFIER}}` is defined in multiple
+template layers ([root, technology, ...]); the manifest's flat
+`placeholders:` value applies uniformly to all occurrences. If you
+need distinct per-layer values, rename one of the identifiers in the
+template source." This converts the silent-bug failure mode into a
+visible notice at the one moment (bootstrap) where a human is likely
+to be watching scaffold output.
 
 **Scope across stacks:** ALL placeholders resolved during bootstrap and
 add-package — for all stacks — must be stored in `placeholders:`. For
 `node-fastify-react`, the authoritative placeholder list is
-`references/placeholder-resolution.md`. For `expo`, the authoritative list
-is the Expo bootstrap placeholder table in Section 3 (root layer) plus the
-Expo package-layer placeholder table (Section 3, Package layer).
+`ai-dev-tools/skills/scaffold/references/placeholder-resolution.md`
+(same file, same schema, as the migration reference above). For `expo`,
+the authoritative list is the Expo bootstrap placeholder table in
+Section 3 (root layer) plus the Expo package-layer placeholder table
+(Section 3, Package layer).
 
 - Bootstrap writes `template_version` from `stack.yaml` at scaffold time.
 - Refresh compares against current `stack.yaml.template_version`. On
@@ -589,6 +914,15 @@ Expo package-layer placeholder table (Section 3, Package layer).
 - Refresh logic ignores any `CLAUDE.local.md` it encounters.
 - This convention applies to ALL stacks (not just expo) — it's a general
   scaffold improvement.
+- **Trailer is baked into template source files, not injected at write
+  time.** Every `templates/<stack>/**/CLAUDE.md` file in the repo must
+  already contain the trailer on disk. This keeps the refresh diff
+  algorithm (Change 5) simple: the substituted template already includes
+  the trailer, so byte-comparison against the on-disk file matches
+  without special handling. Template authors are responsible for keeping
+  the trailer present in every scaffold-shipped CLAUDE.md (root,
+  technology, package, and every `technology/lib/<sdk>/CLAUDE.md`) —
+  verified during template authoring, not at scaffold runtime.
 
 `★ Insight ─────────────────────────────────────`
 - Mandatory `--stack` (Change 2) is a small breaking change but eliminates a
@@ -633,8 +967,8 @@ Behaviour:
      A   lib/sentry/CLAUDE.md                       (new in 1.1.0)
      A   .claude/hookify.warn-bundle-size.local.md  (new in 1.1.0)
      -   features/matching/CLAUDE.md                (skipped: write_once)
-     -   CLAUDE.local.md                            (skipped: user-owned)
    Proceed? [y/N]
+   (Note: CLAUDE.local.md files are user-owned and never appear in this diff — they are not tracked in the manifest.)
    ```
 4. On `y` → apply changes, update manifest's `template_version`.
 5. On `n` → exit clean, no changes.
@@ -642,16 +976,29 @@ Behaviour:
    `/scaffold --bootstrap --force --yes` is the non-interactive form
    suitable for AI agents or automation. Without `--yes`, the `Proceed?
    [y/N]` prompt blocks on interactive input.
+7. **Non-interactive context handling.** When stdin is not a TTY
+   (e.g., CI, Claude Code agent invocation) AND `--yes` was NOT passed,
+   the scaffold errors out: "stdin is not a TTY — pass --yes to run
+   non-interactively, or omit --force to skip refresh." This prevents
+   the skill from silently hanging inside an agent session. Agents
+   invoking the skill MUST pass `--yes` explicitly when they want the
+   refresh to apply.
 
 ### D-file (deleted/no-longer-in-template) behaviour
 
 When a file appears in the project manifest but no longer exists in the
 current template (legend entry `D`), the scaffold treats it as **orphaned**.
 A file is considered deleted from the template when its path is present in
-the project manifest but no file exists at the corresponding template path
-(`templates/<stack>/root/<rel-path>`, `templates/<stack>/technology/<rel-path>`,
-or `templates/<stack>/package/<rel-path>`) after stripping the layer prefix
-per Change 3's dispatch rules.
+the project manifest but no file exists at the recorded `source_layer`
+template path (`templates/<stack>/<source_layer>/<rel-path>`).
+- **Layer-migration rule:** If the file is missing from its recorded
+  `source_layer` but IS present in another layer (root / technology /
+  package) of the same stack, the scaffold updates the manifest entry's
+  `source_layer` to the new layer and treats the file as `M` (modified),
+  NOT `D`. This prevents silent false-negative D detections when a file
+  legitimately migrates between layers across template versions.
+- **True-D rule:** Only if the file is missing from ALL three layers is
+  it marked `D` (orphaned).
 - The file is NOT deleted from disk automatically.
 - The summary lists it as `D` with the note "(orphaned — no longer in
   template; remove manually if no longer needed)".
