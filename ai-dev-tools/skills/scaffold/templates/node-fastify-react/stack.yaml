@@ -1,0 +1,9 @@
+# Stack metadata for node-fastify-react.
+# See ai-dev-tools/skills/scaffold/SKILL.md § Stack Resolution for how this file is used.
+name: node-fastify-react
+display_name: Node.js + Fastify + React
+layout: monorepo
+add_package_target_dir: packages
+package_dir_creates_settings: true
+bootstrap_prereq: null
+template_version: 1.0.0

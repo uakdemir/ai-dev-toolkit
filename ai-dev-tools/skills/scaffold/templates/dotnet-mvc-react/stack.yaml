@@ -1,0 +1,8 @@
+# Stack metadata for dotnet-mvc-react (STUB).
+# This stack is reserved in the allowlist but has no template content yet.
+# Selecting it at --bootstrap exits with the error_on_select message.
+name: dotnet-mvc-react
+display_name: .NET MVC + React
+status: registered_templates_pending
+error_on_select: "stack registered, templates pending"
+template_version: 0.0.0

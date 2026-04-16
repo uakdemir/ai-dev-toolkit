@@ -1,0 +1,13 @@
+# Stack metadata for expo (React Native).
+# See ai-dev-tools/skills/scaffold/SKILL.md § Stack Resolution for how this file is used.
+name: expo
+display_name: Expo (React Native)
+layout: single-package
+add_package_target_dir: features
+package_dir_creates_settings: false
+bootstrap_prereq:
+  any_of:
+    - file_exists: app.json
+    - package_json_dependency: expo
+  error_message: "Run `npx create-expo-app` first, then re-run scaffold."
+template_version: 1.0.0
