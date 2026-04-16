@@ -110,3 +110,7 @@ Project status is tracked in a separate file to avoid polluting git history with
 - Analysis-first: for each milestone, clarify requirements -> approve structure -> implement
 - Claude handles configuration, folder structure, wiring, and implementation
 - All code changes go through git; CLAUDE.md is the persistent context carrier across sessions
+
+---
+Project-specific or personal AI guidance not managed by the scaffold lives
+in `CLAUDE.local.md` next to this file. Read it if present.

@@ -1,0 +1,99 @@
+{
+  "model": "opus",
+  "effortLevel": "high",
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true
+  },
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      "allowRead": ["./", "~/.npm/", "/tmp/", "/usr/", "/etc/", "/bin/", "/sbin/", "/lib/"],
+      "allowWrite": ["./", "~/.npm/", "/tmp/"]
+    },
+    "network": {
+      "allowedHosts": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "raw.githubusercontent.com",
+        "expo.dev",
+        "docs.expo.dev",
+        "react.dev",
+        "reactnative.dev",
+        "supabase.com",
+        "posthog.com",
+        "revenuecat.com",
+        "onesignal.com",
+        "branch.io",
+        "adjust.com",
+        "sentry.io",
+        "bunny.net",
+        "crowdin.com",
+        "deepl.com"
+      ]
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Read",
+      "Glob",
+      "Grep",
+      "Task",
+      "WebFetch",
+      "WebSearch",
+      "Bash(*)",
+      "mcp__plugin_context7_context7__*"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git branch *)",
+      "Bash(git pull *)",
+      "Bash(git rebase *)",
+      "Bash(git reset *)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(git clean *)",
+      "Bash(git stash *)",
+      "Bash(eas build*)"
+    ]
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Claude Code needs your attention'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsc --noEmit 2>&1 | head -20"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Reminder] Update tmp/project_status.md if session work was significant'"
+          }
+        ]
+      }
+    ]
+  }
+}
