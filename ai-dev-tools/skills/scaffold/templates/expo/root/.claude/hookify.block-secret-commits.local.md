@@ -23,7 +23,6 @@ Correct patterns:
 
 Note: `eas.json` is NOT blocked here — every Expo project must author
 and maintain `eas.json` (build profiles, submit config, `$SECRET_NAME`
-references). A separate `warn` hook (`warn-eas-json-secrets`) flags
-literal secret VALUES inside `eas.json`. If you need to block at
-commit-time, use a pre-commit secret scanner (e.g., gitleaks) rather
-than a write-time block.
+references). Review `eas.json` commits manually for hardcoded secret
+values, or use a pre-commit secret scanner (e.g., gitleaks) to catch
+them automatically.

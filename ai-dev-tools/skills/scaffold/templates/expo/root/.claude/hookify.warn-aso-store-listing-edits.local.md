@@ -2,7 +2,7 @@
 name: warn-aso-store-listing-edits
 enabled: true
 event: write
-pattern: (store[/_-]?listing|fastlane/metadata|app-store|play-store|screenshots/)
+pattern: (^|/)(store[/_-]?listing|fastlane/metadata|app-store|play-store|screenshots)/
 action: warn
 ---
 
