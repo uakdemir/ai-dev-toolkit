@@ -12,6 +12,7 @@
 - **Progress logging:** concise status lines, one per stage transition:
   `[auto] <spec-filename> > stage <i|ii|iii|iv> — <started|complete|failed>`
 - **Auto mode never reads or writes `tmp/orchestrate-state.md`.** It uses `tmp/auto-state.md` exclusively.
+- **Profiling log:** auto mode appends one JSONL entry per sub-agent dispatch to `${XDG_DATA_HOME:-$HOME/.local/share}/ai-dev-tools/ai-dev-tools.log`. Write failures are silently swallowed — profiling never blocks the pipeline. See `references/auto/profiling-log.md`.
 
 ---
 
@@ -39,6 +40,20 @@ The safety net is downstream: if the spec has gaps, the implement agent produces
 Before processing the first spec:
 1. Verify every positional spec arg is: (a) an existing regular file, (b) readable, (c) ends in `.md` or `.markdown`.
 2. Any failure → print the full list of invalid paths with per-path reasons and exit. No spec processed, no state written.
+
+---
+
+## Profiling Log — One-Time Setup
+
+After pre-pipeline validation passes and before stage i starts (runs once per auto invocation, not per spec):
+
+```bash
+LOG_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ai-dev-tools"
+LOG="$LOG_DIR/ai-dev-tools.log"
+mkdir -p "$LOG_DIR" 2>/dev/null || echo "[auto] warning: could not create $LOG_DIR (profiling log disabled)" >&2
+```
+
+A `mkdir -p` failure prints a single stderr breadcrumb and does NOT abort the run; per-dispatch appends fail silently per the profiling-log failure policy. See `references/auto/profiling-log.md` for the full write protocol and schema.
 
 ---
 

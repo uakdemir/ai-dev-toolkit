@@ -67,6 +67,14 @@ On success: set `implement_head = HEAD` in `auto-state.md`, transition to `imple
 
 ---
 
+## Profiling
+
+After `/implement` returns (BEFORE the validator suite runs), append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=implement`, `round=1`, `model=opus`.
+
+If the Q3 retry-once fires, the retry dispatch emits its own entry on clean return (see profiling-log.md retry rule). Write failures are silently swallowed.
+
+---
+
 ## Next Stage
 
 When stage ii is complete (validators passed, `implement_head` set), update `tmp/auto-state.md` state to `implementation-complete`, then load and execute `references/auto/stages/stage-iii-code-review.md`.

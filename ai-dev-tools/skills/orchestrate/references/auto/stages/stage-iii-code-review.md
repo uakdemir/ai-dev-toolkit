@@ -60,6 +60,12 @@ Optimistic trust. Orchestrate does NOT validate review JSON for agent iii. Missi
 
 ---
 
+## Profiling
+
+After each code-review iteration dispatch returns, append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=review-code`, `round=N` (iteration number 1–4), `model=opus`. Early-exit iterations that never dispatch produce no entry. Write failures are silently swallowed.
+
+---
+
 ## Next Stage
 
 When stage iii is complete (all iterations done or early-exited on 0 criticals), load and execute `references/auto/stages/stage-iv-verification-gate.md`.
