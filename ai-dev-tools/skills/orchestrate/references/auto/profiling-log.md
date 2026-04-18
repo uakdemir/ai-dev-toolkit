@@ -126,7 +126,7 @@ printf '{"schema_version":1,"ts":"%s","spec":"%s","action":"%s","round":%d,"mode
   >> "$LOG" 2>/dev/null || true
 ```
 
-The `spec_basename` is JSON-safe because spec filenames in this project are constrained to `[A-Za-z0-9._-]` by upstream validation (pre-pipeline validation — `pipeline-overview.md` Pre-pipeline Validation section, step 1 sub-points (a) and (c) — requires an existing regular file ending in `.md` or `.markdown`). **Defensive invariant:** if that constraint is ever relaxed (e.g., spaces, quotes, or backslashes allowed in basenames), the writer MUST JSON-escape `spec_basename` before substitution into the `printf` format string; otherwise a single unescaped `"` or `\` in the basename will emit a syntactically invalid JSONL line.
+The `spec_basename` is JSON-safe because spec filenames in this project are constrained to `[A-Za-z0-9._-]` by upstream validation (pre-pipeline validation — `pipeline-overview.md` Pre-pipeline Validation section, step 1 sub-points (a) and (c) — requires an existing regular file ending in `.md` or `.markdown`). **Defensive invariant:** if that constraint is ever relaxed (e.g., spaces, quotes, or backslashes allowed in basenames), the writer MUST JSON-escape `spec_basename` before substitution into the `printf` format string; otherwise a single unescaped `"` or `\` in the basename will emit a syntactically invalid JSONL line. A regression test SHOULD fail loudly if any incoming basename contains a byte outside `[A-Za-z0-9._-]`.
 
 ---
 
