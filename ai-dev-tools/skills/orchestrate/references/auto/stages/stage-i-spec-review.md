@@ -7,12 +7,12 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 ## Phase 1 — Cheap sonnet exploration
 
 ```bash
-/review-doc <spec> --fact-check false --max-iterations 3 --run-id <run_id>-phase1
+/review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1
 ```
 
 - Model: sonnet (default)
 - No fact-check
-- Up to 3 iterations with early-exit on 0 criticals
+- Up to 2 iterations with early-exit on 0 criticals
 
 ## Phase 2 — Rigorous opus + fact-check
 
@@ -50,7 +50,7 @@ Applies ONLY to phase 2's final iteration (not phase 1):
 
 Phase 1's exit state is irrelevant for the endless-loop check.
 
-**Bounded worst case:** 3 + 2 = 5 review dispatches per spec.
+**Bounded worst case:** 2 + 2 = 4 review dispatches per spec.
 
 ---
 

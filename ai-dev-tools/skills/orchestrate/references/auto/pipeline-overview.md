@@ -19,7 +19,7 @@
 
 | # | Stage | Composition | Agent? |
 |---|---|---|---|
-| i | Spec-review two-phase | Phase 1: `/review-doc <spec> --fact-check false --max-iterations 3 --run-id <run_id>-phase1` (sonnet). Phase 2: `/review-doc <spec> --fact-check true --model opus --max-iterations 2 --run-id <run_id>-phase2` (opus + fact-checker) | Yes — two serial sub-agent dispatches |
+| i | Spec-review two-phase | Phase 1: `/review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1` (sonnet). Phase 2: `/review-doc <spec> --fact-check true --model opus --max-iterations 2 --run-id <run_id>-phase2` (opus + fact-checker) | Yes — two serial sub-agent dispatches |
 | ii | Implement | `/implement <spec> --auto --run-id <id>` | Yes — single dispatch (may spawn 1 helper internally) |
 | iii | Code-review loop | `/review-code <spec_baseline> --against <spec_path> --run-id <id>` opus-only, up to 4 iters, commit after each | Yes — one dispatch per iter |
 | iv | Verification gate | No-op in this release (no test suite). Final commits, print completion log | No — orchestrate runs directly |
@@ -28,7 +28,7 @@
 
 ## Why no write-plan stage?
 
-Specs entering auto mode have been through brainstorming AND the two-phase review-doc pipeline (3 sonnet + 2 opus+fact-checker iters). The fact-checker verifies file paths, function signatures, and architectural claims against the live codebase. By the time a spec reaches agent ii, it IS an implementation blueprint.
+Specs entering auto mode have been through brainstorming AND the two-phase review-doc pipeline (2 sonnet + 2 opus+fact-checker iters). The fact-checker verifies file paths, function signatures, and architectural claims against the live codebase. By the time a spec reaches agent ii, it IS an implementation blueprint.
 
 The safety net is downstream: if the spec has gaps, the implement agent produces fuzzy code, and the opus code-review loop (up to 4 iters) catches and fixes it.
 
