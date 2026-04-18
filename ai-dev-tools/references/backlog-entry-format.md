@@ -28,7 +28,7 @@ Each entry is a block separated by `---`:
 - **Category:** bug | architecture | spec-drift | security | test-gap
 - **Location:** path/to/file.ext:line_number
 - **Commit:** short_hash (when available)
-- **Status:** found | fixed | deferred | pushed-back
+- **Status:** found | fixed | pushed-back
 
 **Problem:**
 Clear explanation of the issue.
@@ -36,8 +36,8 @@ Clear explanation of the issue.
 **Suggested fix:**
 Concrete suggestion.
 
-**Deferral reason:** _(only present when status is deferred or pushed-back)_
-Why the coder chose not to fix this.
+**Push-back reason:** _(only present when status is pushed-back)_
+Why the coder rejected the finding.
 
 ---
 ```
@@ -48,8 +48,7 @@ Why the coder chose not to fix this.
 |--------|---------|
 | `found` | Identified by reviewer, no fix attempted |
 | `fixed` | Coder resolved the issue |
-| `deferred` | Coder chose to skip with reason |
-| `pushed-back` | Coder disputes the reviewer's finding with reason |
+| `pushed-back` | Coder disputes the reviewer's finding OR cannot act on it with available context, with explicit reasoning |
 
 ## Field Rules
 

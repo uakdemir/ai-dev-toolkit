@@ -192,7 +192,7 @@ Scope-based filtering:
 After each iteration, append all issues to `tmp/past-issues-backlog.md`:
 1. Read `ai-dev-tools/references/backlog-entry-format.md` for the entry template.
 2. If `./tmp/past-issues-backlog.md` does not exist, create it with the standard header.
-3. Cross-reference with `tmp/_reviews_errors/review-code-fix-report.json` for dispositions (`fixed`, `deferred`, `pushed-back`).
+3. Cross-reference with `tmp/_reviews_errors/review-code-fix-report.json` for dispositions (`fixed`, `pushed-back`).
 4. On stop-check iterations (no fix phase): all issues recorded as `status: found`.
 5. On abort: record all issues as `status: found` with warning.
 6. `Source: review-code` for all entries.
@@ -237,7 +237,7 @@ Generate `tmp/_reviews_errors/review-code-summary.md` using this template:
 X Critical fixed | Y High fixed | Z Medium fixed
 Remaining: A Critical | B High | C Medium
 Last round: X Critical fixed | Y High fixed | Z Medium fixed
-Deferred: D | Pushed back: P
+Pushed back: P
 
 ## Verification
 command1: PASS
@@ -248,7 +248,7 @@ command2: PASS
 ### 1. [Title]
 **Severity:** high | **Category:** bug | **Location:** src/auth.ts:42
 **Problem:** ...
-**Status:** deferred — reason
+**Status:** pushed-back — reason
 
 [... up to 10 items]
 ```
@@ -287,10 +287,9 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 
 After printing the terminal output, auto-triage each remaining issue from `tmp/_reviews_errors/review-code.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
 
-**Auto-triage rules (per issue):**
-- **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly — same approach as the fixer agent (edit the file, run `--verify` commands if configured).
-- **Defer:** The fix requires information the agent doesn't have, depends on future work, or is explicitly a future concern.
-- **Push back:** The finding is incorrect, irrelevant, or based on a misunderstanding of the code/spec. Record the agent's reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected.
+**Auto-triage rules (per issue)** — every issue resolves to exactly one of these two outcomes. There is no "defer" option; the agent must either fix or justify rejecting the finding:
+- **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly — same approach as the fixer agent (edit the file, run `--verify` commands if configured). Default to this option whenever the fix is within reach.
+- **Push back:** The finding is incorrect, irrelevant, misunderstands the code/spec, OR the fix genuinely requires information/context the agent cannot obtain. Record the reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected. "I don't have enough context" is a valid push-back reason — but it must be written as explicit reasoning, not silently skipped.
 
 **Escalation (rare):** Only ask the user if an issue is both **critical severity** AND the agent genuinely cannot determine the correct action. This should be exceptional — for high/medium issues, always decide autonomously.
 
@@ -303,9 +302,8 @@ N issues triaged (H high, M medium).
   [Applied]     #1 high: <title>
   [Applied]     #2 medium: <title>
   [Pushed back] #3 medium: <title> — <one-line reason>
-  [Deferred]    #4 medium: <title> — <one-line reason>
 
-Applied: N | Deferred: N | Pushed back: N
+Applied: N | Pushed back: N
 ```
 
 If any fixes were applied, commit with: `fix(review-code): apply N review suggestions`.
@@ -318,16 +316,13 @@ After all issues are processed, update `tmp/_reviews_errors/review-code-summary.
 ## Review-Code Response — <date>
 
 ### [N] — [Issue title derived from problem]
-**Status:** Applied | Deferred | Pushed back
+**Status:** Applied | Pushed back
 
 **[If Applied]**
 Change: what was changed and where
 
-**[If Deferred]**
-Reason: <agent's reasoning>
-
 **[If Pushed back]**
-Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
+Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cannot be acted on with available context>
 
 ---
 ```
@@ -339,7 +334,6 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 Orchestrator maintains running counters across iterations:
 - `total_fixed` (per-severity: critical, high, medium)
 - `last_round_fixed` (per-severity: critical, high, medium) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
-- `total_deferred` (flat count)
 - `total_pushed_back` (flat count)
 
 Parse `tmp/_reviews_errors/review-code-fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `after_sha != before_sha`, append the short SHA. This populates the "Commits added" line in terminal output.
@@ -371,9 +365,8 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 **Fixer model:** max-model
 **Scope:** last N commits | commits before_sha..after_sha
 **Issues found:** X critical, Y high, Z medium
-**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>"
+**Outcome:** "Fixed N issues (P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>"
 **Issues fixed:** [category] [severity] at [location]
-**Issues deferred:** [category] [severity] at [location] — reason
 **Issues pushed back:** [category] [severity] at [location] — reason
 **Issues found (no disposition):** [category] [severity] at [location], or "none"
 **Commits added:** after_sha (or "none")
