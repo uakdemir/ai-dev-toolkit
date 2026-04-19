@@ -259,7 +259,7 @@ After printing the terminal output, auto-triage each remaining issue from `tmp/_
 - **Defer:** The fix requires information the agent doesn't have, depends on future work, or is explicitly a future concern.
 - **Push back:** The finding is incorrect, irrelevant, or based on a misunderstanding of the document/spec. Record the agent's reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected.
 
-**Escalation (rare):** Only ask the user if an issue is both **critical severity** AND the agent genuinely cannot determine the correct action. This should be exceptional — for high/medium issues, always decide autonomously.
+The agent never asks the user. Every remaining issue resolves to apply, defer, or push back — including critical-severity items the agent cannot confidently fix (push back with explicit reasoning).
 
 After auto-triage, print a summary and commit applied fixes:
 

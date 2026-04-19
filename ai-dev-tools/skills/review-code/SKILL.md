@@ -291,7 +291,7 @@ After printing the terminal output, auto-triage each remaining issue from `tmp/_
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly — same approach as the fixer agent (edit the file, run `--verify` commands if configured). Default to this option whenever the fix is within reach.
 - **Push back:** The finding is incorrect, irrelevant, misunderstands the code/spec, OR the fix genuinely requires information/context the agent cannot obtain. Record the reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected. "I don't have enough context" is a valid push-back reason — but it must be written as explicit reasoning, not silently skipped.
 
-**Escalation (rare):** Only ask the user if an issue is both **critical severity** AND the agent genuinely cannot determine the correct action. This should be exceptional — for high/medium issues, always decide autonomously.
+The agent never asks the user. Every remaining issue resolves to apply or push back — including critical-severity items the agent cannot confidently fix (push back with explicit reasoning).
 
 After auto-triage, print a summary and commit applied fixes:
 
