@@ -46,6 +46,7 @@ The `action` field must be either `"fixed"` or `"pushed-back"`. `"deferred"` is 
 - Use Edit for targeted code fixes. Use Write only for `tmp/review-code-fix-report.json`.
 - Make minimal changes. Do not refactor surrounding code.
 - Do not add error handling, comments, or types beyond what's needed for the fix.
+- Do not introduce backward-compat shims, dual code paths, or `if old_format` branches when fixing — unless the spec or CLAUDE.md explicitly requires legacy support. Default policy is clean break; prefer deletion over deprecation.
 - Read files before editing — understand the context.
 - Use `git add -u` (tracked files only) to avoid committing verification artifacts.
 

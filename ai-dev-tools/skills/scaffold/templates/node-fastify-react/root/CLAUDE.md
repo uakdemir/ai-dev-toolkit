@@ -93,6 +93,16 @@ Project status is tracked in a separate file to avoid polluting git history with
 6. If you detect conflicting requirements, call them out clearly and propose a minimal resolution path before coding.
 7. When changing/updating analysis documents that are already done always keep the changes surgical. Do not change grammatical minor fixes for better looks — changes that matter should be identifiable quickly via diff.
 
+## Backwards Compatibility
+
+Default policy: clean break. New code replaces old code. Do not add
+dual-path shims, `if old_format` branches, or deprecation pathways
+unless a spec explicitly requires legacy support (e.g., "must keep v1
+endpoint while adding v2"). When in doubt, delete the old path.
+
+To flip project-wide policy: edit this section in the root CLAUDE.md.
+For one-off feature exceptions: state the requirement in the feature spec.
+
 ## Project: {{PROJECT_NAME}}
 
 ### What This Is

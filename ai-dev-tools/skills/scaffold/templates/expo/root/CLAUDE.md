@@ -81,6 +81,16 @@ Before touching code that calls an SDK, read the relevant
 5. After multi-file changes, run `npx tsc --noEmit` and fix errors
    before considering the task complete.
 
+## Backwards Compatibility
+
+Default policy: clean break. New code replaces old code. Do not add
+dual-path shims, `if old_format` branches, or deprecation pathways
+unless a spec explicitly requires legacy support (e.g., "must keep v1
+endpoint while adding v2"). When in doubt, delete the old path.
+
+To flip project-wide policy: edit this section in the root CLAUDE.md.
+For one-off feature exceptions: state the requirement in the feature spec.
+
 ---
 Project-specific or personal AI guidance not managed by the scaffold lives
 in `CLAUDE.local.md` next to this file. Read it if present.

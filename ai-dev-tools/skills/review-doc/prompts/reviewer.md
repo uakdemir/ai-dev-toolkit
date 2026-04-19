@@ -93,6 +93,7 @@ Review each document for completeness gaps, internal contradictions, implementab
 - Stylistic choices that don't affect implementation
 - Minor wording improvements
 - Architectural alternatives — the document has already chosen an approach
+- Missing backward-compat language — silence is fine; the project default (clean break) applies. Only flag this if the document explicitly references legacy users/clients/versions but fails to specify the compatibility contract. Conversely, DO flag specs that mandate dual-path or legacy support without justification when the project policy is clean break.
 
 ## Output Processing
 

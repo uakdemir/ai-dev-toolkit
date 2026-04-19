@@ -39,6 +39,7 @@ For files shown as stat-only summaries (no full diff included), use the Read too
 - Refactoring opportunities unrelated to correctness
 - Missing comments or documentation
 - Hypothetical requirements not in the spec
+- Missing backward-compat shims, deprecation pathways, or dual-path support — unless the spec or CLAUDE.md explicitly requires legacy support. Default policy is clean break. Instead, flag dual-path code (`if old_format`, v1+v2 branches, legacy fallbacks) that exceeds what the spec requires.
 
 ## Output
 
