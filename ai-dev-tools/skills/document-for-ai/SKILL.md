@@ -166,16 +166,25 @@ Generation uses a two-phase scan architecture. Phase 1 extracts structural data 
 
 The skill exposes a pluggable `structural_extractor` interface. At skill invocation, select the backend:
 
-1. **SerenaExtractor** (preferred) — probe for Serena MCP: call `mcp.list_tools()`. Serena is available if ANY of these tool names appears: `get_symbols_overview`, `find_symbol`, `find_referencing_symbols` (OR check — any one match suffices). If the call fails, returns empty, or none match, Serena is unavailable.
+1. **SerenaExtractor** (preferred) — perform all three checks in order. Each step's failure mode falls through to the next extractor unless `--require-extractor serena` is set.
+
+   a. **Schema load.** In harnesses that gate MCP tools behind deferred schemas (e.g. Claude Code), the agent must materialize Serena's tool schemas before invoking them. Without this step, Serena tools exist in the deferred-tool list but calls fail with InputValidationError. Claude Code: call `ToolSearch` with `"select:mcp__plugin_serena_serena__activate_project,mcp__plugin_serena_serena__get_symbols_overview,mcp__plugin_serena_serena__find_symbol"` before any Serena invocation. Harnesses with non-deferred MCP tools skip this step.
+
+   b. **Project activate.** Call `activate_project` with the repository root path or a known project name. Serena returns "No active project" on every other call until activation succeeds. If activation fails, fall through.
+
+   c. **Smoke test.** Call `get_symbols_overview` on a known file inside scope. This catches cases where schema-load and activation succeed but Serena is misconfigured for the repo. If the call errors, fall through.
+
+   After all three steps succeed, Serena is the selected extractor. Mid-run tool errors fall through to the next extractor for remaining files (log the switch) unless `--require-extractor serena` is set.
 2. **TscDeclarationExtractor** — for TS projects when `tsc` is available in PATH and `tsconfig.json` exists in scope.
 3. **GrepExtractor** — fallback for any language. Uses patterns from `references/signature-patterns.md`.
 
 Override with `--extractor <serena|tsc|grep>`.
 
 **Failure modes:**
-- Serena available but fails partway → fall through to next backend for remaining files, log the switch.
-- Grep fallback has false negatives → the Open Questions section documents any file the extractor couldn't parse (`// parser-unknown: <reason>`).
-- All backends fail or return zero symbols → abort doc generation for this subsystem, log to `AI_INDEX.md` with extraction-failed row format (see AI_INDEX.md Format section).
+- **Probe-time failure** (schema-load / activate / smoke-test fails before any doc-generating call) → fall through to next extractor, log which probe step failed. If `--require-extractor serena` is set, abort the run with exit code ≠ 0 and a diagnostic naming the failed step.
+- **Mid-run failure** (Serena call errors after the probe succeeds) → fall through to next extractor for remaining files, log the switch. If `--require-extractor serena` is set, abort the run with exit code ≠ 0 and a diagnostic naming the failing tool.
+- **Grep fallback has false negatives** → the Open Questions section documents any file the extractor couldn't parse (`// parser-unknown: <reason>`).
+- **All backends fail or return zero symbols** → abort doc generation for this subsystem, log to `AI_INDEX.md` with extraction-failed row format (see AI_INDEX.md Format section).
 
 **Content constraint:** Never guess file content beyond what structural extraction exposes. If the selected extractor can't surface a value, mark the slot as `// unknown — see source` rather than inventing content.
 
