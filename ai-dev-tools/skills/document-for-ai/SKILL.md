@@ -20,6 +20,9 @@ FLAGS
   --include-tests            Include test files in LoC counts and symbol indexes
   --force-reclassify         Re-run volatility classification for existing docs
   --depth <auto|L1|L2>       Force depth for every subsystem in scope (default: auto)
+  --exports-only             Narrow L1 symbol index to exports-only (default:
+                             all top-level symbols). Sets frontmatter
+                             symbol_scope: exports-only.
   --extractor <serena|tsc|grep>   Override structural extractor selection
   --require-extractor <serena|tsc|grep>   Hard requirement — abort if the named
                                            extractor cannot be initialized or
@@ -262,6 +265,7 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 --include-tests        Include test files in LoC counts and symbol indexes (default: excluded)
 --force-reclassify     Re-run volatility classification even for subsystems with existing depth
 --depth <auto|L1|L2>   Force depth for every subsystem in scope; bypasses classification (default: auto)
+--exports-only         Narrow the L1 symbol index to symbols bearing the `export` keyword. Default is all top-level symbols (exported + internal). Sets frontmatter `symbol_scope: exports-only`.
 --extractor <serena|tsc|grep>   Override automatic extractor selection
 --require-extractor <serena|tsc|grep>   Hard requirement — abort the run with
                                          exit code ≠ 0 if the named extractor
@@ -280,7 +284,7 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 3. **Run Phase 1** with the selected extractor. In batch mode, share the import graph across subsystems.
 4. **Run Phase 2** on each subsystem where triggers fired.
 5. **Load templates.** Read `references/doc-templates.md` for the appropriate depth template (L1 or L2) and `references/frontmatter-schema.md` for required frontmatter fields.
-6. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. **Narrative cap:** never hand-generate more than 6,000 tokens of narrative per doc. L2 narrative sections are capped at 1,500 tokens/section. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, and `regenerate_if`.
+6. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. **Narrative cap:** never hand-generate more than 6,000 tokens of narrative per doc. L2 narrative sections are capped at 1,500 tokens/section. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, `symbol_scope` (`all` by default, `exports-only` when `--exports-only` is passed), and `regenerate_if`.
 7. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
 8. **Generate root CLAUDE.md** at the project root (same marker-based append).
 9. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format).
