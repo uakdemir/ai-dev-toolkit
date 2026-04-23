@@ -337,15 +337,16 @@ N. **<One-line problem statement>**
    - **Accuracy** (1-5): does the doc match current code?
    - **Completeness** (1-5): are all template sections filled with substantive content?
    - **Format compliance** (1-5): correct frontmatter and correct template structure?
-3. **Calculate priority.** Use the priority formula from `references/audit-checklist.md` to rank docs by urgency.
-4. **Find orphans and gaps.** Orphaned docs: `code_paths` reference files that no longer exist. Undocumented areas: code modules with no matching doc.
-5. **Output audit report** with these sections:
+3. **Symbol-scope change detection.** If a doc's `symbol_scope` frontmatter differs from the current generation default (or the value the doc would receive on regeneration), classify any symbol-count delta as a scope change, not a regression. Log it in the audit report under a "Scope changes" header and do NOT score down the Completeness dimension for the delta. Freshly generated docs always populate this field. Docs generated before this field was introduced lack it entirely; AUDIT infers `exports-only` for those legacy docs (matching the pre-change default), flags them under "Scope changes," and recommends regeneration to populate the field explicitly.
+4. **Calculate priority.** Use the priority formula from `references/audit-checklist.md` to rank docs by urgency.
+5. **Find orphans and gaps.** Orphaned docs: `code_paths` reference files that no longer exist. Undocumented areas: code modules with no matching doc.
+6. **Output audit report** with these sections:
    - Per-doc score table (accuracy, completeness, format, priority score).
    - Overall quality percentage (see formula in `references/audit-checklist.md`).
    - List of orphaned docs with their stale `code_paths`.
    - List of undocumented modules with suggested doc types.
    - Priority-ranked fix list (urgent red > yellow > green).
-6. **Offer to fix** issues by category. Prompt: "Want me to fix the issues found? (all / specific items / skip)"
+7. **Offer to fix** issues by category. Prompt: "Want me to fix the issues found? (all / specific items / skip)"
    - **Accuracy** — rewrite sections that contradict current code.
    - **Completeness** — fill empty or stub sections from code analysis.
    - **Format** — correct frontmatter fields and align sections to template structure.
