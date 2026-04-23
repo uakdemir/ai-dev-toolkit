@@ -21,6 +21,10 @@ FLAGS
   --force-reclassify         Re-run volatility classification for existing docs
   --depth <auto|L1|L2>       Force depth for every subsystem in scope (default: auto)
   --extractor <serena|tsc|grep>   Override structural extractor selection
+  --require-extractor <serena|tsc|grep>   Hard requirement — abort if the named
+                                           extractor cannot be initialized or
+                                           errors mid-run. Mutually exclusive
+                                           with --extractor.
 
 EXAMPLES
   /document-for-ai                                    Generate CLAUDE.md and AI_INDEX.md
@@ -178,7 +182,7 @@ The skill exposes a pluggable `structural_extractor` interface. At skill invocat
 2. **TscDeclarationExtractor** — for TS projects when `tsc` is available in PATH and `tsconfig.json` exists in scope.
 3. **GrepExtractor** — fallback for any language. Uses patterns from `references/signature-patterns.md`.
 
-Override with `--extractor <serena|tsc|grep>`.
+Override with `--extractor <serena|tsc|grep>`. Use `--require-extractor <serena|tsc|grep>` to make the selection strict — the run aborts with a non-zero exit code if the named extractor can't initialize or errors mid-run, rather than falling through. Passing both `--extractor` and `--require-extractor` is a usage error and aborts before any probe runs.
 
 **Failure modes:**
 - **Probe-time failure** (schema-load / activate / smoke-test fails before any doc-generating call) → fall through to next extractor, log which probe step failed. If `--require-extractor serena` is set, abort the run with exit code ≠ 0 and a diagnostic naming the failed step.
@@ -257,6 +261,14 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 --force-reclassify     Re-run volatility classification even for subsystems with existing depth
 --depth <auto|L1|L2>   Force depth for every subsystem in scope; bypasses classification (default: auto)
 --extractor <serena|tsc|grep>   Override automatic extractor selection
+--require-extractor <serena|tsc|grep>   Hard requirement — abort the run with
+                                         exit code ≠ 0 if the named extractor
+                                         cannot be initialized or errors
+                                         mid-run. Mutually exclusive with
+                                         --extractor. Use when you want
+                                         evidence that the named extractor
+                                         actually ran (CI gates, doc-quality
+                                         audits).
 ```
 
 ### Generation pipeline
