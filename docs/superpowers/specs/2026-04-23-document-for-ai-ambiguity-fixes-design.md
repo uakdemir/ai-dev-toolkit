@@ -93,7 +93,14 @@ In the Invocation flags block, add after the existing `--extractor` line:
                                          audits).
 ```
 
-Help text (`<help-text>` block at top of SKILL.md) adds the same flag.
+Help text (`<help-text>` block at top of SKILL.md) — add the following line to the FLAGS section, directly below the existing `--extractor` entry:
+
+```
+  --require-extractor <serena|tsc|grep>   Hard requirement — abort if the named
+                                           extractor cannot be initialized or
+                                           errors mid-run. Mutually exclusive
+                                           with --extractor.
+```
 
 Validation: if both `--extractor` and `--require-extractor` are passed, abort with a usage error before any probe runs.
 
@@ -183,7 +190,13 @@ In the Invocation flags block, add:
                         `symbol_scope: exports-only`.
 ```
 
-Add the same flag to the `<help-text>` block at top of SKILL.md.
+Help text (`<help-text>` block at top of SKILL.md) — add the following line to the FLAGS section, directly below the existing `--depth` entry:
+
+```
+  --exports-only             Narrow L1 symbol index to exports-only (default:
+                             all top-level symbols). Sets frontmatter
+                             symbol_scope: exports-only.
+```
 
 ### Frontmatter population (Step 6 of the Generation pipeline)
 
@@ -343,7 +356,7 @@ After all spec edits land, run:
 
 | File | Change |
 |---|---|
-| `ai-dev-tools/skills/document-for-ai/SKILL.md` | Extractor probe rewrite, `--require-extractor` flag, L1 framework row, Key principle sub-paragraph, Phase 1 bullet, `--exports-only` flag, self-check step, AUDIT symbol_scope note, AI_INDEX failure-row comment format, help-text flag additions |
+| `ai-dev-tools/skills/document-for-ai/SKILL.md` | Extractor probe rewrite, `--require-extractor` flag (FLAGS block + `<help-text>` block), L1 framework row, Key principle sub-paragraph, Phase 1 bullet, `--exports-only` flag (FLAGS block + `<help-text>` block), self-check step, AUDIT symbol_scope note, AI_INDEX failure-row comment format |
 | `ai-dev-tools/skills/document-for-ai/references/doc-templates.md` | L1 template — add `Visibility` column to Symbol index table |
 | `ai-dev-tools/skills/document-for-ai/references/signature-patterns.md` | Loosen `^export ` anchors for TS/Rust; document Python/Go visibility rules; update `.d.ts` note |
 | `ai-dev-tools/skills/document-for-ai/references/frontmatter-schema.md` | Add optional `symbol_scope: all \| exports-only` field |
