@@ -203,12 +203,12 @@ By default, test files are excluded from all generation outputs:
 
 ### Phase 1 — Cheap structural extraction (always runs)
 
-- Extract exported symbols and their signatures per file (excluding test files unless `--include-tests`).
+- Extract ALL top-level symbols (functions, classes, interfaces, type aliases, module-level const/let) per file (excluding test files unless `--include-tests`). For each: name, `file:line`, signature, visibility (`exported` | `internal`), one-line purpose from the nearest JSDoc/docstring or inferred from the signature + file name. Exports-only mode: add `--exports-only` to filter to symbols bearing the `export` keyword; this sets `symbol_scope: exports-only` in frontmatter instead of the default `symbol_scope: all`.
 - Extract one-line purpose from the nearest JSDoc/docstring or inferred from the signature + file name.
 - Build import graph (what imports what, which symbols are used where).
 - Count files, LoC (excluding test files unless `--include-tests`), public-vs-internal ratio.
 - Compute the L1 symbol index and the internal dependency graph.
-- Record `last_verified_symbol_count` (total exported symbols found).
+- Record `last_verified_symbol_count` (total top-level symbols found, subject to `symbol_scope`).
 
 **Token cap:** Phase 1 budgets ≤ 50k combined I/O tokens per subsystem of ≤ 50 files. If exceeded, split the subsystem by directory depth: partition files into subdirectory groups (one group per immediate child directory of the subsystem root). Each group becomes a sub-subsystem named `<subsystem>/<child-dir>` with `partial: true` in frontmatter and a cross-reference note. **Flat-subsystem fallback:** if no subdirectories exist, split files alphabetically into 2 groups. If a group still exceeds the cap, recursively split in half until every group fits. Name groups `<subsystem>/part-1`, `<subsystem>/part-2`, etc.
 
