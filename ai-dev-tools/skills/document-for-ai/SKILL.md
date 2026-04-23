@@ -540,9 +540,9 @@ When a subsystem fails Phase 1 extraction, log it in AI_INDEX.md:
 | Doc | Purpose | Keywords | Path |
 |-----|---------|----------|------|
 | conversation/llm | extraction-failed | | — |
-<!-- extraction failed: Serena timeout after 30s, grep returned 0 symbols -->
+<!-- extraction failed [probe:smoke-test]: Serena get_symbols_overview returned error, grep returned 0 symbols -->
 
-The failure row uses: subsystem path in the Doc column, `extraction-failed` in the Purpose column, empty Keywords cell, `—` in the Path column. An HTML comment on the next line records the reason.
+The failure row uses: subsystem path in the Doc column, `extraction-failed` in the Purpose column, empty Keywords cell, `—` in the Path column. An HTML comment on the next line records the reason, prefixed with a stage tag that names the failure point. Stage tags: `probe:schema-load`, `probe:activate`, `probe:smoke-test`, `runtime:<tool-name>`. Example of a mid-run failure: `<!-- extraction failed [runtime:find_symbol]: Serena errored mid-run after 12 files, grep fallback returned 0 symbols -->`.
 
 ---
 
