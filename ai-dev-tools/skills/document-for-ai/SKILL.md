@@ -285,10 +285,18 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 4. **Run Phase 2** on each subsystem where triggers fired.
 5. **Load templates.** Read `references/doc-templates.md` for the appropriate depth template (L1 or L2) and `references/frontmatter-schema.md` for required frontmatter fields.
 6. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. **Narrative cap:** never hand-generate more than 6,000 tokens of narrative per doc. L2 narrative sections are capped at 1,500 tokens/section. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, `symbol_scope` (`all` by default, `exports-only` when `--exports-only` is passed), and `regenerate_if`.
-7. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
-8. **Generate root CLAUDE.md** at the project root (same marker-based append).
-9. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format).
-10. **Output summary report:** list all files created, subsystems covered, depth assigned to each, and any gaps where docs could not be generated.
+7. **Post-generation self-check (Serena-only).** For each L1 doc just written, re-call `get_symbols_overview` on the subsystem's files and count Serena's reported top-level symbols. Compare against the doc's symbol-index row count. If `doc_count / serena_count < 0.70`, emit an advisory warning to the summary report:
+
+   ```
+   ⚠  <subsystem>: doc indexes <N>/<M> top-level symbols (<pct>%). Possible extractor underperformance — review before accepting.
+   ```
+
+   The warning does NOT abort the run. The self-check runs only when Serena was the actual extractor (not tsc or grep), because comparing a doc against the same extractor that produced it is circular. Threshold rationale: 70% is low enough to tolerate Serena's stricter definition of "top-level" (ambient declarations, re-exported type aliases) without tripping on boundary cases, and strict enough to catch the silent grep-fallback class of bug.
+
+8. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
+9. **Generate root CLAUDE.md** at the project root (same marker-based append).
+10. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format).
+11. **Output summary report:** list all files created, subsystems covered, depth assigned to each, any gaps where docs could not be generated, and any **Self-check warnings** — subsystems where Serena's symbol count exceeded the doc's by more than 30%, with the fraction and percent for each. Self-check warnings are advisory; the report otherwise treats the run as successful.
 
 ### Open Questions format
 
