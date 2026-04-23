@@ -70,11 +70,13 @@ The depth framework governs how much detail each generated doc contains. Depth i
 
 | Level | What it captures | Cost | Churn resistance | Best for |
 |---|---|---|---|---|
-| **L1: Structural index** | Exported symbols, signatures, one-line purposes, cross-cutting patterns, file/dir map | Low (20–40% of L2) | High — survives refactors that don't rename files/symbols | Volatile subsystems, internal scaffolding |
+| **L1: Structural index** | All top-level symbols (functions, classes, interfaces, type aliases, module-level constants) across scoped files — both exported and internal. Per symbol: signature, visibility (`exported` \| `internal`), one-line purpose inferred from name/nearest JSDoc/docstring, `file:line`. Plus cross-cutting patterns and file/dir map. | Low (20–40% of L2) | High — survives refactors that don't rename files/symbols | Volatile subsystems, internal scaffolding |
 | **L2: Architecture** | Data flow, key decisions, integration points, constraints, ADR cross-refs | Medium | Medium — survives refactors that don't change topology | Stable modules, public API contracts, schema |
 | **L3: Implementation detail** | Method-by-method logic, edge cases, invariants | High | Low — breaks on most refactors | **NOT auto-generated.** Stays in source comments + git blame. |
 
 **Key principle:** L1 is not "shallow L2." It is a fundamentally different artifact. L1 gives a bug-fixer a precise map of the subsystem without teaching them how the code works. That trade-off is correct for high-churn code because architectural narrative goes stale faster than symbol indexes do.
+
+**Scope — exported vs internal:** L1 indexes ALL top-level symbols by default, not just exports. The purpose is to give a maintainer inside the package a precise map of what lives where — internal helpers are where most bugs live, and excluding them produces a public-facade doc that is wrong for the common case (an agent editing inside the subsystem). Each symbol in the index is marked `exported` or `internal` in the Visibility column. When you want an exports-only index for a cross-package consumer view (e.g. publishing a package's public surface), pass `--exports-only` — this narrows the symbol index to symbols bearing the `export` keyword, and sets `symbol_scope: exports-only` in frontmatter.
 
 ---
 
