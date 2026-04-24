@@ -1,6 +1,6 @@
 # Doc Templates
 
-Six purpose-specific templates plus two depth-specific variants (L1, L2) are available. The six purpose templates define section structure for docs with a matching `purpose` frontmatter field. The L1 and L2 variants define section structure based on the `depth` frontmatter field — they are used by the GENERATE mode's two-phase scan architecture when `depth` is set via the volatility assessment.
+Six purpose-specific templates, two depth-specific variants (L1, L2), and one tier-specific variant (Interface) are available. The six purpose templates define section structure for docs with a matching `purpose` frontmatter field. The L1 and L2 variants define section structure based on the `depth` frontmatter field — they are used by the GENERATE mode's two-phase scan architecture when `depth` is set via the volatility assessment. The Interface variant replaces the L1/L2 section set when `tier: interface` is set.
 
 ---
 
@@ -36,6 +36,29 @@ Sections (includes all L1 sections plus these additional sections):
 - **Open Questions**: Same as L1.
 
 **Token cap:** L2 narrative sections (Data flow, Key decisions, Integration points) are capped at 1,500 tokens per section. Total generated narrative must not exceed 6,000 tokens per doc.
+
+---
+
+## Interface Template (tier: interface — Barrel Surface)
+
+Use when `tier: interface` is set (via `--tier interface`). Interface docs live at `<repo-root>/docs/ai/<pkg>/<subsystem>.md` and index only the subsystem's root barrel, not the full subsystem. Depth is almost always L1; L2-interface is unusual.
+
+The interface template **replaces** the L1/L2 section set — it does NOT extend it. Specifically, the File map, full Symbol index, Internal dependency graph, Cross-cutting patterns, and Open Questions-about-internals sections are omitted. Those belong in the internal tier doc.
+
+Sections (all required unless marked optional — include section heading even if empty):
+
+- **Narrative** (one paragraph, no heading): what this barrel exposes, who the consumers are, and the transport / boundary this interface represents. One paragraph, no headings.
+- **Exports**: single table with columns `Symbol | Kind | Source | Purpose`. One row per re-exported symbol.
+  - `Symbol`: the exported name as it appears to consumers (post-alias if any).
+  - `Kind`: `function` | `class` | `interface` | `type` | `const` | `enum`.
+  - `Source`: `file:line` of the definition site. For direct re-exports, cite the original definition file, not the barrel line. For `export * from './foo'` wildcards, resolve the wildcard by enumerating `./foo`'s top-level exports via the structural extractor (Serena preferred) and expand into individual rows — do NOT emit a single "wildcard re-export" row.
+  - `Purpose`: one-line purpose from the source's JSDoc/docstring, or inferred from name + signature.
+- **Consumers** (optional): which workspace packages import from this barrel, derived from the shared cross-package import graph built during Phase 1. Omit the section entirely when the import graph has not been populated (single-subsystem mode without batch context).
+- **Regeneration triggers**: bullet list. For interface tier, the triggers are tighter than internal tier:
+  - "A top-level export is added, removed, or renamed in `src/<subsystem>/index.ts`."
+  - "A re-exported symbol's source file is renamed or its signature changes."
+
+**Do NOT generate** under the interface template: File map, full Symbol index, Internal dependency graph, Cross-cutting patterns, Open Questions about internals. A reader who needs those should read the internal-tier doc under `<package-root>/docs/ai/`.
 
 ---
 

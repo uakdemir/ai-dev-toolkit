@@ -23,6 +23,12 @@ FLAGS
   --exports-only             Narrow L1 symbol index to exports-only (default:
                              all top-level symbols). Sets frontmatter
                              symbol_scope: exports-only.
+  --tier <internal|interface>   Output tier. `internal` (default) writes to
+                                <package-root>/docs/ai/ with symbol_scope: all.
+                                `interface` writes to <repo-root>/docs/ai/<pkg>/
+                                with symbol_scope: exports-only — one-page
+                                public-API index per barrel for monorepo-root
+                                consumers.
   --extractor <serena|tsc|grep>   Override structural extractor selection
   --require-extractor <serena|tsc|grep>   Hard requirement — abort if the named
                                            extractor cannot be initialized or
@@ -33,6 +39,8 @@ EXAMPLES
   /document-for-ai                                    Generate CLAUDE.md and AI_INDEX.md
   /document-for-ai --scope calibration --subsystems all   Batch generate all subsystem docs
   /document-for-ai --scope calibration/conversation/llm   Single subsystem
+  /document-for-ai --tier interface --subsystems all  Generate monorepo-interface docs for every package at the repo root
+  /document-for-ai --tier interface --scope packages/admin --subsystems server   Generate docs/ai/admin/server.md (public API only) at the repo root
   /document-for-ai humanize                           Render docs for humans
   /document-for-ai adr docs/spec.md                   Extract ADRs from spec
 </help-text>
@@ -81,6 +89,19 @@ The depth framework governs how much detail each generated doc contains. Depth i
 
 **Scope — exported vs internal:** L1 indexes ALL top-level symbols by default, not just exports. The purpose is to give a maintainer inside the package a precise map of what lives where — internal helpers are where most bugs live, and excluding them produces a public-facade doc that is wrong for the common case (an agent editing inside the subsystem). Each symbol in the index is marked `exported` or `internal` in the Visibility column. When you want an exports-only index for a cross-package consumer view (e.g. publishing a package's public surface), pass `--exports-only` — this narrows the symbol index to symbols bearing the `export` keyword, and sets `symbol_scope: exports-only` in frontmatter.
 
+## Tiers: internal vs. interface
+
+Depth (L1/L2) and tier are orthogonal. A doc can be L1-internal (symbol-level map of a subsystem) or L1-interface (symbol-level map of just the barrel). L2-interface is unusual — interfaces are almost always L1. L2-internal is appropriate for stable, low-churn subsystems where architectural narrative won't rot.
+
+Two tiers coexist and serve different readers:
+
+| Tier | Location | Audience | Scope |
+|---|---|---|---|
+| **Package-internal** (default) | `packages/<pkg>/docs/ai/<subsystem>.md` | Agent working inside a single package | `symbol_scope: all` — every top-level symbol across all files in the subsystem |
+| **Monorepo-interface** (`--tier interface`) | `<repo-root>/docs/ai/<pkg>/<subsystem>.md` | Agent working at the monorepo root | `symbol_scope: exports-only` — only symbols re-exported from the subsystem's root barrel (`index.ts`), with each row citing where the symbol is defined |
+
+Omitting `--tier` produces today's output unchanged (default = `internal`). Running one tier never modifies the other tier's files — the two output trees coexist.
+
 ---
 
 ## Step 1: Tech Stack Selection
@@ -115,6 +136,12 @@ Detect monorepo structure before proceeding to mode detection.
 3. If a monorepo is detected and CWD is inside a package subdirectory, scope all subsequent work to that package only. Generate module-level CLAUDE.md, not root-level.
 4. If a monorepo is detected and CWD is at the repo root, ask the user: "Scope to entire monorepo or a specific package?"
 5. If no monorepo is detected, skip this step and proceed with the full project.
+
+**`--tier interface` adjustments:**
+
+- **At repo root with `--tier interface --subsystems all`:** skip the "scope to entire monorepo or a specific package?" prompt. Interface-tier explicitly means "all packages at monorepo level" — there's no ambiguity to resolve. Iterate every package's subsystems.
+- **Inside a package with `--tier interface`:** documents that one package's barrels, but output still lands at `<repo-root>/docs/ai/<pkg>/<subsystem>.md`. Walk up to repo root to write, even though CWD is a package.
+- Record the resolved `<repo-root>` for downstream use by the generation pipeline (output paths, root CLAUDE.md updates, repo-root AI_INDEX.md).
 
 ---
 
@@ -266,6 +293,16 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 --force-reclassify     Re-run volatility classification even for subsystems with existing depth
 --depth <auto|L1|L2>   Force depth for every subsystem in scope; bypasses classification (default: auto)
 --exports-only         Narrow the L1 symbol index to symbols bearing the `export` keyword. Default is all top-level symbols (exported + internal). Sets frontmatter `symbol_scope: exports-only`.
+--tier <internal|interface>    Output tier. `internal` (default) writes to
+                                <package-root>/docs/ai/<subsystem>.md with
+                                symbol_scope: all and code_paths covering the
+                                entire subsystem. `interface` writes to
+                                <repo-root>/docs/ai/<pkg>/<subsystem>.md with
+                                symbol_scope: exports-only and code_paths
+                                limited to the subsystem's root barrel. Sets
+                                frontmatter `tier: interface`. Honors
+                                `--symbol-scope all` as an override with a
+                                warning.
 --extractor <serena|tsc|grep>   Override automatic extractor selection
 --require-extractor <serena|tsc|grep>   Hard requirement — abort the run with
                                          exit code ≠ 0 if the named extractor
@@ -284,18 +321,41 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 3. **Run Phase 1** with the selected extractor. In batch mode, share the import graph across subsystems.
 4. **Run Phase 2** on each subsystem where triggers fired.
 5. **Load templates.** Read `references/doc-templates.md` for the appropriate depth template (L1 or L2) and `references/frontmatter-schema.md` for required frontmatter fields.
-6. **Generate docs.** Create each doc using the depth-appropriate template. Output path: `<package-root>/docs/ai/<subsystem-name>.md`. **Narrative cap:** never hand-generate more than 6,000 tokens of narrative per doc. L2 narrative sections are capped at 1,500 tokens/section. Populate frontmatter with `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, `symbol_scope` (`all` by default, `exports-only` when `--exports-only` is passed), and `regenerate_if`.
-7. **Post-generation self-check (Serena-only).** For each L1 doc just written, re-call `get_symbols_overview` on the subsystem's files and count Serena's reported top-level symbols. Compare against the doc's symbol-index row count. If `doc_count / serena_count < 0.70`, emit an advisory warning to the summary report:
+6. **Generate docs.** Create each doc using the depth-appropriate template. **Narrative cap:** never hand-generate more than 6,000 tokens of narrative per doc. L2 narrative sections are capped at 1,500 tokens/section. Output path and section set depend on `--tier`:
+
+   **Internal tier (default):**
+   - Output path: `<package-root>/docs/ai/<subsystem-name>.md`.
+   - `code_paths`: every non-test file under the subsystem directory.
+   - Frontmatter: `scope`, `subsystem`, `purpose`, `depth`, `volatility`, `volatility_measured`, `churn_rate`, `code_paths`, `ai_keywords` (from Phase 1 symbol names), `last_verified` (today), `last_verified_symbol_count`, `symbol_scope` (`all` by default, `exports-only` when `--exports-only` is passed), `tier: internal`, and `regenerate_if`.
+   - Section set: per the L1 or L2 template in `references/doc-templates.md`.
+
+   **Interface tier (`--tier interface`):**
+   - Output path: `<repo-root>/docs/ai/<package-name>/<subsystem>.md`. `<package-name>` is the package's short name (last path component — e.g. `admin`, not `@titansigma/admin`).
+   - `code_paths`: only the subsystem's root barrel file (e.g. `packages/admin/src/server/index.ts`). Do NOT include every file in the subsystem — the interface-tier reader only cares about what crosses the barrel.
+   - Default `symbol_scope`: `exports-only`. Passing `--exports-only` alongside `--tier interface` is a no-op. Passing `--tier interface --symbol-scope all` honors the override but logs a warning: "interface-tier with symbol_scope: all is usually wrong — internal-tier docs live under <package-root>/docs/ai/."
+   - Frontmatter: `tier: interface`, `scope`, `subsystem`, `purpose`, `depth` (almost always `L1`), `code_paths` (single-entry), `symbol_scope: exports-only`, `ai_keywords`, `last_verified`, `last_verified_symbol_count` (counted under the narrower exports-only scope), `regenerate_if` (narrowed — see below). Volatility/churn fields are still populated when available but are advisory for interface docs.
+   - Section set (use the interface-tier template in `references/doc-templates.md`):
+     1. Frontmatter as above.
+     2. One-paragraph narrative: what this barrel exposes, who the consumers are.
+     3. `## Exports` — table with columns `Symbol | Kind | Source | Purpose`, one row per re-exported symbol. For `export * from './foo'` wildcards, resolve via Serena (enumerate the source file's top-level exports) and expand into individual rows. `Source` cites `file:line` of the definition, not the barrel line.
+     4. `## Consumers` (optional) — workspace packages that import from this barrel, derived from the shared cross-package import graph built during Phase 1.
+     5. `## Regeneration triggers` — narrowed to "a top-level export is added, removed, or renamed in `src/<subsystem>/index.ts`" and "a re-exported symbol's source file or signature changes."
+   - **Do NOT generate** for interface tier: File map, full Symbol index, Internal dependency graph, Cross-cutting patterns, Open Questions about internals. Interface-tier docs are specifically about the barrel surface — internal narrative belongs in the internal tier.
+
+7. **Post-generation self-check (Serena-only).** For each L1 doc just written, re-call `get_symbols_overview` on the doc's reference files and count Serena's reported top-level symbols. Compare against the doc's symbol-index row count (or Exports table row count for interface tier). If `doc_count / serena_count < 0.70`, emit an advisory warning to the summary report:
 
    ```
    ⚠  <subsystem>: doc indexes <N>/<M> top-level symbols (<pct>%). Possible extractor underperformance — review before accepting.
    ```
 
-   The warning does NOT abort the run. The self-check runs only when Serena was the actual extractor (not tsc or grep), because comparing a doc against the same extractor that produced it is circular. Threshold rationale: 70% is low enough to tolerate Serena's stricter definition of "top-level" (ambient declarations, re-exported type aliases) without tripping on boundary cases, and strict enough to catch the silent grep-fallback class of bug.
+   The warning does NOT abort the run. The self-check runs only when Serena was the actual extractor (not tsc or grep), because comparing a doc against the same extractor that produced it is circular.
 
-8. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte.
-9. **Generate root CLAUDE.md** at the project root (same marker-based append).
-10. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format).
+   - **Internal tier:** compare doc rows vs. Serena's total top-level symbols across the subsystem's files. Threshold rationale: 70% is low enough to tolerate Serena's stricter definition of "top-level" (ambient declarations, re-exported type aliases) without tripping on boundary cases, and strict enough to catch the silent grep-fallback class of bug.
+   - **Interface tier:** compare doc Exports rows vs. Serena's count of symbols marked `export` in the barrel-referenced source files (i.e., after wildcard resolution). The 70% threshold applies to this narrower count. Using the full top-level count here would always fail, because the doc intentionally narrows to exports.
+
+8. **Generate per-module CLAUDE.md** files. Generated content is appended under `<!-- document-for-ai:generated-start -->` / `<!-- document-for-ai:generated-end -->` markers. On first generation, append the marker pair at end of file. On subsequent runs, replace everything between the markers. User-authored content above the start marker is preserved byte-for-byte. **Skip this step when `--tier interface` is the only invocation** — interface-tier runs do not modify `<package-root>/CLAUDE.md`; that's the internal tier's concern.
+9. **Generate root CLAUDE.md** at the project root (same marker-based append). When any interface-tier docs exist at `<repo-root>/docs/ai/<pkg>/`, add (or refresh) a `## Monorepo Interface Docs` heading inside the markers with a table `| Package | Subsystem | Doc |`, one row per interface-tier doc. Internal-tier module map entries remain unchanged.
+10. **Generate AI_INDEX.md** at the project root (see AI_INDEX.md Format section for subsystem entry format). When interface-tier docs exist, also generate `<repo-root>/docs/ai/AI_INDEX.md` — a grouped lookup table using the same 4-column format (`Doc | Purpose | Keywords | Path`) with one `## Package: <pkg>` header per package whose interface docs exist. Under the root `<repo-root>/AI_INDEX.md`, reference each interface-tier doc under a `## Monorepo Interface` section, distinct from per-package internal sections.
 11. **Output summary report:** list all files created, subsystems covered, depth assigned to each, any gaps where docs could not be generated, and any **Self-check warnings** — subsystems where Serena's symbol count exceeded the doc's by more than 30%, with the fraction and percent for each. Self-check warnings are advisory; the report otherwise treats the run as successful.
 
 ### Open Questions format
@@ -324,9 +384,11 @@ N. **<One-line problem statement>**
    - If a single doc spans multiple templates, split it into separate files — one per template.
    - If still unclassifiable, place in `docs/unclassified/` and list in migration report. Ask user to manually classify.
 3. **Restructure in place.** Rewrite each doc to match its assigned template's section structure. Git history serves as backup — do not create separate backup copies. Non-Markdown files found in docs directories are listed as "unsupported format" in the migration report and not processed.
-4. **Fill gaps.** Analyze code to fill missing sections. Generate frontmatter for each doc per `references/frontmatter-schema.md`. Set `last_verified` to today.
+4. **Fill gaps.** Analyze code to fill missing sections. Generate frontmatter for each doc per `references/frontmatter-schema.md`. Set `last_verified` to today. Existing per-package docs always map to `tier: internal`.
 5. **Generate CLAUDE.md hierarchy** (root + per-module) and **AI_INDEX.md**.
 6. **Output migration report:** files migrated, files split, gaps filled, unsupported files skipped, and any files that could not be classified.
+
+**Interface tier:** MIGRATE skips interface tier on first pass. Running `migrate --tier interface` explicitly after the fact is allowed but produces fresh interface docs; it does not "migrate" existing internal docs into interface form (the scopes are too different — the internal doc's whole-subsystem symbol index cannot be mechanically narrowed to a barrel's exports without re-extraction).
 
 ---
 
@@ -338,6 +400,10 @@ N. **<One-line problem statement>**
    - **Completeness** (1-5): are all template sections filled with substantive content?
    - **Format compliance** (1-5): correct frontmatter and correct template structure?
 3. **Symbol-scope change detection.** If a doc's `symbol_scope` frontmatter differs from the current generation default (or the value the doc would receive on regeneration), classify any symbol-count delta as a scope change, not a regression. Log it in the audit report under a "Scope changes" header and do NOT score down the Completeness dimension for the delta. Freshly generated docs always populate this field. Docs generated before this field was introduced lack it entirely; AUDIT infers `exports-only` for those legacy docs (matching the pre-change default), flags them under "Scope changes," and recommends regeneration to populate the field explicitly.
+
+3b. **Tier-aware scoring.** Audit each tier independently:
+   - **Internal tier** (`tier: internal` or absent in legacy docs): accuracy is evaluated against the full subsystem — every top-level symbol across `code_paths`.
+   - **Interface tier** (`tier: interface`): accuracy is evaluated against the barrel's current exports only, not the full subsystem. Scoring rule: if an interface doc's Exports table contains a symbol that no longer appears in the barrel, score accuracy down by 1. An Exports table that still lists a removed export is strictly incorrect for an interface doc — the barrel is the entire contract. When the `tier` field is absent, infer `tier: internal` for backward compatibility (matching the pre-change default) and do not flag it as a scope change (the `tier` inference is independent of `symbol_scope` inference).
 4. **Calculate priority.** Use the priority formula from `references/audit-checklist.md` to rank docs by urgency.
 5. **Find orphans and gaps.** Orphaned docs: `code_paths` reference files that no longer exist. Undocumented areas: code modules with no matching doc.
 6. **Output audit report** with these sections:
@@ -372,6 +438,11 @@ Do not change status or archive without this distinction.
 3. **Analyze changes.** Review git commits since the doc's `last_verified` date. If `last_verified` is missing, default to the last 30 days of commits.
 4. **Regenerate sections.** Update only the sections affected by code changes. If the doc's accuracy score is <= 2, regenerate the entire doc using its template.
 5. **Finalize.** Set `last_verified` to today on all updated docs. Update CLAUDE.md files if changes affect module structure, entry points, or dependencies.
+
+**Tier-specific regeneration triggers:**
+
+- **Internal tier:** regenerates when any file in the subsystem changes (current behavior).
+- **Interface tier:** regenerates only when a top-level export is added, removed, or renamed in the barrel (`src/<subsystem>/index.ts`), OR when a re-exported symbol's source file is renamed or its signature changes. This is a tighter trigger than internal tier — edits inside the subsystem that don't cross the barrel do not invalidate the interface doc. When UPDATE detects such a barrel-surface change, also refresh the `<repo-root>/docs/ai/AI_INDEX.md` and the `## Monorepo Interface Docs` section in `<repo-root>/CLAUDE.md`.
 
 ### UPDATE: ADR Extension
 
