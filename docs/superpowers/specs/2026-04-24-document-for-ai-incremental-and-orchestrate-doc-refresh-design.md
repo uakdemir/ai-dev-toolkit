@@ -16,7 +16,7 @@ The fix is two coupled changes: a non-interactive, diff-driven entry point in `d
 
 - **D1. New `--incremental` flag on `document-for-ai`, mandating `--since <git-ref>`.** `--incremental` implies `--mode update` strictly and silences all interactive prompts (tech-stack selection, monorepo scope prompt, mode-detection prompt). Passing `--incremental` without `--since`, or combining `--incremental` with `--mode {audit,generate,migrate}`, is a usage error — abort at argument parsing before any probe or prompt. *(Alternatives considered: overload `--mode update` with an optional `--since`. Rejected because keeping the interactive UPDATE path unchanged preserves the human-in-the-loop workflow; `--incremental` is the machine-callable subset and the naming advertises intent.)*
 - **D2. Affected-doc discovery is diff-driven, not user-driven.** `git diff --name-only <ref>..HEAD` produces the changed-files set; it is intersected with every AI-optimized doc's `code_paths` frontmatter to produce the affected-doc set. Step 1 (user prompt) and Step 2 (keyword matching) in the existing UPDATE flow are skipped entirely when `--incremental` is set. *(Alternatives: keep the keyword prompt, use the diff only for the git window. Rejected because it re-introduces an interactive step that cannot run under orchestrate auto.)*
-- **D3. `document-for-ai` commits its own refresh.** When affected-doc set is non-empty, regenerate per existing UPDATE step 4 logic, update `last_verified` to today, and commit with subject `docs(incremental): refresh for <short-ref>..HEAD` (or `docs(<prefix>): <slug>: refresh for <short-ref>..HEAD` when `--subject-slug <slug>` and `--subject-prefix <prefix>` are passed). When affected-doc set is empty, exit 0 with a one-line log and no commit. *(Alternatives: leave working tree dirty for the caller to commit. Rejected because it mirrors how `/implement` and code-review iters own their commits in the auto pipeline, and because it lets `/document-for-ai --incremental` stand alone as a user-invocable command outside orchestrate.)*
+- **D3. `document-for-ai` commits its own refresh.** When affected-doc set is non-empty, regenerate per existing UPDATE step 4 logic, update `last_verified` to today, and commit with subject `docs(incremental): refresh for <short-ref>..HEAD` (or `docs(<subject-prefix>): <subject-slug>: refresh for <short-ref>..HEAD` when `--subject-slug <slug>` and `--subject-prefix <prefix>` are passed). When affected-doc set is empty, exit 0 with a one-line log and no commit. *(Alternatives: leave working tree dirty for the caller to commit. Rejected because it mirrors how `/implement` and code-review iters own their commits in the auto pipeline, and because it lets `/document-for-ai --incremental` stand alone as a user-invocable command outside orchestrate.)*
 - **D4. New `--add-documentation` flag on `/orchestrate --auto`, end-of-spec cadence.** Stage iv dispatches `/document-for-ai --incremental --since <spec_baseline> --subject-prefix auto --subject-slug <spec-slug>` once per spec, after the existing no-op test gate and before the completion log. One call per spec, not per iteration — per-iter cost (N refresh runs per spec, some reverted by later iters) is not worth the marginal freshness. *(Alternatives: per-iteration refresh after each stage iii commit; unconditional default. Rejected: per-iter is expensive and churn-prone; unconditional default changes existing auto behavior and deserves explicit opt-in for at least one release.)*
 - **D5. Doc-refresh failures are non-fatal for the auto pipeline.** If the dispatched `document-for-ai` sub-call fails (non-zero exit, extractor abort, unresolved git ref), orchestrate logs `[auto] <spec-filename> > stage iv — documentation refresh failed (continuing)` and advances to the completion log. A stale doc is strictly less bad than a halted pipeline that just produced working code. *(Alternatives: fail the pipeline. Rejected because auto mode's value proposition is "walk away and it finishes"; doc refresh is a nice-to-have that should never revoke that.)*
 
@@ -80,13 +80,13 @@ Once all four pass, proceed.
 **Flow:**
 
 1. **Compute the changed-files set.** Run `git diff --name-only <ref>..HEAD`. Filter to files that exist in the working tree (deletions produce no doc to refresh; they are out of scope for this mode and are handled separately by AUDIT's orphan-detection). If the filtered set is empty, log `[incremental] no changed files in <short-ref>..HEAD — nothing to refresh` and exit 0 with no commit.
-2. **Infer scope and tech stack.** For each changed file, walk up to the nearest package root (first ancestor containing a stack-validation file per `references/tech-stacks.md`, or the repo root if none is found). Union of those roots is the effective scope. Stack is detected per package from the same validation files. If stack cannot be inferred for any touched package, abort with: `--incremental: unable to infer tech stack for <path>` — do not fall back to "Other" (that would require the interactive 3-question prompt, which is not permitted in this mode). Skip Step 1 (Tech Stack Selection) and Step 1.5 (Scope Detection) prompts entirely.
+2. **Infer scope and tech stack.** For each changed file, walk up to the nearest package root (first ancestor containing a stack-validation file per `references/tech-stacks.md`, or the repo root if none is found). Union of those roots is the effective scope. Stack is detected per package from the same validation files. Stack inference runs per-package; if stack cannot be inferred for any single touched package, abort the entire run immediately with: `--incremental: unable to infer tech stack for <path>` — do not skip the failing package and continue, do not fall back to "Other" (that would require the interactive 3-question prompt, which is not permitted in this mode). Skip Step 1 (Tech Stack Selection) and Step 1.5 (Scope Detection) prompts entirely.
 3. **Skip mode detection.** Mode is UPDATE. Do not sample existing docs, do not prompt "audit or update?".
-4. **Discover affected docs.** Enumerate AI-optimized docs (files under each in-scope package's `docs/ai/` with both `scope` and `purpose` in frontmatter). For each doc, load `code_paths` and compute intersection with the changed-files set. Non-empty intersection → doc is affected. Track interface-tier docs separately: an interface-tier doc is affected only if a changed file is the barrel listed in its `code_paths` OR is a source file of a symbol currently re-exported from that barrel (interface-tier regeneration trigger per SKILL.md:445). If the affected-doc set is empty after both tiers are considered, log `[incremental] 0 docs affected by <short-ref>..HEAD` and exit 0 with no commit.
+4. **Discover affected docs.** Enumerate AI-optimized docs (files under each in-scope package's `docs/ai/` with both `scope` and `purpose` in frontmatter). For each doc, load `code_paths` and compute intersection with the changed-files set. Non-empty intersection → doc is affected. Track interface-tier docs separately: an interface-tier doc is affected only if a changed file is the barrel listed in its `code_paths` OR is a source file of a symbol currently re-exported from that barrel (interface-tier regeneration trigger per SKILL.md:445). To determine which source files are re-exported, use the same extractor selected for the regeneration run (Serena preferred, grep fallback) and resolve `export * from` wildcards the same way Mode: GENERATE's Phase 1 does. If the extractor cannot resolve a wildcard, treat the barrel as affected (conservative). Add a failure-mode row for 'barrel parse fails': exit non-zero with the extractor's error message. If the affected-doc set is empty after both tiers are considered, log `[incremental] 0 docs affected by <short-ref>..HEAD` and exit 0 with no commit.
 5. **Regenerate affected sections.** Apply UPDATE step 4 logic per affected doc, with one override: the git window is fixed to `<ref>..HEAD` for every doc, replacing the per-doc `last_verified` lookup. This makes the refresh correspond 1:1 to the commit range the caller specified, regardless of each doc's `last_verified` date. If a doc's accuracy score is ≤ 2, regenerate the entire doc using its template per existing UPDATE logic.
 6. **Finalize frontmatter.** Set `last_verified` to today on every affected doc. Update `last_verified_symbol_count` when Phase 1 was rerun. Leave other frontmatter fields untouched unless the doc was fully regenerated.
-7. **Refresh CLAUDE.md hierarchy and AI_INDEX.md** only if the affected-doc set includes a doc whose regeneration changed the module map, entry points, or dependency list. Skip otherwise — the index files are expensive to rewrite and unaffected by most UPDATE runs.
-8. **Commit.** Subject: `<prefix>(<subject-prefix>): <subject-slug>: refresh docs for <short-ref>..HEAD` when both are passed; `<subject-prefix>: refresh docs for <short-ref>..HEAD` when only prefix is passed (slug omitted); `docs(incremental): refresh for <short-ref>..HEAD` when neither is passed. `<short-ref>` is the first 7 characters of `git rev-parse <ref>`. Stage only files under the affected packages' `docs/ai/` subtrees plus any changed CLAUDE.md / AI_INDEX.md files — never stage source code changes.
+7. **Refresh CLAUDE.md hierarchy and AI_INDEX.md** only if the affected-doc set includes a doc whose regeneration changed the module map, entry points, or dependency list. To detect this: compare the `## Entry Points` and `## Dependencies` sections of the old and new doc text using a line diff — if any line in those sections differs, treat this doc as having changed its module map. Skip otherwise — the index files are expensive to rewrite and unaffected by most UPDATE runs.
+8. **Commit.** Subject: `docs(<subject-prefix>): <subject-slug>: refresh docs for <short-ref>..HEAD` when both `--subject-prefix` and `--subject-slug` are passed; `docs(<subject-prefix>): refresh docs for <short-ref>..HEAD` when only `--subject-prefix` is passed (slug omitted); `docs(incremental): refresh for <short-ref>..HEAD` when neither is passed. `<short-ref>` is produced by `git rev-parse --short <ref>` (git picks the minimum unambiguous length). Stage only files under the affected packages' `docs/ai/` subtrees plus any changed CLAUDE.md / AI_INDEX.md files — never stage source code changes.
 9. **Output summary.** Print: `[incremental] <N> docs refreshed (<ref>..HEAD): <comma-separated doc paths>`. Include a tier breakdown when both tiers were touched: `(<i> internal, <j> interface)`.
 
 **Failure modes:**
@@ -100,7 +100,7 @@ Once all four pass, proceed.
 | Empty diff | Exit 0, no commit, one-line log |
 | Empty affected-doc set after intersection | Exit 0, no commit, one-line log |
 | Stack inference fails for a touched package | Abort with per-path diagnostic (no interactive fallback) |
-| Mid-run extractor failure | Existing fallthrough behavior (SKILL.md:220-222); self-check warnings still emitted |
+| Mid-run extractor failure | Existing extractor fallthrough behavior (see "Failure modes" subsection of "Structural extractor selection" in Mode: GENERATE); self-check warnings still emitted |
 | Commit fails (e.g. pre-commit hook) | Exit non-zero with the hook's error; do not amend or retry |
 
 **Interaction with existing flags:**
@@ -126,7 +126,7 @@ Add a bullet to the **Workflow Overview** reference-files list (SKILL.md:65-74) 
 
 ### 2a. Extend the auto-mode help/invocation surface
 
-In `ai-dev-tools/skills/orchestrate/SKILL.md` (or `references/common/help.md` — whichever currently documents auto-mode flags), add:
+In `ai-dev-tools/skills/orchestrate/references/common/help.md` (the FLAGS block that documents auto-mode flags), add:
 
 ```
 --add-documentation        After stage iv completes, dispatch
@@ -179,15 +179,39 @@ Add one optional state transition:
 
 - `docs-refreshed` — set after a successful doc-refresh dispatch; set to `docs-refresh-failed` with an `error` field on non-zero exit. Only present in state when `--add-documentation` was passed. Absent otherwise.
 
-Transition order: `code-review-iter-{N}-complete` → (optional `docs-refreshed` | `docs-refresh-failed`) → `finalized`.
+Transition order: `code-review-iter-{N}-complete` → (optional `docs-refreshed` | `docs-refresh-failed`) → `finalized`. The intermediate doc-refresh state is ephemeral: after writing `docs-refreshed` or `docs-refresh-failed`, immediately overwrite with `finalized` per the existing State Update section of stage-iv-verification-gate.md. `finalized` remains the terminal state in all cases; `docs-refreshed` and `docs-refresh-failed` are never the final value in auto-state.md.
+
+In `auto-state-schema.md`, add `docs-refreshed` and `docs-refresh-failed` to the State Enum list, AND update the Happy-Path Transitions diagram by inserting an optional branch after `code-review-iter-{N}-complete`: → (if --add-documentation) `docs-refreshed` → `finalized` | (on failure) `docs-refresh-failed` → `finalized`.
 
 ### 2e. Profiling log entry
 
-The doc-refresh dispatch appends one JSONL entry to the profiling log per the existing schema (`references/auto/profiling-log.md`). Fields: `spec`, `stage: "iv.5"`, `sub_skill: "document-for-ai"`, `flags: ["--incremental", "--since <ref>", "--subject-prefix auto", "--subject-slug <slug>"]`, `exit_code`, `wall_time_ms`, `docs_refreshed_count` (when exit_code is 0), `affected_doc_paths` (array, optional).
+The doc-refresh dispatch appends one JSONL entry to the profiling log per the existing schema (`references/auto/profiling-log.md`). Fields: `spec`, `stage: "iv.5"`, `sub_skill: "document-for-ai"`, `flags: ["--incremental", "--since <ref>", "--subject-prefix auto", "--subject-slug <slug>"]`, `exit_code`, `wall_time_ms`, `docs_refreshed_count` (when exit_code is 0), `affected_doc_paths` (array, optional), `stderr_excerpt` (string, first 500 characters of the sub-call's stderr; present only when exit_code is non-zero; omit when empty). The `stage` field is a free-form string — the existing profiling log schema imposes no pattern constraint on stage identifiers, so `"iv.5"` is valid alongside `"i"`, `"ii"`, `"iii"`, `"iv"`.
 
 ### 2f. Pre-pipeline validation (pipeline-overview.md:38-42)
 
 No change needed. `--add-documentation` is a pipeline modifier, not a spec arg; existing spec-arg validation is unaffected.
+
+### 2g. Document interface-tier limitation (`references/auto/pipeline-overview.md`)
+
+Add a **Known Limitations** subsection under the Pipeline table (after the stage rows). Content:
+
+```markdown
+**Known Limitations**
+
+- Interface-tier docs are not refreshed by `--add-documentation`. The doc-refresh call does not pass `--tier interface`; auto-mode specs rarely touch barrel files, and interface-tier docs have tight regeneration triggers with low churn. To refresh interface-tier docs, run `document-for-ai --incremental --since <ref> --tier interface` manually after the pipeline completes. A future `--tier auto-select` or per-package config may address this.
+```
+
+---
+
+## Acceptance Criteria
+
+1. `document-for-ai --incremental` without `--since` exits non-zero and prints `--incremental requires --since <git-ref>`.
+2. `document-for-ai --incremental --since HEAD~5` on a repo with no AI docs (empty affected-doc set) exits 0 with no commit.
+3. `document-for-ai --incremental --since HEAD~5 --subject-prefix auto --subject-slug myspec` on a repo where docs are affected produces a commit whose subject is exactly `docs(auto): myspec: refresh docs for <short>..HEAD` (where `<short>` is the output of `git rev-parse --short HEAD~5`).
+4. `document-for-ai --incremental --since HEAD~5 --mode generate` exits non-zero and prints `--incremental is incompatible with --mode generate`.
+5. `document-for-ai --incremental --since nonexistent-ref` exits non-zero and prints `--since: unable to resolve git ref nonexistent-ref`.
+6. `/orchestrate --auto <spec> --add-documentation` appends a JSONL entry with `stage: "iv.5"` to the profiling log after stage iv completes.
+7. If the `document-for-ai` sub-call exits non-zero, orchestrate logs the failure message and continues to the completion log without halting the pipeline.
 
 ---
 
@@ -199,8 +223,7 @@ Opt-in for at least one release. After soak on 3-5 real auto-mode runs, consider
 
 ## Open questions
 
-- **Q1. Short-ref length in commit subject.** 7 chars is the git default, but commits in a long-running repo can require 8-9 to disambiguate. Use `git rev-parse --short <ref>` (git picks the minimum unambiguous length) instead of hardcoding 7. *Resolution path: switch SKILL.md change 1b step 8 to use `--short` without a fixed length.*
-- **Q2. Interaction with `--tier interface` in orchestrate auto.** Auto-mode specs today don't pass `--tier`; orchestrate's doc-refresh call also won't. So interface-tier docs never refresh from auto runs. This is likely fine (interface docs have tight regeneration triggers and low churn), but worth naming so we don't silently ship a gap. *Resolution path: document the limitation in pipeline-overview.md and punt to a future `--tier auto-select` or per-package config.*
+None — all open questions resolved. Q1 (short-ref length) resolved: `git rev-parse --short` adopted in step 8. Q2 (interface-tier gap) resolved: documented as a known limitation in Change 2g.
 
 ---
 
