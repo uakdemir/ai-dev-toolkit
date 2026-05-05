@@ -314,9 +314,11 @@ The orchestrator maintains the following state across the loop:
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 
-After each fix phase, parse `tmp/_reviews_errors/review-doc-fix-report.json`: for each disposition (keyed by `id`), look up the corresponding issue's severity in `tmp/_reviews_errors/review-doc.json` (match by `id`, not by array position) and — when `action: "fixed"` — increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
+After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state so subsequent iterations need not re-resolve it. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`.
 
-**ID stability:** Issue IDs (`ISSUE-NNN`) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (same location AND same deficiency) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds.
+If a carried-forward `id` has been displaced from a later iteration's JSON (e.g., it dropped out of the active issues set), use the cached severity from the iteration where the id was first introduced — never silently skip a disposition just because its id is no longer in the latest JSON.
+
+**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker), so their IDs stay valid. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
 
 ## Status Logic
 
@@ -376,7 +378,7 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
         "additionalProperties": false,
         "required": ["id", "severity", "category", "location", "confidence", "problem", "suggested_fix"],
         "properties": {
-          "id": { "type": "string", "pattern": "^ISSUE-\\d{3}$" },
+          "id": { "type": "string", "pattern": "^ISSUE-\\d{3,}$" },
           "severity": { "type": "string", "enum": ["critical", "high", "medium"] },
           "category": { "type": "string", "enum": [
             "completeness", "consistency", "scope", "structure",

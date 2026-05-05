@@ -51,11 +51,13 @@ Fact-check every verifiable claim in each document against the actual source cod
 
 ## Output Format
 
-**Do NOT write markdown findings.** Instead, write structured JSON directly to `tmp/review-doc.json`.
+**Do NOT write markdown findings.** Instead, write structured JSON directly to `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active).
 
 ### Procedure
 
-1. Read `tmp/review-doc.json` (already written by the reviewer in this round). Note the largest existing `id` in the `issues` array — call this `next_id_seed = max(existing_ids) + 1` (or `1` if the array is empty). Existing IDs use the format `ISSUE-NNN` (zero-padded to 3 digits); parse the numeric suffix to compute the max.
+1. Read `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant — already written by the reviewer in this round).
+   - **Validate ID integrity first:** every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If any issue is missing the `id` field or has a malformed value, abort the fact-check with the error `"Reviewer output is malformed — id field invalid or missing on issue at index N. Restoring backup."` rather than guessing — the orchestrator will then restore the backup it took before dispatching you.
+   - Compute `next_id_seed = max(numeric suffix of every well-formed id) + 1`. Filter out malformed entries from this calculation so a single bad entry cannot poison the max. If the issues array is empty, set `next_id_seed = 1`.
 2. For each claim you verify, record the verdict.
 3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
    - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is `next_id_seed` zero-padded to 3 digits, then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
@@ -73,7 +75,7 @@ Fact-check every verifiable claim in each document against the actual source cod
    ```
 5. Compute `fact_check_accuracy`: `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
 6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues).
-7. Rewrite `tmp/review-doc.json` with the updated content using the Write tool.
+7. Rewrite `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) with the updated content using the Write tool.
 
 ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.
 

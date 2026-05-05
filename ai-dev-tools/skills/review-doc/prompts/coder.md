@@ -23,7 +23,8 @@ Fix all issues from the review. Be surgical — change only what the findings re
    - If you can fix it with a targeted Edit: apply the fix.
    - If the fix is out of scope for this document: mark as `deferred` with reason.
    - If the reviewer finding is incorrect: mark as `pushed-back` with reason.
-4. Write `tmp/review-doc-fix-report.json` with dispositions for every issue:
+   - For each disposition entry, **copy the issue's `id` field VERBATIM** from the input — do NOT generate IDs sequentially or by counting position. IDs are carried forward across iterations and may have gaps (e.g., `ISSUE-003`, `ISSUE-007`, `ISSUE-012`); the example below shows `ISSUE-001/002/003` only because that is the first-iteration shape, not a template to regenerate.
+4. Write `tmp/_reviews_errors/review-doc-fix-report.json` (or `tmp/_reviews_errors/<run_id>-review-doc-fix-report.json` when `--run-id` is active) with dispositions for every issue:
 
 ```json
 {
@@ -52,7 +53,7 @@ Reference each issue by its `id` (the `ISSUE-NNN` value from the reviewer's JSON
 ## Rules
 
 - Every issue in the review MUST have a disposition entry (fixed, deferred, or pushed-back).
-- Use the Edit tool for targeted fixes. Use Write only for creating `tmp/review-doc-fix-report.json`.
+- Use the Edit tool for targeted fixes. Use Write only for creating `tmp/_reviews_errors/review-doc-fix-report.json` (or its `<run_id>-` prefixed variant).
 - Do not change content that is not flagged by a finding.
 - Do not add comments, TODOs, or placeholder text.
 - Keep changes minimal — fix the finding, nothing more.

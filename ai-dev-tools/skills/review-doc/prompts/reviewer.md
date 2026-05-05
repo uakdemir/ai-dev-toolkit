@@ -7,7 +7,7 @@ You are an expert technical document reviewer. You combine completeness analysis
 
 ## Mission
 
-Review each document for completeness gaps, internal contradictions, implementability problems, and structural weaknesses. When multiple documents are provided, also check cross-file consistency. Write findings directly to `tmp/review-doc.json` as structured JSON.
+Review each document for completeness gaps, internal contradictions, implementability problems, and structural weaknesses. When multiple documents are provided, also check cross-file consistency. Write findings directly to `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active) as structured JSON.
 
 ## Inputs
 
@@ -106,13 +106,25 @@ After collecting all findings:
    - confidence 60-79 → `"high"`
    - confidence 40-59 → `"medium"`
 4. **Cap at 20** — include all critical + high first, then fill with medium by descending confidence. If critical + high exceed 20, raise the cap to include all of them.
-5. **Assign stable IDs** — assign each issue an `id` of the form `ISSUE-NNN` (zero-padded to 3 digits, e.g. `ISSUE-001`, `ISSUE-002`, ...). Sort the capped issues array by severity descending (critical → high → medium), with confidence descending as the tiebreaker, and alphabetical-by-location as the deterministic fallback; assign IDs sequentially in that order starting from `ISSUE-001`. **Stability across iterations:** if an existing `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`) is present from a prior iteration, read it first and carry forward existing IDs for issues that match (same location AND same deficiency); mint new IDs for genuinely new findings starting from `max(existing_id) + 1`. Never renumber existing IDs even if their underlying issues were fixed, deferred, or pushed back — IDs are append-only for the lifetime of the review session.
+5. **Assign stable IDs** — every issue gets an `id` of the form `ISSUE-NNN`, zero-padded to **at least** 3 digits (`ISSUE-001`, `ISSUE-007`, `ISSUE-1024`). The algorithm depends on whether a prior iteration's JSON exists.
+
+   **First, read the prior file** at `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active). If it doesn't exist, run the **fresh-start** branch below; otherwise run the **carry-forward** branch.
+
+   **Fresh-start branch (no prior file):** Sort the capped issues array by severity descending (critical → high → medium), with confidence descending as the tiebreaker and alphabetical-by-`location` as the deterministic fallback. Assign IDs sequentially in that order starting from `ISSUE-001`.
+
+   **Carry-forward branch (prior file exists):**
+   a. Compute `next_id_seed` as the largest numeric suffix across every well-formed id in the prior file's `issues` array, plus 1. A well-formed id matches `^ISSUE-\d{3,}$`; ignore malformed entries when computing the max. If the prior issues array is empty, set `next_id_seed = 1`.
+   b. For each issue in your current (capped, sorted) output, **match against prior issues using the tuple `(location exact string match, category enum exact match)`**. If exactly one prior issue matches, REUSE its `id`; the issue's other fields (severity, confidence, problem, suggested_fix) come from the CURRENT iteration — only the `id` is preserved. If multiple prior issues share the tuple, prefer the one with the highest confidence. If no prior issue matches, MINT a new id `ISSUE-NNN` from `next_id_seed`, then increment `next_id_seed`.
+   c. **Preserve every prior issue not re-discovered this iteration** — copy each unmatched prior entry forward verbatim (id, severity, category, location, confidence, problem, suggested_fix). This includes fact-check entries (`category: "fact-check"`) appended by the fact-checker in prior iterations: even though you do not produce fact-check issues yourself, you must not drop their IDs, or the append-only invariant breaks.
+   d. **Cap exemption:** Step 4's 20-cap applies ONLY to newly-minted IDs. Carried-forward issues (whether re-matched in 5b or copied through in 5c) are always included regardless of the cap, so external references to their IDs stay valid.
+
+   **Append-only invariant:** existing IDs are never renumbered, even if their underlying issues were fixed, deferred, or pushed back in a prior iteration. IDs stay attached to their finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. A change in an issue's severity bucket between iterations is normal and reflected in the current JSON; the id does not change.
 6. **Compute counts** — `critical_count` and `high_count` from the capped issues array.
 7. **Set fact-check fields** — `fact_check_claims: []` and `fact_check_accuracy: 100` (the fact-checker handles these separately).
 
 ## JSON Output Format
 
-Write `tmp/review-doc.json` using the Write tool with this exact structure:
+Write `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active) using the Write tool with this exact structure:
 
 ```json
 {
