@@ -56,11 +56,14 @@ Fact-check every verifiable claim in each document against the actual source cod
 ### Procedure
 
 1. Read `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant — already written by the reviewer in this round).
-   - **Validate ID integrity first:** every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If any issue is missing the `id` field or has a malformed value, abort the fact-check with the error `"Reviewer output is malformed — id field invalid or missing on issue at index N. Restoring backup."` rather than guessing — the orchestrator will then restore the backup it took before dispatching you.
+   - **Validate ID integrity first:** every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If any issue is missing the `id` field or has a malformed value, abort the fact-check by:
+     1. Leaving `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) UNCHANGED — do not write or modify it.
+     2. Returning a text response whose **first line begins with the literal sentinel `ABORT: `** followed by a one-line reason, e.g. `ABORT: Reviewer output is malformed — id field invalid or missing on issue at index N`.
+     The orchestrator detects the `ABORT:` prefix, restores the backup it took before dispatching you, prints a warning, and proceeds to the fixer using the original reviewer output.
    - Compute `next_id_seed = max(numeric suffix of every well-formed id) + 1`. Filter out malformed entries from this calculation so a single bad entry cannot poison the max. If the issues array is empty, set `next_id_seed = 1`.
 2. For each claim you verify, record the verdict.
 3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
-   - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is `next_id_seed` zero-padded to 3 digits, then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
+   - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is the decimal value of `next_id_seed` zero-padded to **at least** 3 digits (use more digits when `next_id_seed >= 1000`, e.g. `ISSUE-1024`); then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
    - `"category": "fact-check"`
    - `"location"`: the document section where the claim appears
    - `"problem"`: the claim text + your evidence
