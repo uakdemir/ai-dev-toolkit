@@ -106,8 +106,9 @@ After collecting all findings:
    - confidence 60-79 → `"high"`
    - confidence 40-59 → `"medium"`
 4. **Cap at 20** — include all critical + high first, then fill with medium by descending confidence. If critical + high exceed 20, raise the cap to include all of them.
-5. **Compute counts** — `critical_count` and `high_count` from the capped issues array.
-6. **Set fact-check fields** — `fact_check_claims: []` and `fact_check_accuracy: 100` (the fact-checker handles these separately).
+5. **Assign stable IDs** — assign each issue an `id` of the form `ISSUE-NNN` (zero-padded to 3 digits, e.g. `ISSUE-001`, `ISSUE-002`, ...). Sort the capped issues array by severity descending (critical → high → medium), with confidence descending as the tiebreaker, and alphabetical-by-location as the deterministic fallback; assign IDs sequentially in that order starting from `ISSUE-001`. **Stability across iterations:** if an existing `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`) is present from a prior iteration, read it first and carry forward existing IDs for issues that match (same location AND same deficiency); mint new IDs for genuinely new findings starting from `max(existing_id) + 1`. Never renumber existing IDs even if their underlying issues were fixed, deferred, or pushed back — IDs are append-only for the lifetime of the review session.
+6. **Compute counts** — `critical_count` and `high_count` from the capped issues array.
+7. **Set fact-check fields** — `fact_check_claims: []` and `fact_check_accuracy: 100` (the fact-checker handles these separately).
 
 ## JSON Output Format
 
@@ -121,6 +122,7 @@ Write `tmp/review-doc.json` using the Write tool with this exact structure:
   "fact_check_claims": [],
   "issues": [
     {
+      "id": "ISSUE-001",
       "severity": "critical",
       "category": "completeness",
       "location": "Section 3.2",
@@ -134,7 +136,7 @@ Write `tmp/review-doc.json` using the Write tool with this exact structure:
 
 Valid categories: completeness, consistency, scope, structure, vague-action, vague-step, dependency-gap, ordering-issue, agent-pitfall, missing-criteria, cross-reference.
 
-**Do NOT include** any fields beyond the 6 required per issue (severity, category, location, confidence, problem, suggested_fix). No `id`, `title`, `description`, `metadata`, or `summary` fields.
+**Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix). No `title`, `description`, `metadata`, or `summary` fields.
 
 ## Confidence Scoring Guide
 

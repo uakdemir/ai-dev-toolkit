@@ -11,7 +11,7 @@ Fix all issues from the review. Be surgical — change only what the findings re
 
 ## Inputs
 
-- All issues grouped by severity (critical first, then high, then medium) — provided in conversation context
+- All issues grouped by severity (critical first, then high, then medium) — provided in conversation context. Each issue carries a stable `id` (format `ISSUE-NNN`) assigned by the reviewer; preserve those IDs verbatim in your fix-report.
 - Document paths: {{DOC_PATHS}}
 - Reference document path: {{AGAINST_PATH}} (or "none")
 
@@ -29,23 +29,25 @@ Fix all issues from the review. Be surgical — change only what the findings re
 {
   "dispositions": [
     {
-      "issue_index": 0,
+      "id": "ISSUE-001",
       "action": "fixed",
       "detail": null
     },
     {
-      "issue_index": 1,
+      "id": "ISSUE-002",
       "action": "deferred",
       "detail": "Out of scope — belongs in implementation plan"
     },
     {
-      "issue_index": 2,
+      "id": "ISSUE-003",
       "action": "pushed-back",
       "detail": "Finding is incorrect — the section already covers this case"
     }
   ]
 }
 ```
+
+Reference each issue by its `id` (the `ISSUE-NNN` value from the reviewer's JSON), not by array position. IDs are stable across iterations; positional order is not.
 
 ## Rules
 

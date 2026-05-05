@@ -55,9 +55,10 @@ Fact-check every verifiable claim in each document against the actual source cod
 
 ### Procedure
 
-1. Read `tmp/review-doc.json` (already written by the reviewer in this round).
+1. Read `tmp/review-doc.json` (already written by the reviewer in this round). Note the largest existing `id` in the `issues` array — call this `next_id_seed = max(existing_ids) + 1` (or `1` if the array is empty). Existing IDs use the format `ISSUE-NNN` (zero-padded to 3 digits); parse the numeric suffix to compute the max.
 2. For each claim you verify, record the verdict.
 3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
+   - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is `next_id_seed` zero-padded to 3 digits, then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
    - `"category": "fact-check"`
    - `"location"`: the document section where the claim appears
    - `"problem"`: the claim text + your evidence

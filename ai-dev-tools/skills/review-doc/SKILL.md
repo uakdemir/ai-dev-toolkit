@@ -205,12 +205,12 @@ X/Y verifiable claims accurate (Z%)
 
 ## Remaining Issues (top 10 by severity)
 
-### 1. [Title]
+### ISSUE-NNN — [Title]
 **Severity:** high | **Category:** completeness | **Location:** Section 3.2
 **Problem:** ...
 **Status:** deferred -- reason
 
-[... up to 10 items]
+[... up to 10 items, each headed by its stable ISSUE-NNN id]
 ```
 
 Single file: show just the path (no count suffix).
@@ -267,10 +267,10 @@ After auto-triage, print a summary and commit applied fixes:
 ── Remaining Issues ────────────────────────────
 N issues triaged (H high, M medium).
 
-  [Applied]     #1 high: <title>
-  [Applied]     #2 medium: <title>
-  [Pushed back] #3 medium: <title> — <one-line reason>
-  [Deferred]    #4 medium: <title> — <one-line reason>
+  [Applied]     ISSUE-001 high: <title>
+  [Applied]     ISSUE-002 medium: <title>
+  [Pushed back] ISSUE-003 medium: <title> — <one-line reason>
+  [Deferred]    ISSUE-004 medium: <title> — <one-line reason>
 
 Applied: N | Deferred: N | Pushed back: N
 ```
@@ -279,12 +279,12 @@ If any fixes were applied, commit with: `fix(review-doc): apply N review suggest
 
 After all issues are processed, update `tmp/_reviews_errors/review-doc-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
-**Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first):
+**Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first). Use the issue's stable `id` from `review-doc.json` as the section header so future review iterations and human readers can cross-reference findings unambiguously:
 
 ```markdown
 ## Review-Doc Response — <date>
 
-### [N] — [Issue title derived from problem]
+### ISSUE-NNN — [Issue title derived from problem]
 **Status:** Applied | Deferred | Pushed back
 
 **[If Applied]**
@@ -314,7 +314,9 @@ The orchestrator maintains the following state across the loop:
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 
-After each fix phase, parse `tmp/_reviews_errors/review-doc-fix-report.json`: for each disposition with `action: "fixed"`, look up the issue's severity in `tmp/_reviews_errors/review-doc.json` and increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
+After each fix phase, parse `tmp/_reviews_errors/review-doc-fix-report.json`: for each disposition (keyed by `id`), look up the corresponding issue's severity in `tmp/_reviews_errors/review-doc.json` (match by `id`, not by array position) and — when `action: "fixed"` — increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`. Update counters before the file is overwritten in the next iteration.
+
+**ID stability:** Issue IDs (`ISSUE-NNN`) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (same location AND same deficiency) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds.
 
 ## Status Logic
 
@@ -336,10 +338,10 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 **Fixer model:** <configured model>
 **Issues found:** X critical, Y high, Z medium
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, early exit" | "0 criticals, loop complete" | "Max iterations reached" | "Fix phase failed: <error>"
-**Issues fixed:** [category] [severity] at [location]
-**Issues deferred:** [category] [severity] at [location] -- reason
-**Issues pushed back:** [category] [severity] at [location] -- reason
-**Issues found (no disposition):** [category] [severity] at [location], or "none"
+**Issues fixed:** [ISSUE-NNN] [category] [severity] at [location]
+**Issues deferred:** [ISSUE-NNN] [category] [severity] at [location] -- reason
+**Issues pushed back:** [ISSUE-NNN] [category] [severity] at [location] -- reason
+**Issues found (no disposition):** [ISSUE-NNN] [category] [severity] at [location], or "none"
 ```
 
 ## JSON Schema
@@ -372,8 +374,9 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["severity", "category", "location", "confidence", "problem", "suggested_fix"],
+        "required": ["id", "severity", "category", "location", "confidence", "problem", "suggested_fix"],
         "properties": {
+          "id": { "type": "string", "pattern": "^ISSUE-\\d{3}$" },
           "severity": { "type": "string", "enum": ["critical", "high", "medium"] },
           "category": { "type": "string", "enum": [
             "completeness", "consistency", "scope", "structure",
