@@ -4,23 +4,23 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 
 ---
 
-## Phase 1 — Cheap sonnet exploration
+## Phase 1 — Exploration (no fact-check)
 
 ```bash
 /review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1
 ```
 
-- Model: sonnet (default)
+- Model: inherited from caller session
 - No fact-check
 - Up to 2 iterations with early-exit on 0 criticals
 
-## Phase 2 — Rigorous opus + fact-check
+## Phase 2 — Rigorous (fact-check on)
 
 ```bash
-/review-doc <spec> --fact-check true --model opus --max-iterations 2 --run-id <run_id>-phase2
+/review-doc <spec> --fact-check true --max-iterations 2 --run-id <run_id>-phase2
 ```
 
-- Model: opus
+- Model: inherited from caller session
 - Fact-check enabled
 - Up to 2 iterations
 
@@ -46,8 +46,8 @@ After each phase completes, orchestrate checks `git diff --quiet <spec_path>`:
 
 After each phase dispatch (phase 1 and phase 2) returns, append one JSONL entry to the profiling log per the protocol in `references/auto/profiling-log.md`.
 
-- Phase 1 entry: `action=review-doc`, `round=1`, `model=sonnet`.
-- Phase 2 entry: `action=review-doc`, `round=2`, `model=opus`.
+- Phase 1 entry: `action=review-doc`, `round=1`, `model=inherited`.
+- Phase 2 entry: `action=review-doc`, `round=2`, `model=inherited`.
 - Write failures are silently swallowed; profiling never blocks the pipeline.
 
 ---

@@ -24,10 +24,10 @@ LOG="$LOG_DIR/ai-dev-tools.log"
 JSON Lines (JSONL). One JSON object per line.
 
 ```json
-{"schema_version":1,"ts":"2026-04-18T10:00:00Z","spec":"foo.md","action":"review-doc","round":1,"model":"sonnet","total_time_s":42.123}
-{"schema_version":1,"ts":"2026-04-18T10:00:45Z","spec":"foo.md","action":"review-doc","round":2,"model":"opus","total_time_s":88.307}
-{"schema_version":1,"ts":"2026-04-18T10:02:14Z","spec":"foo.md","action":"implement","round":1,"model":"opus","total_time_s":412.612}
-{"schema_version":1,"ts":"2026-04-18T10:09:07Z","spec":"foo.md","action":"review-code","round":1,"model":"opus","total_time_s":95.204}
+{"schema_version":2,"ts":"2026-04-18T10:00:00Z","spec":"foo.md","action":"review-doc","round":1,"model":"inherited","total_time_s":42.123}
+{"schema_version":2,"ts":"2026-04-18T10:00:45Z","spec":"foo.md","action":"review-doc","round":2,"model":"inherited","total_time_s":88.307}
+{"schema_version":2,"ts":"2026-04-18T10:02:14Z","spec":"foo.md","action":"implement","round":1,"model":"opus","total_time_s":412.612}
+{"schema_version":2,"ts":"2026-04-18T10:09:07Z","spec":"foo.md","action":"review-code","round":1,"model":"inherited","total_time_s":95.204}
 ```
 
 ---
@@ -36,12 +36,12 @@ JSON Lines (JSONL). One JSON object per line.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | integer | Log schema version. Current: `1`. Bump on any additive or breaking change to the field set or enum membership. Consumers SHOULD accept any `schema_version >= 1` whose required fields (`ts`, `spec`, `action`, `round`, `model`, `total_time_s`) remain present; newer schema_versions MUST only add fields or widen enums. Consumers MAY log and skip entries with unexpected `schema_version`. |
+| `schema_version` | integer | Log schema version. Current: `2`. Bump on any additive or breaking change to the field set or enum membership. Consumers SHOULD accept any `schema_version >= 1` whose required fields (`ts`, `spec`, `action`, `round`, `model`, `total_time_s`) remain present; newer schema_versions MUST only add fields or widen enums. Consumers MAY log and skip entries with unexpected `schema_version`. |
 | `ts` | string (ISO-8601 UTC, `Z`-suffixed) | Timestamp captured at dispatch **end** |
 | `spec` | string | Spec file basename (e.g. `"mobile-scaffold-integration-design.md"`) — basename, not full path |
 | `action` | enum: `"review-doc"` \| `"implement"` \| `"review-code"` | Which pipeline stage. Consumers MUST treat unknown values as opaque (forward compatibility). |
 | `round` | integer ≥ 1 | Phase/iteration ordinal within the action (see below) |
-| `model` | enum: `"sonnet"` \| `"opus"` | Logical model used by the sub-command. ALWAYS the effective model, never a "default" sentinel: `review-doc` phase 1 → `"sonnet"`, `review-doc` phase 2 → `"opus"`, `implement` → `"opus"`, `review-code` → `"opus"`. **Operational invariant:** orchestrate emits `model="opus"` for implement entries; if `/implement` is ever dispatched with a non-opus `--model` override, the emitted `model` value MUST reflect the effective model used (not a hardcoded default). |
+| `model` | string | Effective model for the dispatch. `review-doc` and `review-code` inherit the caller's session model and emit `"inherited"` (the skill pins no model). `implement` emits `"opus"`. **Operational invariant:** if `/implement` is ever dispatched with an explicit model override, the emitted value MUST reflect the effective model used. The `sonnet`/`opus` enum was widened to a free string in `schema_version` 2, when review-doc and review-code moved to session-inherited models. |
 | `total_time_s` | float | Wall-clock seconds from dispatch start to dispatch return. **Precision: 3 decimal places (millisecond resolution).** Formatted with `printf '%.3f'`. |
 
 ### Round semantics
@@ -109,7 +109,7 @@ Runs around every sub-agent dispatch:
 5. Append exactly one JSONL line using `printf` (single `write(2)` on glibc for lines < PIPE_BUF; see Concurrency safety):
    ```bash
    spec_basename=$(basename "$spec_path")
-   printf '{"schema_version":1,"ts":"%s","spec":"%s","action":"%s","round":%d,"model":"%s","total_time_s":%s}\n' \
+   printf '{"schema_version":2,"ts":"%s","spec":"%s","action":"%s","round":%d,"model":"%s","total_time_s":%s}\n' \
      "$ts" "$spec_basename" "$action" "$round" "$model" "$total_time_s" \
      >> "$LOG" 2>/dev/null || true
    ```
@@ -121,8 +121,8 @@ Runs around every sub-agent dispatch:
 For a phase-1 review-doc dispatch on spec `foo.md` that ran 42.123 seconds and ended at `2026-04-18T10:00:00Z`, the full append command issued is:
 
 ```bash
-printf '{"schema_version":1,"ts":"%s","spec":"%s","action":"%s","round":%d,"model":"%s","total_time_s":%s}\n' \
-  "2026-04-18T10:00:00Z" "foo.md" "review-doc" 1 "sonnet" "42.123" \
+printf '{"schema_version":2,"ts":"%s","spec":"%s","action":"%s","round":%d,"model":"%s","total_time_s":%s}\n' \
+  "2026-04-18T10:00:00Z" "foo.md" "review-doc" 1 "inherited" "42.123" \
   >> "$LOG" 2>/dev/null || true
 ```
 

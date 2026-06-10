@@ -5,7 +5,7 @@
 > If it is NOT, you have skipped stage ii (implement). **STOP. Go back and execute stage ii first.**
 > Do not proceed under any circumstances if this gate fails.
 
-Single phase, opus-only. Up to 4 iterations with early exit.
+Single phase. Up to 4 iterations with early exit.
 
 ---
 
@@ -62,7 +62,7 @@ Optimistic trust. Orchestrate does NOT validate review JSON for agent iii. Missi
 
 ## Profiling
 
-After each code-review iteration dispatch returns, append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=review-code`, `round=N` (iteration number 1–4), `model=opus`. Early-exit iterations that never dispatch produce no entry. Write failures are silently swallowed.
+After each code-review iteration dispatch returns, append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=review-code`, `round=N` (iteration number 1–4), `model=inherited`. Early-exit iterations that never dispatch produce no entry. Write failures are silently swallowed.
 
 ---
 
