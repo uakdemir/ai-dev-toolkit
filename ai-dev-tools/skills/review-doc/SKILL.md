@@ -14,8 +14,7 @@ Iterative document review. Dispatches a single merged reviewer to check complete
 Parse arguments after `/review-doc`:
 
 ```
-/review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
-            [--model <sonnet|opus>] --fact-check <true|false>
+/review-doc <path1> [path2 ...] [--against <ref-path>] --fact-check <true|false>
             [--max-iterations N] [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
@@ -23,14 +22,12 @@ Parse arguments after `/review-doc`:
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
-| `--model` | sonnet | sonnet, opus | Controls all dispatches: reviewer, fixer, and fact-checker |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
 | `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Honors option Y early-exit when pre-fix criticals == 0 |
-| `--effort` | high | low, medium, high | Thoroughness level passed to all agents |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
 
-**Removed flags:** `--min-model`, `--max-model` (clean break, no backward compat shim).
+**Removed flags:** `--min-model`, `--max-model`, `--model`, `--effort` (clean break, no backward compat shim). The reviewer, fixer, and fact-checker inherit the caller's session model and effort level — the skill pins neither.
 
 ### `--help` Output
 
@@ -46,17 +43,14 @@ between rounds. Fact-checker runs when --fact-check true is passed.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
-  --model <model>         All dispatches: reviewer + fixer + fact-checker
-                                                             (default: sonnet)
   --fact-check <bool>     Run fact-checker each iteration    (default: false)
   --max-iterations N      Safety cap, 0=skip                 (default: 3)
-  --effort <level>        Thoroughness: low, medium, high    (default: high)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
 
 Examples:
   /review-doc docs/spec.md                                  Default review
-  /review-doc docs/spec.md --fact-check true --model opus   Rigorous review
+  /review-doc docs/spec.md --fact-check true                Rigorous review
   /review-doc docs/spec.md --max-iterations 3               Up to 3 rounds
   /review-doc docs/spec.md --run-id k3m9p2q7_a1b2c3d4      Scoped output
 ```
@@ -85,27 +79,27 @@ Examples:
 **`--max-iterations >= 1`:** Run the simplified loop below. There is no separate single-pass mode — `--max-iterations 1` is just one iteration of the same loop.
 
 ```python
-# One invocation = one loop, one model, one fact-check setting
+# One invocation = one loop, one fact-check setting (model + effort inherited from caller session)
 for iter in 1..max_iterations:
-    review_with(model)                  # reviewer agent at configured model
+    review()                            # reviewer agent (inherits session model + effort)
     pre_fix_criticals = count(json)     # option Y: measured at review output, before fact-check
     if fact_check:
-        fact_check_with(model)          # appends fact-check issues to json; same model
+        fact_check()                    # appends fact-check issues to json
     total_criticals = count(json)       # re-count after fact-check (includes fact-check-added criticals)
     is_final_iter = (iter == max_iterations)
     if pre_fix_criticals == 0 and not is_final_iter:
         break                           # early-exit: no criticals, skip fix phase, skip remaining iters
     if total_criticals == 0:            # final iter, 0 criticals: skip fixer, clean exit
         break
-    fix_with(model)                     # fixer runs when total_criticals > 0
+    fix()                               # fixer runs when total_criticals > 0
 ```
 
 **Key behavioral properties:**
 1. No phase logic, no tier promotion, no hidden final gate.
 2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
 3. Early exit only on `pre_fix_criticals == 0` (option Y — always measure at review output, before fact-check).
-4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--model` and `--fact-check` settings.
-5. `--model` controls ALL dispatches in that invocation, including the fact-checker. Using `--model sonnet --fact-check true` runs the fact-checker at sonnet quality.
+4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
+5. All dispatches in that invocation — reviewer, fixer, and fact-checker — inherit the caller's session model and effort level. The skill pins neither.
 
 ## Agent Dispatch
 
@@ -113,12 +107,11 @@ All `agents/` and `prompts/` paths in this section are relative to this skill's 
 
 ### Reviewer
 
-The orchestrator dispatches a single reviewer agent at configured model.
+The orchestrator dispatches a single reviewer agent, inheriting the caller's session model and effort.
 
-Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>, model: <model>)`.
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`.
 
 The dispatch prompt must include:
-- The effort level (`--effort` value)
 - The document paths list:
   ```
   Documents to review:
@@ -138,7 +131,7 @@ Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json`
 
 **Abort detection contract:** the fact-checker signals a controlled abort (e.g., on malformed reviewer JSON) by leaving the JSON file unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, and proceeds to the fixer using the original reviewer output. Any other failure mode (agent crash, exception, no response) is treated identically: restore backup, print a generic warning, continue.
 
-Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>, model: <model>)`.
+Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>)`.
 
 The fact-checker:
 1. Reads `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`)
@@ -152,7 +145,7 @@ The fact-checker:
 
 Dispatched when `total_criticals > 0` after review (and optional fact-check).
 
-Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>, model: <model>)`.
+Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`.
 
 The dispatch prompt must include:
 - All issues grouped by severity
@@ -337,9 +330,8 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 ```markdown
 # Iteration N
 
-**Reviewer model:** <configured model>
+**Model/effort:** inherited from caller session
 **Agents:** 1 (merged reviewer) or 1 + fact-checker (when --fact-check true)
-**Fixer model:** <configured model>
 **Issues found:** X critical, Y high, Z medium
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, early exit" | "0 criticals, loop complete" | "Max iterations reached" | "Fix phase failed: <error>"
 **Issues fixed:** [ISSUE-NNN] [category] [severity] at [location]

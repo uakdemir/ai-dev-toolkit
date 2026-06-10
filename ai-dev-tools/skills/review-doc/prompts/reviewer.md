@@ -13,8 +13,6 @@ Review each document for completeness gaps, internal contradictions, implementab
 
 - Document paths: newline-separated list provided in dispatch prompt (may be a single path)
 - Reference document path: provided in dispatch prompt (or "none")
-- Effort level: provided in dispatch prompt (low/medium/high)
-  Interpret as: low = check only critical-severity issues, medium = check critical + high, high = full review of all severities.
 - Read the project's CLAUDE.md for conventions and constraints
 
 **Location format:** When multiple documents are provided, prefix each finding's location with the filename: `strategy.md > Section 3.2`. For cross-file findings, use: `strategy.md + module-map.md > Module counts`. When only one document is provided, omit the filename prefix.

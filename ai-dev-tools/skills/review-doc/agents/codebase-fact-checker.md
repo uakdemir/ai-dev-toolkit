@@ -14,7 +14,6 @@ Fact-check every verifiable claim in each document against the actual source cod
 - Documents to review (newline-separated list of paths provided in dispatch prompt; may be a single path)
 - The actual codebase to verify against
 - Read the project's CLAUDE.md for conventions
-- The `effort` level (low/medium/high) — passed in the dispatch prompt. Interpret as: low = check only critical-severity issues, medium = check critical + high, high = full review.
 
 ## What to Verify
 
