@@ -54,7 +54,7 @@ Both subcommands discover project directories the same way:
    - Do NOT use `turbo.json` -- it defines task pipelines, not package locations.
 
 2. **Fallback (always used for non-JS monorepos, or when no workspace config exists):**
-   - Scan: root directory + `*/` (depth-1) + `*/*/` (depth-2).
+   - Scan: walk down from root until a project marker (`package.json` / `*.csproj` / `pyproject.toml` / `go.mod`) is found in a directory, to a max depth of 4; report the scan depth used. (Replaces the previous fixed depth-2 walk, which missed depth-3 layouts like `packages/group/pkg/`.)
    - For non-JS monorepos (Python, .NET, etc.), this fallback is the primary discovery method since no `package.json` workspaces exist.
 
 3. **Exclusions (always applied):**

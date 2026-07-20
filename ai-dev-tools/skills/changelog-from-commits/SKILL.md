@@ -94,7 +94,7 @@ If no argument provided:
 ## Step 2: Collect
 
 ```
-git log --no-merges --format="%h%x00%s%x00%b%x00%aI" <range>
+git log -z --no-merges --format="%h%x1f%s%x1f%b%x1f%aI" <range>
 ```
 
 Collects per commit: short hash, subject line, body (for BREAKING CHANGE footer detection), and commit date (for heading date). Fields are null-byte delimited. Author is not collected.

@@ -65,7 +65,7 @@ references/edge-cases.md for the fallback flow.
 
 Scan ONLY the user's messages in the conversation. Do not scan LLM responses
 or tool results — they are verbose and waste context tokens. One exception:
-the TaskList tool may be invoked directly as a structured artifact — it is
+the TodoWrite tool may be invoked directly as a structured artifact — it is
 not part of conversation scanning (see In-Progress Skill Detection below).
 
 From user messages, extract:
@@ -86,7 +86,7 @@ From user messages, extract:
 
 ### In-Progress Skill Detection
 
-After scanning user messages, check TaskList for active tasks.
+After scanning user messages, check TodoWrite for active tasks.
 
 If tasks exist:
 1. Use task subjects, descriptions, and completion status as the primary
@@ -97,7 +97,7 @@ If tasks exist:
 3. If tasks are numbered sequentially, preserve ordering and terminology.
    Skill identification is not required — task order and subject are sufficient.
 
-If TaskList tool is unavailable or returns an error, skip In-Progress Skill Detection and rely on user-message scanning only. If TaskList returns no tasks or all tasks are completed: fall back to user-message scanning as sole source. Completed tasks may supplement the Done section.
+If TodoWrite tool is unavailable or returns an error, skip In-Progress Skill Detection and rely on user-message scanning only. If TodoWrite returns no tasks or all tasks are completed: fall back to user-message scanning as sole source. Completed tasks may supplement the Done section.
 
 Task list items take priority over conversation-derived items when they
 conflict. Conversation scanning fills gaps (decisions, gotchas) that

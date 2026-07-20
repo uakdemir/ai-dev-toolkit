@@ -13,7 +13,7 @@ Compare AI configs across discovered projects. Classify every section/key as:
 
 **Splitting:** Read each project's CLAUDE.md (check both `<project>/CLAUDE.md` and `<project>/.claude/CLAUDE.md`). Split by `##` headers into sections. Preamble (content before first `##`) is preserved verbatim and never diffed. `###` sub-headers belong to their parent `##` section -- they are not split boundaries.
 
-**Section matching** -- 3-step algorithm applied across all projects:
+**Section matching** -- 5-step algorithm applied across all projects:
 
 1. **Normalize** each header: lowercase, strip punctuation, strip leading numbering (`1.`, `2.`, `01.`), trim whitespace.
 2. **Exact match:** compare normalized headers. If identical, pair those sections.
