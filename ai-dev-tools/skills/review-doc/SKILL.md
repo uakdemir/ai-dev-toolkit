@@ -14,20 +14,23 @@ Iterative document review. Dispatches a single merged reviewer to check complete
 Parse arguments after `/review-doc`:
 
 ```
-/review-doc <path1> [path2 ...] [--against <ref-path>] --fact-check <true|false>
-            [--max-iterations N] [--run-id <id>] [--help]
+/review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
+            --fact-check <true|false> [--max-iterations N] [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
 
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
+| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker) |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
 | `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Honors option Y early-exit when pre-fix criticals == 0 |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
 
-**Removed flags:** `--min-model`, `--max-model`, `--model`, `--effort` (clean break, no backward compat shim). The reviewer, fixer, and fact-checker inherit the caller's session model and effort level — the skill pins neither.
+**Removed flags:** `--min-model`, `--max-model`, `--model` (clean break, no backward compat shim). The reviewer, fixer, and fact-checker inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
+
+If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
 
 ### `--help` Output
 
@@ -43,6 +46,7 @@ between rounds. Fact-checker runs when --fact-check true is passed.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
+  --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
   --fact-check <bool>     Run fact-checker each iteration    (default: false)
   --max-iterations N      Safety cap, 0=skip                 (default: 3)
   --run-id <id>           Prefix for output files            (default: none)
@@ -79,9 +83,9 @@ Examples:
 **`--max-iterations >= 1`:** Run the simplified loop below. There is no separate single-pass mode — `--max-iterations 1` is just one iteration of the same loop.
 
 ```python
-# One invocation = one loop, one fact-check setting (model + effort inherited from caller session)
+# One invocation = one loop, one fact-check setting (model inherited from caller session; effort pinned by --effort)
 for iter in 1..max_iterations:
-    review()                            # reviewer agent (inherits session model + effort)
+    review()                            # reviewer agent (inherits session model; runs at --effort level)
     pre_fix_criticals = count(json)     # option Y: measured at review output, before fact-check
     if fact_check:
         fact_check()                    # appends fact-check issues to json
@@ -99,7 +103,7 @@ for iter in 1..max_iterations:
 2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
 3. Early exit only on `pre_fix_criticals == 0` (option Y — always measure at review output, before fact-check).
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
-5. All dispatches in that invocation — reviewer, fixer, and fact-checker — inherit the caller's session model and effort level. The skill pins neither.
+5. All dispatches in that invocation — reviewer, fixer, and fact-checker — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
 
 ## Agent Dispatch
 
@@ -107,11 +111,12 @@ All `agents/` and `prompts/` paths in this section are relative to this skill's 
 
 ### Reviewer
 
-The orchestrator dispatches a single reviewer agent, inheriting the caller's session model and effort.
+The orchestrator dispatches a single reviewer agent, inheriting the caller's session model and running at the `--effort` reasoning level.
 
 Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`.
 
 The dispatch prompt must include:
+- The effort level (`--effort` value) as a reasoning-depth directive: `max` = exhaustive analysis; `xhigh`/`high` proportionally less. All severities stay in scope regardless.
 - The document paths list:
   ```
   Documents to review:
@@ -131,7 +136,7 @@ Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json`
 
 **Abort detection contract:** the fact-checker signals a controlled abort (e.g., on malformed reviewer JSON) by leaving the JSON file unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, and proceeds to the fixer using the original reviewer output. Any other failure mode (agent crash, exception, no response) is treated identically: restore backup, print a generic warning, continue.
 
-Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>)`.
+Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>)`. Include the effort level (`--effort` value) in the dispatch prompt.
 
 The fact-checker:
 1. Reads `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`)
@@ -148,6 +153,7 @@ Dispatched when `total_criticals > 0` after review (and optional fact-check).
 Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`.
 
 The dispatch prompt must include:
+- The effort level (`--effort` value) as a reasoning-depth directive
 - All issues grouped by severity
 - The document paths list
 - Reference document path (if `--against` provided)
@@ -330,7 +336,8 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 ```markdown
 # Iteration N
 
-**Model/effort:** inherited from caller session
+**Model:** inherited from caller session
+**Effort:** <--effort value>
 **Agents:** 1 (merged reviewer) or 1 + fact-checker (when --fact-check true)
 **Issues found:** X critical, Y high, Z medium
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, early exit" | "0 criticals, loop complete" | "Max iterations reached" | "Fix phase failed: <error>"

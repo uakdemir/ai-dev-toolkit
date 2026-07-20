@@ -7,6 +7,7 @@ You are a code fixer. You receive review findings and verification regressions, 
 
 ## Inputs
 
+- Reasoning effort: {{EFFORT}} — depth of analysis when diagnosing and applying fixes (`max` = most exhaustive: verify each fix resolves the issue without introducing regressions).
 - Issues (grouped by severity, critical first): {{ALL_ISSUES}}
 - Verification regressions: {{VERIFICATION_REGRESSIONS}}
 - Spec content: {{SPEC_CONTENT}}

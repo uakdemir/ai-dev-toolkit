@@ -5,23 +5,26 @@ description: "Use when reviewing recent commits for bugs, architecture violation
 
 # Review Code
 
-Iterative code review with automatic fix cycles. Reviews the last N commits, finds issues, fixes them, and verifies. Repeats until zero criticals and no verification regressions, or max iterations reached. A single agent (inheriting the caller's session model and effort) handles both review and fix phases. Tracks verification command regressions and maintains an append-only backlog of all issues found.
+Iterative code review with automatic fix cycles. Reviews the last N commits, finds issues, fixes them, and verifies. Repeats until zero criticals and no verification regressions, or max iterations reached. A single agent (inheriting the caller's session model, at the `--effort` reasoning level) handles both review and fix phases. Tracks verification command regressions and maintains an append-only backlog of all issues found.
 
 ## Argument Parsing
 
 ```
-/review-code <commit-count|git-ref> [--against <spec-path>] [--max-iterations N] [--verify "<cmd>"] [--run-id <id>] [--help]
+/review-code <commit-count|git-ref> [--against <spec-path>] [--effort <level>] [--max-iterations N] [--verify "<cmd>"] [--run-id <id>] [--help]
 ```
 
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <spec-path>` | none | any file path | Spec as implementation contract |
+| `--effort` | max | high, xhigh, max | Reasoning-effort level for the reviewer and fixer |
 | `--max-iterations` | 1 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
 | `--verify "<cmd>"` | none | any shell command | Repeatable — verification commands run after each fix |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional |
 | `--help` | — | — | Print usage and exit |
 
-**Removed flags:** `--max-model`, `--effort` (clean break, no backward-compat shim). The reviewer and fixer inherit the caller's session model and effort level — the skill pins neither.
+**Removed flags:** `--max-model` (clean break, no backward-compat shim). The reviewer and fixer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
+
+If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
 
 **Positional argument detection:**
 
@@ -52,6 +55,7 @@ zero criticals or cap.
 
 Flags:
   --against <spec-path>   Spec as implementation contract    (default: none)
+  --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
   --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 1)
   --verify "<cmd>"        Verification command (repeatable)  (default: none)
   --run-id <id>           Prefix for output files            (default: none)
@@ -103,7 +107,7 @@ This is review+fix behavior. Old single-pass users get the same review, plus aut
 For iteration 1 to max_iterations:
 
   REVIEW PHASE:
-    Dispatch single reviewer agent (inherits session model + effort)
+    Dispatch single reviewer agent (inherits session model; runs at --effort level)
     Agent produces tmp/_reviews_errors/review-code.json directly (no synthesis)
 
   VALIDATION:
@@ -123,7 +127,7 @@ For iteration 1 to max_iterations:
       Fall through to Fix Phase
 
   FIX PHASE (when critical_count > 0):
-    Dispatch fixer agent (inherits session model + effort)
+    Dispatch fixer agent (inherits session model; runs at --effort level)
     Fixer commits: "fix(review-code): resolve N issues from iteration M"
 
   VERIFICATION (post-fix):
@@ -138,7 +142,7 @@ No final-gate pattern for review-code. Since all rounds use the same single agen
 
 ## Reviewer Agent
 
-Single agent, inheriting the caller's session model and effort. Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the `--effort` value is substituted for `{{EFFORT}}` in `prompts/reviewer.md`). Receives:
 - Git diff (up to 3000 lines, strategically trimmed)
 - Spec content (if `--against` provided)
 - CLAUDE.md (if exists)
@@ -160,7 +164,7 @@ Read `prompts/reviewer.md` from this skill's directory for dispatch instructions
 
 ## Fixer Agent
 
-Single agent, inheriting the caller's session model and effort. Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the `--effort` value is substituted for `{{EFFORT}}` in `prompts/coder.md`). Receives:
 - All issues grouped by severity
 - Verification regressions (if any)
 - Spec content (if `--against` provided)
@@ -359,7 +363,8 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 ```markdown
 # Iteration N
 
-**Model/effort:** inherited from caller session
+**Model:** inherited from caller session
+**Effort:** <--effort value>
 **Scope:** last N commits | commits before_sha..after_sha
 **Issues found:** X critical, Y high, Z medium
 **Outcome:** "Fixed N issues (P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>"
