@@ -24,7 +24,7 @@ COMMANDS (ORCHESTRATE FLOW)
   /review-doc <path> [...]  Review specs and design documents
   /implement [path] [...]   Execute a plan or spec (task graph + dispatch)
   /document-for-ai          Generate AI-optimized docs (auto-invoked by orchestrate)
-  /review-code <N> <spec>   Review last N commits against a spec
+  /review-code <N|ref> [...]  Review recent commits for bugs & drift
 
 COMMANDS (INDEPENDENT QUALITY CHECKS)
   /changelog-from-commits   Generate release notes from git history
