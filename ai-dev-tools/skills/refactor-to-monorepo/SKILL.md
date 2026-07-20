@@ -114,7 +114,7 @@ Four phases, each building on the previous. Present findings at each user checkp
 
 While executing phases 1-3, the agent watches for non-obvious extraction hazards in parallel with the phase's primary analysis goal. These observations feed into checklist generation after Phase 4.
 
-**What to watch for:**
+**What to watch for:** (the rows below are Node.js/TypeScript-flavored — apply them only when Step 1 detected a Node/TS stack; for .NET/Python repos watch the stack-specific hazards from the crystallization checklists instead, not JS-only ones like `vi.mock` or pnpm phantom deps)
 
 | Category | What to look for | Example |
 |----------|-----------------|---------|
@@ -128,7 +128,7 @@ While executing phases 1-3, the agent watches for non-obvious extraction hazards
 
 **Tagging:** Each observation is tagged with the file path(s) where it was detected (e.g., `src/config/env.ts`). This tagging is used during artifact generation to associate observations with specific modules.
 
-**Quality bar:** Only record observations that are counter-intuitive, invisible at compile time, or cause silent runtime failures. If the accumulated list exceeds ~20 entries, keep only the most severe per category (prioritize silent runtime failures over build-time failures).
+**Quality bar:** Only record observations that are counter-intuitive, invisible at compile time, or cause silent runtime failures. If the accumulated list exceeds ~20 entries, keep the **top 3 per category** (prioritize silent runtime failures over build-time failures) and surface a one-line `N observations truncated` notice at the next checkpoint — never drop hazards silently.
 
 **Observations are NOT written to disk during phases 1-3.** They are held in conversation context only.
 
@@ -454,6 +454,8 @@ Load reference files only when needed to minimize context window usage:
 ## --next-unit Mode
 
 Trigger: invoked when a unit roadmap exists (`docs/monorepo-strategy/roadmap.md`) with unchecked items and the previous unit is finalized.
+
+**Precondition check (enforce, don't assume):** before generating the next unit's spec, read the immediately-prior `[x]` unit's spec and verify `Status: finalized`. If it is not finalized, print `Warning: previous unit '<prev>' is not finalized (Status: <status>) — generating the next spec may run ahead of unfinished work. Continue? [y/N]` and pause for explicit confirmation.
 
 **Behavior:**
 
