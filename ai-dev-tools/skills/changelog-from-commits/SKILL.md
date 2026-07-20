@@ -98,7 +98,7 @@ If no argument provided:
 git log -z --no-merges --format="%h%x1f%s%x1f%b%x1f%aI" <range>
 ```
 
-Collects per commit: short hash, subject line, body (for BREAKING CHANGE footer detection), and commit date (for heading date). Fields are null-byte delimited. Author is not collected.
+Collects per commit: short hash, subject line, body (for BREAKING CHANGE footer detection), and commit date (for heading date). Fields are `0x1F` (unit-separator) delimited and commits are NUL-delimited (`-z`), so multi-line bodies parse reliably: split the output on NUL for records, then each record on `0x1F` for fields. Author is not collected.
 
 If 0 commits: warn "No commits found in range." Do not write.
 

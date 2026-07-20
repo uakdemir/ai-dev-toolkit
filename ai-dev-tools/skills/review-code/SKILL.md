@@ -217,11 +217,13 @@ After each iteration, append all issues to `tmp/past-issues-backlog.md`:
 
 | File | Purpose | Consumer |
 |---|---|---|
-| `tmp/_reviews_errors/review-code.json` | Structured JSON from last iteration | Machines |
-| `tmp/_reviews_errors/review-code-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
-| `tmp/_reviews_errors/review-code-fix-report.json` | Coder dispositions per issue | Orchestrator |
+| `tmp/_reviews_errors/[<run_id>-]review-code.json` | Structured JSON from last iteration | Machines |
+| `tmp/_reviews_errors/[<run_id>-]review-code-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
+| `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json` | Coder dispositions per issue | Orchestrator |
 | `tmp/past-issues-backlog.md` | Full issue history across iterations | Pattern mining |
-| `tmp/_reviews_errors/review-code-iteration-N.md` | Per-iteration log | Debugging, audit |
+| `tmp/_reviews_errors/[<run_id>-]review-code-iteration-N.md` | Per-iteration log | Debugging, audit |
+
+**Run-id prefixing (applies throughout):** every `tmp/_reviews_errors/review-code*` path referenced anywhere in this document (Iteration Flow, Backlog, Terminal, Final Report, Respond, Cross-Iteration, Iteration Log, Schema) is prefixed to `tmp/_reviews_errors/<run_id>-review-code*` when `--run-id` is active — matching the run-id-aware paths the reviewer/fixer prompts write to. The `[<run_id>-]` prefix is elided inline for brevity and shown explicitly only in the Output Artifacts table above.
 
 ## Review Summary Format
 

@@ -63,7 +63,12 @@ const EXPORTED_SUBPATHS: string[] = [{EXPORTED_SUBPATHS}];
  */
 function getConsumerFiles(): string[] {
   const patterns = SOURCE_EXTENSIONS.map(ext => `**/*${ext}`);
-  const allFiles = patterns.flatMap(p => globSync(p, { exclude: (fp) => ['node_modules', '/dist/', '/build/', '/coverage/'].some(d => fp.includes(d)) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(fp) }));
+  const EXCLUDED_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage']);
+  const allFiles = patterns.flatMap(p => globSync(p, {
+    // fs.globSync passes `exclude` bare path segments / slash-less relative paths,
+    // so match on split segments (not `/dist/` substrings) plus a test/spec basename check.
+    exclude: (fp) => fp.split(/[\\/]/).some(seg => EXCLUDED_DIRS.has(seg)) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(fp),
+  }));
   const moduleDirResolved = path.resolve(MODULE_PATH);
   return allFiles.filter(f => !path.resolve(f).startsWith(moduleDirResolved + path.sep)
     && path.resolve(f) !== moduleDirResolved);

@@ -35,7 +35,7 @@ COMMANDS (INDEPENDENT QUALITY CHECKS)
   /consolidate <ai|lint|all>  Unify AI configs or linting rules across monorepo
   /refactor-to-monorepo     Analyze monolith, produce unit extraction roadmap
   /refactor-to-layers       Enforce layered architecture, produce unit roadmap
-  /scaffold --stack <name>  Bootstrap a project or add a package (node-fastify-react | expo)
+  /scaffold --stack <name>  Bootstrap a project or add a package (node-fastify-react | expo | dotnet-mvc-react)
 
   Run any command with --help for usage details.
 
