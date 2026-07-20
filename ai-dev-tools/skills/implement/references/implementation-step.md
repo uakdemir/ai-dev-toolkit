@@ -55,7 +55,7 @@ If implementation_estimate > remaining × 0.8 → subagent-per-task
   (also include in Reason line: "Consider clearing context first for single-agent (Option [3])")
 Else if coupling == HIGH → single-agent
 Else if task_count > 8 AND coupling == LOW → subagent-per-task
-Else if task_count >= 4 AND coupling != HIGH AND parallelism_ratio >= 0.30 → single-agent + parallel helper
+Else if task_count >= 4 AND coupling != HIGH AND parallelism_ratio >= 0.35 → single-agent + parallel helper
 Else → single-agent
 ```
 
@@ -79,13 +79,13 @@ Alternatives:
 Proceed with [N]?
 ```
 
-The "Parallelism yield" line is shown only when the yield check ran (task_count >= 4 and coupling != HIGH). When [4] is not eligible (ratio < 0.30), it still appears as an alternative but the recommendation does not point to it.
+The "Parallelism yield" line is shown only when the yield check ran (task_count >= 4 and coupling != HIGH). When [4] is not eligible (ratio < 0.35), it still appears as an alternative but the recommendation does not point to it.
 
 Any input other than 1, 2, 3, or 4 re-presents the options.
 
 **Auto mode (`--auto` flag):** When auto mode is active, the picker is not presented. The dispatch narrows to two options only: `{single-agent, single-agent + parallel helper}`. The threshold is the same (0.35). Options [2] and [3] are excluded. See `implement/SKILL.md` for the `--auto` algorithm.
 
-**Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit. Mode is persisted in the hint file; if mode was activated via `--strict` flag only and no hint file mode is set, the new session will prompt for mode selection again.
+**Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit.
 
 ---
 
@@ -116,12 +116,12 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    as BLOCKED and continue to the next task. Report all blocked
    tasks when execution completes.
 
-6. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
+5. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
    artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
    is active. This is for traceability in multi-agent pipelines.
 ```
 
-Override 6 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
+Override 5 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
 
 Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip.
 

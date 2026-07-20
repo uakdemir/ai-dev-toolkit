@@ -66,3 +66,13 @@ tmp/_reviews_errors/
 ```
 
 **Standalone usage (no `--run-id`):** skills write to un-prefixed filenames inside `tmp/_reviews_errors/` (e.g. `tmp/_reviews_errors/review-doc.json`). This moves the output path from the previous `tmp/review-doc.json` location.
+
+---
+
+## Gate Read Contract — critical count
+
+The auto-pipeline gates (stage-i / stage-iii early-exit, stage-i endless-loop, and the success check) read the critical count from each review JSON (`tmp/_reviews_errors/<run_id>-review-doc-phase<N>.json` or `-review-code-iter<N>.json`). The field is **`critical_count`**, recounted from the `issues[]` array by the review skill (a stale emitted value is never trusted). Read recipe:
+
+```bash
+jq '.critical_count' tmp/_reviews_errors/<run_id>-review-code-iter<N>.json
+```

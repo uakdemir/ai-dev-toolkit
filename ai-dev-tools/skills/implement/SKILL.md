@@ -6,7 +6,7 @@ description: "Use when the user wants to execute a written implementation plan o
 <help-text>
 /implement — execute a plan or spec
 
-Usage: /implement [path] [--model single|subagent|parallel] [--auto] [--run-id <id>]
+Usage: /implement [path] [--model single|subagent|parallel] [--auto] [--skip-plan-recommendation] [--run-id <id>]
 
 Arguments:
   path             Plan or spec file to implement. If omitted, uses the
@@ -19,6 +19,9 @@ Arguments:
   --auto           Non-interactive dispatch: narrows to {single, parallel}.
                    Excludes options [2] subagent-per-task and [3] clear-context.
                    Skips refactor-unit pre-check.
+  --skip-plan-recommendation
+                   Suppress the Step C spec recommendation prompt (this
+                   invocation only).
   --run-id <id>    Run-id threaded to dispatched sub-agents via override preamble.
   --help           Show this help
 

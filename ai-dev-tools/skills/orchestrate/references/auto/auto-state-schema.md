@@ -20,9 +20,6 @@ implement_head: hash2          # set when agent ii completes
                                # rollback target if code-review iter 1 crashes
 last_iteration_head: hash2b    # updates after each successful code-review iter
                                # rollback target if code-review iter N>1 crashes
-
-current_phase: 1               # 1 = spec-review phase 1, 2 = phase 2; null outside agent i
-current_phase_iteration: 3     # iteration counter within current_phase; resets at phase boundary
 ---
 ```
 
@@ -30,7 +27,7 @@ current_phase_iteration: 3     # iteration counter within current_phase; resets 
 
 ## State Enum
 
-- `spec-review-phase-1-iter-{N}-complete` (N = 1..3)
+- `spec-review-phase-1-iter-{N}-complete` (N = 1..2)
 - `spec-review-phase-1-complete`
 - `spec-review-phase-2-iter-{N}-complete` (N = 1..2)
 - `spec-review-phase-2-complete`
@@ -48,7 +45,7 @@ current_phase_iteration: 3     # iteration counter within current_phase; resets 
 ```
 (start)
   → spec-review-phase-1-iter-1-complete
-  → ... (up to iter 3)
+  → ... (up to iter 2)
   → spec-review-phase-1-complete
   → spec-review-phase-2-iter-1-complete
   → ... (up to iter 2)

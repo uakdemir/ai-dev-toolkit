@@ -37,6 +37,7 @@ After every successful agent iii iteration, orchestrate:
 2. Checks: `git diff --cached --quiet` — if exit code 0 (nothing staged), skip the commit but still update `last_iteration_head = HEAD`. This handles the 0-criticals early-exit case where the review found no issues and no fix phase ran.
 3. Commits (if staged changes exist): `fix(auto): <spec-slug>: code-review iter <N> — address findings`
 4. Updates `last_iteration_head = HEAD` in `auto-state.md`
+5. Updates `state = code-review-iter-<N>-complete` in `auto-state.md` (required — `stage-iv-verification-gate.md`'s GATE CHECK reads this)
 
 This commit is load-bearing for rollback anchors. The hash update in step 4 always runs regardless of whether a commit was created.
 
@@ -54,7 +55,7 @@ At iter 4's REVIEW output, pre-fix:
 
 ## Unusable-Output Policy
 
-Optimistic trust. Orchestrate does NOT validate review JSON for agent iii. Missing or malformed → treat as "no criticals" and advance. Residual criticals caught by the next iteration.
+Optimistic trust. Orchestrate does NOT validate review JSON for agent iii. Missing or malformed → treat as "no criticals" and advance. Residual criticals caught by the next iteration. This optimistic policy is authoritative for agent iii and **overrides** the generic crash-then-retry rule in `references/auto/failure-handling/retry-semantics.md`: a missing agent-iii artifact is advanced-as-clean, not retried.
 
 **Exception:** If iter 4 JSON is unreadable, assume critical count = 0 (fail open).
 
