@@ -1,5 +1,6 @@
 ---
 name: consolidate
+argument-hint: "<ai|lint|all>"
 description: Unify AI configs and linting rules across a monorepo. Diffs AI configs across projects, wires lint config inheritance, and offers direct unification where inheritance isn't available. Use /consolidate ai for AI configs, /consolidate lint for linting, /consolidate all for both.
 ---
 

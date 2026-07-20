@@ -1,5 +1,6 @@
 ---
 name: review-doc
+argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] --fact-check <true|false> [--max-iterations N] [--run-id <id>]"
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 

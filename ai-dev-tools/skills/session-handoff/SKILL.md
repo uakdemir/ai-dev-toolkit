@@ -1,5 +1,6 @@
 ---
 name: session-handoff
+argument-hint: "[flags]"
 description: "Use when the user wants to generate a handoff document for the next AI session, capture session progress, save context between sessions, create a session summary, preserve decisions and pending work, wrap up a session, or indicate they are done for now — even if they don't use the exact skill name."
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: refactor-to-layers
+argument-hint: "[--next-unit]"
 description: "Use when the user wants to enforce architectural layers within a module or project, add dependency direction rules, reduce AI agent context through structural boundaries, introduce provider/dependency injection patterns, or generate structural tests that enforce layer compliance — even if they don't use the term 'layers'."
 ---
 

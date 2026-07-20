@@ -1,5 +1,6 @@
 ---
 name: orchestrate
+argument-hint: "[--auto <spec...>] [--handoff] [--use-roadmap]"
 description: "Use when the user wants to start a development cycle, continue where they left off, check what's next, or run an automated brainstorm-review-implement-review-commit pipeline — even if they don't use the exact skill name."
 ---
 

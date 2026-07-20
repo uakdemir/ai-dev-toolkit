@@ -1,5 +1,6 @@
 ---
 name: test-audit
+argument-hint: "[path] [--changed] [--base <ref>]"
 description: "Use when the user wants to audit test quality, find coverage gaps, detect flaky tests, assess assertion quality, identify missing edge cases, prioritize test improvements, or evaluate test suite health — even if they don't use the exact skill name."
 ---
 

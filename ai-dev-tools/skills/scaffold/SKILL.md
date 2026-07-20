@@ -1,5 +1,6 @@
 ---
 name: scaffold
+argument-hint: "[--bootstrap | --add-package <name>] --stack <name> [--config <path>] [--yes]"
 description: "Use when the user wants to bootstrap a project from scratch, scaffold a new project, generate the initial CLAUDE.md/.claude/ layout for a fresh repo, or add a new package/feature to an existing scaffolded project — even if they don't use the exact skill name. Supports --bootstrap (fresh project) and --add-package <name> (add to existing). Stacks: node-fastify-react (monorepo), expo (single-package React Native), dotnet-mvc-react (stub). `--stack` is required on bootstrap (no default)."
 ---
 

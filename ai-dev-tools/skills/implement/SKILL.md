@@ -1,5 +1,6 @@
 ---
 name: implement
+argument-hint: "[path] [--model single|subagent|parallel] [--auto] [--skip-plan-recommendation]"
 description: "Use when the user wants to execute a written implementation plan or implement directly from a spec — generates a task graph, recommends an execution model, and dispatches with quality overrides. Invoked standalone (/implement <path>) or via orchestrate (/orchestrate (/implement <plan>))."
 ---
 

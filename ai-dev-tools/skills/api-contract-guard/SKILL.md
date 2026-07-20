@@ -1,5 +1,6 @@
 ---
 name: api-contract-guard
+argument-hint: "[flags]"
 description: "Use when the user wants to define module API boundaries, enforce that consumers import through barrel files, generate contract tests for module encapsulation, create index/barrel files for modules, or prevent AI agents from importing internal module paths — even if they don't use the exact skill name."
 ---
 

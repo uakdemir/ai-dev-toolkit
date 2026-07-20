@@ -1,5 +1,6 @@
 ---
 name: review-code
+argument-hint: '<commit-count|git-ref> [--against <spec>] [--effort high|xhigh|max] [--max-iterations N] [--verify "<cmd>"] [--run-id <id>]'
 description: "Use when reviewing recent commits for bugs, architecture violations, spec drift, security issues, and test gaps. Supports single-pass review and iterative review-fix-verify cycles. Invoke with /review-code <commit-count|git-ref>."
 ---
 

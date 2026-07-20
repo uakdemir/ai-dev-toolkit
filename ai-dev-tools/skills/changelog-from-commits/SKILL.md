@@ -1,5 +1,6 @@
 ---
 name: changelog-from-commits
+argument-hint: "[<range>] [--version <label>] [--since <ref>] [--last]"
 description: "Use when the user wants to generate release notes, create a changelog, produce a changelog from git history, document what changed between versions, summarize commits for a release, or group changes by type — even if they don't use the exact skill name."
 ---
 

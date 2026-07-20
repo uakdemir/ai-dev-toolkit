@@ -1,5 +1,6 @@
 ---
 name: convention-enforcer
+argument-hint: "[--re-analyze] [--skip-enforced] [--start-fresh]"
 description: "Use when the user wants to enforce coding conventions, prevent AI agent drift, harden linter rules, generate convention-based structural tests, detect naming/error handling/import/logging inconsistencies, or analyze a codebase for convention violations — even if they don't use the exact skill name."
 ---
 

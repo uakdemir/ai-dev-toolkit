@@ -1,5 +1,6 @@
 ---
 name: refactor-to-monorepo
+argument-hint: "[--next-unit]"
 description: "Use when the user wants to split a monolith into modules, identify module boundaries, analyze code coupling, plan a monorepo migration, evaluate monorepo tooling, or reduce codebase size for better AI agent efficiency — even if they don't explicitly say monorepo."
 ---
 
