@@ -28,7 +28,7 @@ git commit -m "fix(review-code): resolve N issues from iteration M"
 
 (Replace N with count of fixed issues, M with iteration number.)
 
-5. Write `tmp/review-code-fix-report.json` with dispositions for every issue in review-code.json (NOT verification regressions):
+5. Write `{{FIX_REPORT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json`) with dispositions for every issue (NOT verification regressions):
 
 ```json
 {
@@ -44,7 +44,7 @@ The `action` field must be either `"fixed"` or `"pushed-back"`. `"deferred"` is 
 ## Rules
 
 - Every issue must have a disposition entry.
-- Use Edit for targeted code fixes. Use Write only for `tmp/review-code-fix-report.json`.
+- Use Edit for targeted code fixes. Use Write only for `{{FIX_REPORT_PATH}}`.
 - Make minimal changes. Do not refactor surrounding code.
 - Do not add error handling, comments, or types beyond what's needed for the fix.
 - Do not introduce backward-compat shims, dual code paths, or `if old_format` branches when fixing — unless the spec or CLAUDE.md explicitly requires legacy support. Default policy is clean break; prefer deletion over deprecation.

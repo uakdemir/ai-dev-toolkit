@@ -29,10 +29,10 @@ If `--effort` is present, validate its value against the set `{high, xhigh, max}
 **Positional argument detection:**
 
 ```python
-if arg.isdigit() and len(arg) <= 6:  # no reasonable commit-count exceeds ~999,999;
-    mode = "count"                    # git short hashes default to 7+ chars
-elif git("rev-parse", "--verify", arg) succeeds:
+if git("rev-parse", "--verify", arg) succeeds:  # any resolvable ref wins — incl. an all-numeric branch/tag/SHA
     mode = "since"
+elif arg.isdigit():                             # numeric that is NOT a ref = commit count
+    mode = "count"
 else:
     error("Invalid argument: expected a commit count (integer) or a valid git ref.")
 ```
@@ -142,14 +142,14 @@ No final-gate pattern for review-code. Since all rounds use the same single agen
 
 ## Reviewer Agent
 
-Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the `--effort` value is substituted for `{{EFFORT}}` in `prompts/reviewer.md`). Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes `{{EFFORT}}` and the output path `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json` in `prompts/reviewer.md`). Receives:
 - Git diff (up to 3000 lines, strategically trimmed)
 - Spec content (if `--against` provided)
 - CLAUDE.md (if exists)
 - ADRs (scope-based filtering, up to 200 lines)
 - Previous iteration findings (if iteration > 1)
 
-Read `prompts/reviewer.md` from this skill's directory for dispatch instructions. The reviewer writes `tmp/_reviews_errors/review-code.json` directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
+Read `prompts/reviewer.md` from this skill's directory for dispatch instructions. The reviewer writes to the resolved `{{OUTPUT_PATH}}` (`tmp/_reviews_errors/[<run_id>-]review-code.json`) directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
 
 ## Context Budgets
 
@@ -164,7 +164,7 @@ Read `prompts/reviewer.md` from this skill's directory for dispatch instructions
 
 ## Fixer Agent
 
-Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the `--effort` value is substituted for `{{EFFORT}}` in `prompts/coder.md`). Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes `{{EFFORT}}` and `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json` in `prompts/coder.md`). Receives:
 - All issues grouped by severity
 - Verification regressions (if any)
 - Spec content (if `--against` provided)
@@ -173,10 +173,10 @@ Read `prompts/coder.md` from this skill's directory for dispatch instructions. E
 
 ## Verification Commands
 
-- Baseline captured before first iteration (run all `--verify` commands, record exit codes).
+- Baseline captured before first iteration: run each `--verify` command **twice**. A command whose two runs disagree on exit code is non-deterministic (flaky) — print `Warning: --verify command '<cmd>' is non-deterministic; excluded from regression detection.` and exclude it from all regression comparison. Record exit codes for the deterministic commands.
 - Run after each fix phase.
 - Compare to baseline: new non-zero exit = regression.
-- Regressions injected as synthetic critical issues (`category: "bug"`, `severity: "critical"`, `confidence: 85`).
+- Regressions injected as synthetic critical issues with all six schema-required fields: `severity: "critical"`, `category: "bug"`, `location: "<verify-cmd>"`, `confidence: 85`, `problem: "verification regression: <cmd> exit <n>"`, `suggested_fix: "restore <cmd> to passing"`.
 - Regression details persist between iterations, passed to both reviewer and fixer.
 - Verification command failures are NOT errors — they are data for regression comparison.
 

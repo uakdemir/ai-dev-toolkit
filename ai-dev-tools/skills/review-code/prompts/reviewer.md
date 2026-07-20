@@ -46,7 +46,7 @@ For files shown as stat-only summaries (no full diff included), use the Read too
 
 ## Output
 
-Write `tmp/review-code.json` using the Write tool. Use this exact schema:
+Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_reviews_errors/[<run_id>-]review-code.json`) using the Write tool. Use this exact schema:
 
 ```json
 {
