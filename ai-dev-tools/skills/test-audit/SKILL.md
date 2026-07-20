@@ -52,14 +52,14 @@ If "Other" is selected for tech stack, skip `references/tech-stacks.md` entirely
 
 ## Step 1: Tech Stack Selection
 
-Present these 6 options:
+Present these 4 options (keyed on backend — test patterns are backend-specific per `references/tech-stacks.md`):
 
-1. Node.js + React
-2. Node.js + Vue
-3. .NET + React
-4. .NET + Vue
-5. Python + React
-6. Other
+1. Node.js
+2. .NET
+3. Python
+4. Other
+
+For options 1-3, optionally note the frontend framework (React / Vue / other / none) — recorded for context only; it does not change the backend-keyed test patterns.
 
 **Sub-framework prompt:** After selection, ask for the specific sub-framework:
 
@@ -73,7 +73,7 @@ Present these 6 options:
 - **.NET** — "xUnit / NUnit / MSTest / Other?"
 - **Python** — "pytest / unittest / Other?"
 
-**Validation:** After selection (options 1-5), scan the project root for the stack's validation file as defined in `references/tech-stacks.md`. If missing, warn: "Expected {file} for {stack} but did not find it. Continue anyway?"
+**Validation:** After selection (options 1-3), scan the project root for the stack's validation file as defined in `references/tech-stacks.md`. If missing, warn: "Expected {file} for {stack} but did not find it. Continue anyway?"
 
 **If "Other" is selected,** ask these 5 follow-up questions:
 
@@ -126,7 +126,7 @@ Count production code LOC using `wc -l` on all source files matching stack exten
 | >30K LOC | **Prominent warning:** "This codebase is {N}K LOC. Codebases above 30K LOC are harder to test effectively and may benefit from structural decomposition first. Recommended: `/ai-dev-tools:refactor-to-monorepo`." Ask: "Proceed with audit anyway, or decompose first?" |
 
 If user proceeds despite warning:
-- Build full file inventory and test-to-source map in Discovery as one pass. Partition source files by top-level source directory for agent processing. Each agent batch receives the full test-to-source map but only source files for that partition. Findings accumulate, merged once in Step 6. Single strategy doc.
+- Build full file inventory and test-to-source map in Discovery as one pass. Partition the **source-reading** agents by top-level source directory; partition the **test-reading** agents (assertion-quality, flakiness) by top-level TEST directory (same greedy size-balanced scheme) so each agent's context stays within the >30K budget. Each agent batch receives the full test-to-source map but only the files for its partition. Findings accumulate, merged/deduped once in Step 6. Single strategy doc.
 - Inject a **critical finding at position #1** in the final report.
 
 If user chooses to decompose: exit gracefully with a pointer to refactor-to-monorepo.

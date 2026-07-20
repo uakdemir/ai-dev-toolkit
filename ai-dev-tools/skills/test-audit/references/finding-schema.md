@@ -181,7 +181,7 @@ critical_findings: N
 
 ## Human Summary Template
 
-Output path: `docs/tmp/test-audit-summary.md`
+Output path: `docs/test-audit/test-audit-summary.md`
 
 Header: `Generated from test audit on [date] — this is a one-time review document, not a source of truth.`
 
