@@ -109,7 +109,7 @@ for iter in 1..max_iterations:
 
 ## Agent Dispatch
 
-All `agents/` and `prompts/` paths in this section are relative to this skill's root directory (e.g., `ai-dev-tools/skills/review-doc/`).
+All `agents/` and `prompts/` paths in this section are relative to this skill's root directory (e.g., `${CLAUDE_SKILL_DIR}/`).
 
 ### Reviewer
 

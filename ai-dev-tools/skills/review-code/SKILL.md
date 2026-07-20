@@ -192,7 +192,7 @@ Scope-based filtering:
 ## Backlog Writing
 
 After each iteration, append all issues to `tmp/past-issues-backlog.md`:
-1. Read `ai-dev-tools/references/backlog-entry-format.md` for the entry template.
+1. Read `${CLAUDE_PLUGIN_ROOT}/references/backlog-entry-format.md` for the entry template.
 2. If `./tmp/past-issues-backlog.md` does not exist, create it with the standard header.
 3. Cross-reference with `tmp/_reviews_errors/review-code-fix-report.json` for dispositions (`fixed`, `pushed-back`).
 4. On stop-check iterations (no fix phase): all issues recorded as `status: found`.

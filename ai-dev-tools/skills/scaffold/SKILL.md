@@ -117,7 +117,7 @@ If neither `--bootstrap` nor `--add-package` is present, infer the mode from the
 
 ## Stack Resolution
 
-Every stack has a metadata file at `ai-dev-tools/skills/scaffold/templates/<stack>/stack.yaml`. Read it at invocation time to determine layout, `add_package_target_dir`, `package_dir_creates_settings`, `bootstrap_prereq`, and `template_version`.
+Every stack has a metadata file at `${CLAUDE_SKILL_DIR}/templates/<stack>/stack.yaml`. Read it at invocation time to determine layout, `add_package_target_dir`, `package_dir_creates_settings`, `bootstrap_prereq`, and `template_version`.
 
 **Resolution order on `--bootstrap`:**
 1. If `.scaffold-manifest.yaml` exists in cwd AND pins a stack → that's the stack (validate against `--stack` per § Manifest vs --stack disagreement).
@@ -140,7 +140,7 @@ If none of the `any_of:` entries match → exit with the `error_message` field a
 
 | Stack | Authoritative placeholder source |
 |---|---|
-| `node-fastify-react` | `ai-dev-tools/skills/scaffold/references/placeholder-resolution.md` |
+| `node-fastify-react` | `${CLAUDE_SKILL_DIR}/references/placeholder-resolution.md` |
 | `expo` | `${CLAUDE_SKILL_DIR}/references/placeholder-resolution-expo.md` |
 | `dotnet-mvc-react` | n/a (stub, no placeholders resolved) |
 
@@ -439,12 +439,12 @@ Manifests written by prior `/scaffold` versions use a bare-string `files:` list 
    - If no layer contains the path, keep the entry as-is with a warning: `"Could not infer source_layer for '<path>' — leaving unassigned. Refresh will treat this as orphaned (D)."`. The explicit basename check for `CLAUDE.local.md` (user-owned, never in the manifest) still applies: such entries should not appear in any old-format manifest and are discarded if they do.
 3. **Placeholder recovery.** Old-format manifests have no `placeholders:` map; the scaffold cannot run the byte-compare diff until placeholder values are known. The scaffold prompts interactively for every placeholder in the stack's authoritative placeholder list.
 
-   For `node-fastify-react`, the authoritative list lives at `ai-dev-tools/skills/scaffold/references/placeholder-resolution.md`. The migration logic reads this file under the following schema contract — each placeholder documented in the reference MUST expose:
+   For `node-fastify-react`, the authoritative list lives at `${CLAUDE_SKILL_DIR}/references/placeholder-resolution.md`. The migration logic reads this file under the following schema contract — each placeholder documented in the reference MUST expose:
    - `placeholder_name` (the `{{IDENTIFIER}}` token without braces)
    - `resolution_source` (where the value comes from — prompt, directory basename, config, etc.)
    - `default_value` (the value used if the user accepts the prompt default; may be empty)
 
-   Any additional fields in the reference are ignored by migration. If the reference cannot be parsed under this schema, migration aborts with: `"placeholder-resolution.md schema mismatch at ai-dev-tools/skills/scaffold/references/placeholder-resolution.md — expected columns/fields placeholder_name, resolution_source, default_value."`
+   Any additional fields in the reference are ignored by migration. If the reference cannot be parsed under this schema, migration aborts with: `"placeholder-resolution.md schema mismatch at ${CLAUDE_SKILL_DIR}/references/placeholder-resolution.md — expected columns/fields placeholder_name, resolution_source, default_value."`
 
    Each prompt shows the placeholder name, its documented resolution source, and a best-effort default derived the same way the original bootstrap would have. The user may accept defaults or override. All answers are written to the new `placeholders:` map before the first refresh diff runs.
 
@@ -485,12 +485,12 @@ Triggered by `--bootstrap --force` against a directory that already contains `.s
    ```
    WARNING: Major template version bump (1.x → 2.x) — layout or convention
    changes likely. Review the changelog at:
-     ai-dev-tools/skills/scaffold/templates/<stack>/CHANGELOG.md
+     ${CLAUDE_SKILL_DIR}/templates/<stack>/CHANGELOG.md
    ```
    If `CHANGELOG.md` is absent for the stack, print instead:
    ```
    WARNING: Major template version bump (1.x → 2.x) — changelog not found at
-     ai-dev-tools/skills/scaffold/templates/<stack>/CHANGELOG.md
+     ${CLAUDE_SKILL_DIR}/templates/<stack>/CHANGELOG.md
      Review the template diff manually.
    ```
 
