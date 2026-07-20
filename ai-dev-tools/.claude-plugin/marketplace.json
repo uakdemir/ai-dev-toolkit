@@ -1,12 +1,28 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "ai-dev-tools",
+  "description": "AI-native development automation — orchestration, AI-optimized docs, monorepo refactoring strategy, layer/convention/API-contract enforcement, and code & test review.",
   "owner": {
-    "name": "ai-dev-tools"
+    "name": "Umut Akdemir",
+    "url": "https://github.com/uakdemir"
   },
   "plugins": [
     {
       "name": "ai-dev-tools",
-      "source": "./"
+      "source": "./",
+      "description": "AI-optimized documentation, monorepo/layer/convention/API-contract refactoring & enforcement, and brainstorm→review→implement→review development-cycle orchestration.",
+      "category": "development",
+      "keywords": [
+        "documentation",
+        "monorepo-refactoring",
+        "layer-enforcement",
+        "convention-enforcement",
+        "api-contracts",
+        "orchestration",
+        "code-review",
+        "test-audit",
+        "automation"
+      ]
     }
   ]
 }
