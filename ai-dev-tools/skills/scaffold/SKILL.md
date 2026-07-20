@@ -68,7 +68,7 @@ If both `--bootstrap` and `--add-package` are present → error:
 
 ### `--stack` allowlist
 
-The fixed allowlist is `["node-fastify-react", "dotnet-mvc-react", "expo"]`. If `--stack <name>` is present and `<name>` is not in the allowlist → error:
+The allowlist is the set of subdirectory names under `templates/` (single source of truth), derived at runtime — currently `["node-fastify-react", "dotnet-mvc-react", "expo"]`. (The literal stack lists elsewhere in this doc are illustrative and must match the `templates/` set.) If `--stack <name>` is present and `<name>` is not in the allowlist → error:
 
 ```
 [scaffold] Unknown stack '<name>'. Valid stacks: node-fastify-react, dotnet-mvc-react, expo
@@ -141,7 +141,7 @@ If none of the `any_of:` entries match → exit with the `error_message` field a
 | Stack | Authoritative placeholder source |
 |---|---|
 | `node-fastify-react` | `ai-dev-tools/skills/scaffold/references/placeholder-resolution.md` |
-| `expo` | Mobile Scaffold Integration spec § Section 3 root-layer and package-layer placeholder tables (`{{PROJECT_NAME}}`, `{{STACK_DECISIONS_DOC_PATH}}`, `{{FEATURE_NAME}}`, `{{FEATURE_DESCRIPTION}}`, `{{RELATED_SDKS}}`) |
+| `expo` | `${CLAUDE_SKILL_DIR}/references/placeholder-resolution-expo.md` |
 | `dotnet-mvc-react` | n/a (stub, no placeholders resolved) |
 
 The high-level resolution order is:
@@ -164,7 +164,7 @@ On `n` → exit without writing any files. No partial state, no manifest update.
 - **Per-layer substitution.** Placeholder substitution happens per-layer on raw template bytes BEFORE any append or deep-merge (Change 3 dispatch; see § Technology Layer Dispatch).
 - **Single flat namespace.** The manifest `placeholders:` map is a single flat namespace applied uniformly across every layer. If two layers reference the same token they both receive the same value; template authors MUST use distinct placeholder names for distinct values.
 - **Blank-value line dropping.** For specific placeholders documented as "omit if blank" (notably `{{STACK_DECISIONS_DOC_PATH}}` for expo), if the resolved value is the empty string, the entire line containing the placeholder is dropped from the output. This prevents broken file references in generated projects.
-- **Literal `{{X}}` escape syntax.** Template authors who need a literal `{{IDENTIFIER}}` token in generated output write it as `{{{{IDENTIFIER}}}}` in the template source. After all placeholder substitution completes, the substitution pass replaces every `{{{{` with `{{` and every `}}}}` with `}}`.
+- **Literal `{{X}}` escape syntax.** Template authors who need a literal `{{IDENTIFIER}}` token in generated output write it as `{{{{IDENTIFIER}}}}` in the template source. **Ordering (important):** BEFORE the placeholder-substitution pass, replace every `{{{{` and `}}}}` with a unique sentinel (e.g. NUL-delimited `\x00LBRACE\x00` / `\x00RBRACE\x00`) so the inner `{{IDENTIFIER}}` is NOT substituted; run substitution; then restore the sentinels to literal `{{` / `}}`. Collapsing `{{{{`→`{{` only AFTER substitution would wrongly substitute an escaped token that is also a real placeholder name.
 - **Strict identifier regex.** Placeholder tokens match the regex `\{\{([A-Z][A-Z0-9_]*)\}\}`: must start with two braces + an uppercase letter, allow uppercase/digit/underscore after. Markdown or documentation prose with lowercase `{{x}}` or `{{ something }}` does NOT trigger substitution.
 
 ### New-placeholder discovery (refresh)
@@ -301,7 +301,7 @@ The technology-layer write rules (same for every stack) form a canonical three-r
 | All other files under `technology/` | Direct write to the same relative path in the project root. Example: `technology/lib/revenuecat/CLAUDE.md` → `<project>/lib/revenuecat/CLAUDE.md`. Single-layer file — manifest entry uses `source_layer: technology`. |
 
 **Deep-merge rules for `.claude/settings.json`:**
-- **Array-valued keys** (e.g., `hooks`, `sandbox.network.allowedHosts`): concatenate — root values first, then technology values appended. Preserve order.
+- **Array-valued keys** (e.g., `hooks`, `sandbox.network.allowedHosts`): concatenate — root values first, then technology values appended — then **de-duplicate** (drop later duplicates, keep first-seen order), so a host/hook listed by both layers appears once.
 - **Scalar-valued keys** (string/number/bool): technology value wins on conflict.
 - **Object-valued keys**: recurse the deep-merge rule.
 - `sandbox.network.allowedHosts` is the canonical JSON path; do NOT use a top-level `network.allowedHosts` key.
