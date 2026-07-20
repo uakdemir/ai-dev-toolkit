@@ -131,7 +131,7 @@ dotnet_diagnostic.CA1031.severity = warning
 @typescript-eslint/naming-convention
 ```
 
-Example config enforcing camelCase for functions and PascalCase for classes:
+Config enforcing the CONFIRMED convention — substitute `{FUNCTION_CASE}` / `{CLASS_CASE}` from the detected `dominant_pattern` per scope (camelCase/PascalCase shown as the common default; a snake_case project gets `snake_case` here instead):
 
 **Legacy JSON (`.eslintrc.json`) insertion:**
 
@@ -141,8 +141,8 @@ Example config enforcing camelCase for functions and PascalCase for classes:
   "rules": {
     "@typescript-eslint/naming-convention": [
       "error",
-      { "selector": "function", "format": ["camelCase"] },
-      { "selector": "class", "format": ["PascalCase"] }
+      { "selector": "function", "format": ["{FUNCTION_CASE}"] },
+      { "selector": "class", "format": ["{CLASS_CASE}"] }
     ]
   }
 }
@@ -156,8 +156,8 @@ Example config enforcing camelCase for functions and PascalCase for classes:
   rules: {
     "@typescript-eslint/naming-convention": [
       "error",
-      { selector: "function", format: ["camelCase"] },
-      { selector: "class", format: ["PascalCase"] },
+      { selector: "function", format: ["{FUNCTION_CASE}"] },
+      { selector: "class", format: ["{CLASS_CASE}"] },
     ],
   },
 },

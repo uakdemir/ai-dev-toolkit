@@ -120,7 +120,7 @@ If previous artifacts exist, present three options:
 
 Read `references/agent-prompts.md` now.
 
-Substitute `{stack}`, `{scope}`, and `{exclusions}` in the prompt templates from the reference file.
+Substitute `{stack}`, `{scope}`, `{exclusions}`, `{di_patterns_from_tech_stacks}`, `{di_detection_from_tech_stacks}`, and `{endpoint_detection_from_tech_stacks}` in the prompt templates from the reference file. Re-read the relevant `references/tech-stacks.md` sections (loaded back at Step 1) before dispatch to fill the three DI/endpoint placeholders.
 
 **Preferred:** Dispatch Core Agent + Discovery Agent in parallel — two Agent tool invocations in a single message. Each agent receives the detected stack, scope, and output format requirements. Results are returned independently and merged in Step 5.
 
