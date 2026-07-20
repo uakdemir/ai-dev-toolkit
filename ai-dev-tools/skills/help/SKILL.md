@@ -32,10 +32,10 @@ COMMANDS (INDEPENDENT QUALITY CHECKS)
   /test-audit               Audit test quality and coverage gaps
   /convention-enforcer      Detect and enforce coding conventions
   /api-contract-guard       Enforce module API boundaries via barrel files
-  /consolidate <ai|lint>    Unify AI configs or linting rules across monorepo
+  /consolidate <ai|lint|all>  Unify AI configs or linting rules across monorepo
   /refactor-to-monorepo     Analyze monolith, produce unit extraction roadmap
   /refactor-to-layers       Enforce layered architecture, produce unit roadmap
-  /scaffold                 Bootstrap a monorepo or add a package (node-fastify-react)
+  /scaffold --stack <name>  Bootstrap a project or add a package (node-fastify-react | expo)
 
   Run any command with --help for usage details.
 
