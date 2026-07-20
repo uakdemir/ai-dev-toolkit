@@ -39,9 +39,12 @@ public class LayerBoundaryTests {
     static string? ToLayer(string ns) =>
         LayerNS.FirstOrDefault(kv => kv.Value.Any(p => ns.StartsWith(p))).Key;
 
+    // NOTE: replace "MyApp" throughout (LayerNS + namespaces) with your project's ROOT namespace,
+    // and any placeholder type with a real one — otherwise these tests match nothing (silently green) or won't compile.
     [Fact] public void NoBoundaryViolations() {
         foreach (var (layer, forbidden) in Forbidden)
         foreach (var file in Directory.EnumerateFiles(".", "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains("/bin/") && !f.Contains("/obj/") && !f.Contains(@"\bin\") && !f.Contains(@"\obj\"))
                      .Where(f => LayerNS[layer].Any(ns => f.Contains(ns.Replace("MyApp.", "")))))
         foreach (var usingNs in ExtractUsings(file)) {
             var target = ToLayer(usingNs);
@@ -49,14 +52,8 @@ public class LayerBoundaryTests {
         }
     }
 
-    // Also validate <ProjectReference> in .csproj files for project-level violations.
-    [Fact] public void NoCsprojBoundaryViolations() {
-        foreach (var f in Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories)) {
-            var refs = Regex.Matches(File.ReadAllText(f), @"<ProjectReference\s+Include=""([^""]+)""")
-                            .Cast<Match>().Select(m => m.Groups[1].Value);
-            // match ref filenames to layer names and assert no forbidden project dependencies
-        }
-    }
+    // NOTE: a real <ProjectReference> csproj-boundary check is a deferred follow-up.
+    // (Removed the assertion-less NoCsprojBoundaryViolations [Fact] that always passed.)
 }
 ```
 

@@ -57,7 +57,7 @@ Present these 6 options:
 
 **Sub-framework prompt:** After selection, ask for the specific sub-framework. The sub-framework affects layer detection heuristics and composition root patterns:
 
-- **Node.js** — "Fastify / Express / NestJS / Other?"
+- **Node.js** — "Fastify / Other?"  (only Fastify has backed composition-root/provider heuristics; Express/NestJS support is a deferred follow-up)
 - **.NET** — "MVC Controllers / Minimal APIs / Other?"
 - **Python** — "FastAPI / Django / Flask / Other?"
 

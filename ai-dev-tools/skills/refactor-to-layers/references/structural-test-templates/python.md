@@ -40,10 +40,15 @@ def extract_imports(f: Path) -> list[str]:
            [n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module]
 
 def resolve_to_layer(imp: str) -> str | None:
-    folder = imp.replace(".", "/")
+    # Match folder path segments against the import's dotted segments on BOUNDARIES,
+    # not by raw substring (e.g. folder "api" must NOT match inside module "therapist").
+    imp_segments = imp.split(".")
     for layer, folders in LAYER_FOLDERS.items():
-        if any(f.replace("/", ".") in imp or folder.startswith(f) for f in folders):
-            return layer
+        for f in folders:
+            f_segments = [s for s in f.strip("/").split("/") if s]
+            n = len(f_segments)
+            if n and any(imp_segments[i:i + n] == f_segments for i in range(len(imp_segments) - n + 1)):
+                return layer
     return None
 
 def test_layer_boundaries() -> None:

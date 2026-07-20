@@ -65,7 +65,7 @@ describe('Layer boundary enforcement', () => {
   for (const [layer, forbidden] of Object.entries(FORBIDDEN)) {
     test(`${layer} layer must not import forbidden layers`, () => {
       // Resolve files from all canonical folders for this layer
-      const files = (LAYER_FOLDERS[layer] || []).flatMap(f => glob.sync(`${f}/**/*.ts`));
+      const files = (LAYER_FOLDERS[layer] || []).flatMap(f => glob.sync(`${f}/**/*.{ts,tsx,js,jsx,vue}`));
       for (const file of files) {
         const imports = extractImports(file);
         for (const imp of imports) {
