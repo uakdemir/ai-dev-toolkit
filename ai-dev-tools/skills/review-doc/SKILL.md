@@ -86,6 +86,7 @@ Examples:
 # One invocation = one loop, one fact-check setting (model inherited from caller session; effort pinned by --effort)
 for iter in 1..max_iterations:
     review()                            # reviewer agent (inherits session model; runs at --effort level)
+    validate(json)                      # schema-check reviewer output; retry review once on failure, abort iteration on 2nd
     pre_fix_criticals = count(json)     # option Y: measured at review output, before fact-check
     if fact_check:
         fact_check()                    # appends fact-check issues to json
@@ -104,6 +105,7 @@ for iter in 1..max_iterations:
 3. Early exit only on `pre_fix_criticals == 0` (option Y — always measure at review output, before fact-check).
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
 5. All dispatches in that invocation — reviewer, fixer, and fact-checker — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
+6. `validate(json)` runs right after `review()`: schema-check the reviewer's JSON; on invalid JSON or a schema failure, retry the reviewer once, and abort the iteration on a second failure (mirrors review-code's Validation step + Error Handling).
 
 ## Agent Dispatch
 
@@ -233,6 +235,8 @@ Review Doc Complete
   Summary: tmp/_reviews_errors/[<run_id>-]review-doc-summary.md
   Full review: tmp/_reviews_errors/[<run_id>-]review-doc.json
 ```
+
+When `--fact-check false` (default), replace the `Fact-check:` line — in both this terminal output and the summary's `## Fact-Check Accuracy` section — with `Fact-check: not run`.
 
 The `Reviewed:` line supports three formats:
 - Single file: `Reviewed: <doc-path>` (unchanged)

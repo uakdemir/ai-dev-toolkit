@@ -23,7 +23,7 @@ Fact-check every verifiable claim in each document against the actual source cod
 
 **Line number accuracy:**
 - For every `file:line` reference, read the file and check that the referenced code is actually at that line
-- Flag line numbers that are off by more than 5 lines (code may have shifted)
+- Classify each `file:line` offset per the Verification Rules bands (1-2 = ACCURATE, 3-5 = PARTIALLY ACCURATE, >5 = STALE) — not a single ">5" cutoff
 
 **Function and type signatures:**
 - Functions mentioned by name — do they exist? Do their signatures match what's described?
@@ -75,7 +75,7 @@ Fact-check every verifiable claim in each document against the actual source cod
    ```json
    {"claim": "description of claim", "verdict": "ACCURATE"}
    ```
-5. Compute `fact_check_accuracy`: `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
+5. Compute `fact_check_accuracy`: if `total_claims == 0`, set it to `100` (no verifiable claims → nothing inaccurate); otherwise `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
 6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues).
 7. Rewrite `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) with the updated content using the Write tool.
 
