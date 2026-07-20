@@ -15,7 +15,7 @@ Sections (all required — include section heading even if empty):
 - **Internal dependency graph**: Which files import which within the subsystem. Format as a list: `file.ts → imports from: [a.ts, b.ts]`. Sorted by number of dependencies (most dependent first).
 - **Symbol index**: Table of all top-level symbols (exported + internal) with their signatures, visibility, and one-line purposes. Columns: `Symbol | File | Signature | Visibility | Purpose`. Grouped by file, sorted by line number within each file. `Visibility` is `exported` or `internal`. Include parameter types and return types in signatures. When `--exports-only` is passed, the table is filtered to symbols bearing the `export` keyword (Visibility column still present but all rows read `exported`).
 - **Cross-cutting patterns**: Patterns that appear across multiple files in the subsystem. Each entry: pattern name, files involved, brief description. Examples: caching patterns, error handling conventions, shared state mutations, enum/union switch-cases. May be empty — include the heading regardless.
-- **Open Questions**: Items that Phase 1 or Phase 2 extraction flagged as ambiguous or contradictory. Each entry must include an evidence pointer (`file:line`). See §4.9 in the spec for the entry template.
+- **Open Questions**: Items that Phase 1 or Phase 2 extraction flagged as ambiguous or contradictory. Each entry must include an evidence pointer (`file:line`). See the Open Questions format section in SKILL.md for the entry template.
 
 ---
 

@@ -293,6 +293,8 @@ When invoked with `--subsystems all` (batch mode), detect subsystem boundaries a
 --force-reclassify     Re-run volatility classification even for subsystems with existing depth
 --depth <auto|L1|L2>   Force depth for every subsystem in scope; bypasses classification (default: auto)
 --exports-only         Narrow the L1 symbol index to symbols bearing the `export` keyword. Default is all top-level symbols (exported + internal). Sets frontmatter `symbol_scope: exports-only`.
+--symbol-scope <all|exports-only>
+                       Explicit symbol-scope override: `all` (default) indexes all top-level symbols; `exports-only` narrows to exported. `--exports-only` is the shorthand for `--symbol-scope exports-only`.
 --tier <internal|interface>    Output tier. `internal` (default) writes to
                                 <package-root>/docs/ai/<subsystem>.md with
                                 symbol_scope: all and code_paths covering the
@@ -481,7 +483,7 @@ Best-effort rendering for human readers. No quality gate applied.
    - Target reading level: technical professional who hasn't seen the code.
    - Preserve code blocks and examples unchanged.
 3. **Insert snapshot header** at the top of each humanized file: `Generated from AI docs on [date] — this is a one-time snapshot, not a source of truth.`
-4. **Write output** to `docs/tmp/{original-filename}`. Do not modify the original AI-optimized files.
+4. **Write output** to `docs/tmp/<source-relative-path>` — mirror the input's relative path beneath `docs/tmp/` (e.g. `src/auth/README.md` → `docs/tmp/src/auth/README.md`) so inputs sharing a basename never overwrite each other. Do not modify the original AI-optimized files.
 
 **Error handling:**
 

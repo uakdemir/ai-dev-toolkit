@@ -103,5 +103,5 @@ Used by the structural extractor selection logic (see SKILL.md) to determine whi
 
 **Notes:**
 - `tsc --declaration` is only available for TypeScript/JavaScript projects with a valid `tsconfig.json`.
-- Serena MCP is preferred for all stacks when available. The OR-check probe (`get_symbols_overview`, `find_symbol`, `find_referencing_symbols`) is stack-agnostic.
+- Serena MCP is preferred for all stacks when available. For activation, follow SKILL.md's 3-step probe (schema-load → activate → smoke-test via `get_symbols_overview`) — stack-agnostic and authoritative; this file does not re-specify it.
 - Grep patterns are language-specific — see `references/signature-patterns.md` for each language's patterns.
