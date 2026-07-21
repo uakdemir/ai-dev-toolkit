@@ -1,6 +1,6 @@
 ---
 name: document-for-ai
-argument-hint: "[command] [path] [flags]"
+argument-hint: "[command] [path] [--scope <pkg>] [--mode generate|migrate|audit|update] [--depth auto|L1|L2] [--tier internal|interface]"
 description: "Use when the user wants to create, migrate, audit, or maintain AI-optimized documentation, restructure existing docs for AI consumption, generate CLAUDE.md files, create doc indexes, or improve AI agent efficiency through better documentation — even if they don't use the exact skill name."
 ---
 
