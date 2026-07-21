@@ -2,7 +2,6 @@
 
 Authoritative, in-skill placeholder resolution for the `expo` stack (transcribed from the Mobile Scaffold Integration design § Section 3 so the skill no longer depends on a doc in the user's project tree).
 
-Schema per placeholder: `placeholder_name`, `resolution_source`, `default_value`, `config_yaml_key`.
 Resolution order (per SKILL.md § Placeholder Resolution): auto-derive → `--config <path>.yaml` → interactive prompt.
 
 ## Root layer (`templates/expo/root/`) — `--bootstrap`
@@ -16,10 +15,16 @@ Resolution order (per SKILL.md § Placeholder Resolution): auto-derive → `--co
 
 ## Package layer (`templates/expo/package/`) — `--add-package <name>`
 
-| Placeholder | Resolution source | Default | Config YAML key |
-|---|---|---|---|
-| `{{FEATURE_NAME}}` | `--add-package <name>` argument (or interactive prompt) | the `<name>` argument | `feature_name` |
-| `{{FEATURE_DESCRIPTION}}` | interactive prompt | empty (line dropped if blank) | `feature_description` |
-| `{{RELATED_SDKS}}` | interactive prompt | empty / none | `related_sdks` |
+| Placeholder | Resolution source | Default |
+|---|---|---|
+| `{{FEATURE_NAME}}` | `--add-package <name>` argument | (required — no default) |
+| `{{FEATURE_DESCRIPTION}}` | `--add-package` interactive prompt | `Feature description TBD` |
+| `{{RELATED_SDKS}}` | `--add-package` interactive prompt (comma-separated SDK names) | `""` |
 
-All placeholders resolved during bootstrap / add-package are stored in the manifest `placeholders:` map so refresh can re-substitute if the template wording changes.
+The design defines no `--config` YAML keys for the package layer (unlike the root layer).
+
+## Placeholder scope in the manifest
+
+- **Top-level `placeholders:`** — bootstrap-wide values that apply to every scaffold-written file (`PROJECT_NAME`, `STACK_DECISIONS_DOC_PATH`).
+- **Per-file `placeholders:`** — add-package feature-specific values, keyed by the UPPERCASE placeholder name (e.g. `FEATURE_NAME: matching`). Feature-specific placeholders MUST be stored per-file and never top-level: `FEATURE_NAME` differs per `features/<name>/CLAUDE.md`, so a top-level entry would collide across `--add-package` runs.
+- **Resolution at diff time:** merge the top-level placeholders with the file's per-file placeholders (per-file wins on key collision), then substitute into the template content.
