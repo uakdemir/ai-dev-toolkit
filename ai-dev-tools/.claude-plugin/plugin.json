@@ -8,10 +8,7 @@
     "url": "https://github.com/uakdemir"
   },
   "homepage": "https://github.com/uakdemir/ai-dev-toolkit#readme",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/uakdemir/ai-dev-toolkit.git"
-  },
+  "repository": "https://github.com/uakdemir/ai-dev-toolkit.git",
   "license": "MIT",
   "keywords": [
     "documentation",
