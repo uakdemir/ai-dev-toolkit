@@ -95,7 +95,7 @@ Small commits by skill-cluster within each phase (matches the maintainer's small
 - Generated Python enforcement tests are named `test_*.py`; api-contract-guard's Node template no longer `ReferenceError`s.
 - review-code writes and reads the same `tmp/_reviews_errors/[<run_id>-]…` path; two run-ids don't collide.
 - **Phase 2:** each replaced path resolves to the correct file under an installed-plugin layout (spot-checked by expanding `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_SKILL_DIR}`); no functional (non-example) `ai-dev-tools/…` hardcoded path remains (grep confirms).
-- `plugin.json`/`marketplace.json` validate against their `$schema`; `LICENSE` present; version = 2.6.0.
+- **Gate:** `claude plugin validate ./ai-dev-tools --strict` passes. A JSON-parse check is NOT sufficient — the object-form `repository` parsed as valid JSON but the loader rejected it (`expected string, received object`), failing the entire plugin load. `LICENSE` present; version = 2.6.0.
 - The changed `help` entries (`/consolidate`, `/scaffold`) match the actual command/flag surface.
 
 ## Deferred (explicit follow-ups)
