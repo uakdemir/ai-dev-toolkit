@@ -1,12 +1,12 @@
 ---
 name: review-doc
-argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] --fact-check <true|false> [--max-iterations N] [--run-id <id>]"
+argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] --fact-check <true|false> [--verify-fixes <true|false>] [--max-iterations N] [--run-id <id>]"
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
 # Review Doc
 
-Iterative document review. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. When `--fact-check true` is passed, a sequential fact-checker verifies claims against the codebase within each iteration (before the fixer, so fact-check findings get fixed in the same pass). Produces a curated human-readable summary.
+Iterative document review. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. When `--fact-check true` is passed, a sequential fact-checker verifies claims against the codebase within each iteration (before the fixer, so fact-check findings get fixed in the same pass). When `--verify-fixes true` is passed, a verifier checks the fixer's own output after each fix phase and reports what it finds. Produces a curated human-readable summary.
 
 **Output:** `tmp/_reviews_errors/review-doc.json` (structured, machine-readable) + `tmp/_reviews_errors/review-doc-summary.md` (curated human summary, max 10 items + aggregates). When `--run-id` is provided, files are prefixed: `tmp/_reviews_errors/<run_id>-review-doc.json`.
 
@@ -16,7 +16,8 @@ Parse arguments after `/review-doc`:
 
 ```
 /review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
-            --fact-check <true|false> [--max-iterations N] [--run-id <id>] [--help]
+            --fact-check <true|false> [--verify-fixes <true|false>]
+            [--max-iterations N] [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
 
@@ -25,6 +26,7 @@ Parse arguments after `/review-doc`:
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
 | `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker) |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
+| `--verify-fixes` | false | true, false | When true, runs a verifier after each fix phase to check the fixer's output (report-only — appends issues, never re-fixes) |
 | `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Honors option Y early-exit when pre-fix criticals == 0 |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
@@ -49,6 +51,7 @@ Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
   --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
   --fact-check <bool>     Run fact-checker each iteration    (default: false)
+  --verify-fixes <bool>   Verify fixer output after each fix (default: false)
   --max-iterations N      Safety cap, 0=skip                 (default: 3)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
@@ -98,6 +101,8 @@ for iter in 1..max_iterations:
     if total_criticals == 0:            # final iter, 0 criticals: skip fixer, clean exit
         break
     fix()                               # fixer runs when total_criticals > 0
+    if verify_fixes:
+        verify()                        # report-only: appends issues, never re-fixes
 ```
 
 **Key behavioral properties:**
@@ -107,6 +112,7 @@ for iter in 1..max_iterations:
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
 5. All dispatches in that invocation — reviewer, fixer, and fact-checker — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
 6. `validate(json)` runs right after `review()`: schema-check the reviewer's JSON; on invalid JSON or a schema failure, retry the reviewer once, and abort the iteration on a second failure (mirrors review-code's Validation step + Error Handling).
+7. `verify()` runs after `fix()` when `--verify-fixes true`, in every iteration where the fixer ran. It is report-only — it appends issues and never triggers another fix pass. On iterations 1..N-1 its findings are carried forward by the next reviewer and fixed normally; on the final iteration they surface as remaining issues in the summary. It never rewrites `critical_count` or `high_count` (see the Verifier dispatch section).
 
 ## Agent Dispatch
 
@@ -170,6 +176,25 @@ Produces `tmp/_reviews_errors/review-doc-fix-report.json` (or `<run_id>-review-d
 
 A `fixed` disposition may also carry `collateral: [{location, why}]` — edits the fixer made outside the findings because its own fix to a flagged location invalidated that location (a count, a rule, a cross-reference, a table cell). Unrelated improvements, restyling, and reorganisation remain prohibited; collateral is only the consequence of a sanctioned fix.
 
+
+### Verifier (when `--verify-fixes true`)
+
+Runs **after the fixer**, in every iteration where the fixer ran. Report-only: it never edits a document and never triggers another fix pass.
+
+Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants), exactly as it does for the fact-checker. If the verifier fails, the orchestrator restores the backup and prints a warning.
+
+**Abort detection contract:** identical to the fact-checker's — the verifier signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: verify aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
+
+Read `prompts/verifier.md` and dispatch: `Agent(prompt: <verifier-prompt>)`.
+
+The dispatch prompt must include:
+- The effort level (`--effort` value) as a reasoning-depth directive
+- The document paths list
+- The fix report path for this run
+
+The verifier reads the fix report, re-reads only the document regions it names (issue `location` values and `collateral` entries), and appends any defects to the `issues` array with `category: "verify"`, minting ids from `max + 1` exactly as the fact-checker does.
+
+**Count invariant:** the verifier does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i endless-loop gate reads (`references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 1 → Q2 failure"). A verifier that recounted them would make post-fix findings indistinguishable from reviewer findings and trip spurious pipeline failures. Verifier issues are folded into the counts by the NEXT iteration's reviewer, which recomputes both fields from the full issues array.
 
 ## Hash Verification
 
@@ -345,7 +370,7 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 
 **Model:** inherited from caller session
 **Effort:** <--effort value>
-**Agents:** 1 (merged reviewer) or 1 + fact-checker (when --fact-check true)
+**Agents:** 1 (merged reviewer), plus fact-checker (when --fact-check true), plus verifier (when --verify-fixes true and the fixer ran)
 **Issues found:** X critical, Y high, Z medium
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, early exit" | "0 criticals, loop complete" | "Max iterations reached" | "Fix phase failed: <error>"
 **Issues fixed:** [ISSUE-NNN] [category] [severity] at [location]
@@ -390,7 +415,7 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
           "severity": { "type": "string", "enum": ["critical", "high", "medium"] },
           "category": { "type": "string", "enum": [
             "completeness", "consistency", "scope", "structure",
-            "fact-check", "vague-action", "vague-step",
+            "fact-check", "verify", "vague-action", "vague-step",
             "dependency-gap", "ordering-issue", "agent-pitfall",
             "missing-criteria", "cross-reference"
           ]},
