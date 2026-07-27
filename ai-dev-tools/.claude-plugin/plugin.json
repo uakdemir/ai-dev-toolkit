@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "ai-dev-tools",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "description": "AI-optimized documentation generation, monorepo refactoring strategy, architectural layer enforcement, convention enforcement, API contract enforcement, and development cycle orchestration",
   "author": {
     "name": "Umut Akdemir",
