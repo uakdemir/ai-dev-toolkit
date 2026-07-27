@@ -262,7 +262,16 @@ Review Doc Complete
   Fact-check: X/Y claims accurate (Z%)
   Summary: tmp/_reviews_errors/[<run_id>-]review-doc-summary.md
   Full review: tmp/_reviews_errors/[<run_id>-]review-doc.json
+
+Recommended next: focused review — collateral recorded in § 3 rule 3, § 7
+/review-doc docs/spec.md --fact-check true --max-iterations 2 --verify-fixes true
+
+Found this round: 3 Critical | 4 High | 2 Medium
 ```
+
+`Found this round:` is always the **last line printed**. It reports what this invocation's final review surfaced, not an aggregate across rounds, and it is deliberately last because it is the number the next decision keys off. It differs from `Last round:`, which counts issues *fixed*; the gap between the two is what the fixer could not resolve.
+
+The `Recommended next:` block and its command line are described in Next-Round Recommendation below. Under rule 3 the command line is omitted and only the `Recommended next:` line prints.
 
 When `--fact-check false` (default), replace the `Fact-check:` line — in both this terminal output and the summary's `## Fact-Check Accuracy` section — with `Fact-check: not run`.
 
@@ -278,8 +287,9 @@ When the loop completes (final gate passes or max iterations exhausted):
 1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (see Status Logic below).
-4. Print terminal output (see Terminal Output above).
-5. If status is "Approved with suggestions", run the Respond to Remaining Issues phase (below).
+4. Derive the next-round recommendation (see Next-Round Recommendation below).
+5. Print terminal output (see Terminal Output above), ending with the `Found this round:` line.
+6. If status is "Approved with suggestions", run the Respond to Remaining Issues phase (below).
 
 ## Respond to Remaining Issues
 
@@ -346,6 +356,8 @@ The orchestrator maintains the following state across the loop:
 - `last_round_fixed = {critical: 0, high: 0, medium: 0}` -- per-severity breakdown for the most recent iteration only (populates "Last round:" line)
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
+- `found_this_round = {critical: 0, high: 0, medium: 0}` -- severity breakdown of the `issues` array in the CURRENT iteration, measured after review and fact-check but before the fix phase. Overwritten each iteration; the final iteration's value populates the "Found this round:" line and rule 1 of the recommendation.
+- `collateral_count = 0` -- number of `collateral` entries in the CURRENT iteration's fix report, with their `location` values retained for rendering. Reset each iteration; the final iteration's value drives rule 2 of the recommendation.
 
 After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`.
 
@@ -360,6 +372,50 @@ First match wins:
 1. **Issues Found**: `critical_count > 0` OR `fact_check_accuracy < 75`
 2. **Approved with suggestions**: `fact_check_accuracy < 90` OR high/medium issues remain
 3. **Approved**: all other cases
+
+## Next-Round Recommendation
+
+After the status is computed, the orchestrator derives a recommendation for what to do next. It is computed directly from orchestrator state — no agent dispatch, no judgment call, identical output for identical inputs.
+
+Inputs:
+
+| Input | Source |
+|---|---|
+| `found_this_round` | Severity breakdown of the `issues` array in the FINAL iteration, measured after review and fact-check but before the fix phase — the same point as `total_criticals`. Medium is `len(issues) - critical_count - high_count`. |
+| `fact_check_accuracy` | The final `review-doc.json` |
+| `collateral_count` | Total number of `collateral` entries across all dispositions in the final iteration's fix report (0 when the fix phase did not run) |
+
+Rules, first match wins:
+
+| # | Condition | Recommendation |
+|---|---|---|
+| 1 | `found_this_round.critical > 0` OR `fact_check_accuracy < 75` | another review round |
+| 2 | `collateral_count > 0` | focused review |
+| 3 | otherwise | continue to implementation |
+
+Rule 1 dominates rule 2 — a full round covers the collateral regions as well, so there is no point recommending the narrower action when the broader one is already warranted.
+
+**Rule 1** — reprint the invocation exactly as it was given, so it can be pasted directly:
+
+```
+Recommended next: another review round — 3 criticals found this round
+/review-doc docs/spec.md --fact-check true --max-iterations 2
+```
+
+**Rule 2** — name every distinct `location` appearing in a `collateral` entry, then offer the same invocation with verification on:
+
+```
+Recommended next: focused review — collateral recorded in § 3 rule 3, § 7, § 12.2
+/review-doc docs/spec.md --fact-check true --max-iterations 2 --verify-fixes true
+```
+
+**Rule 3** — no command; review-doc does not know the implementation plan path:
+
+```
+Recommended next: continue to implementation — 0 criticals, no collateral recorded
+```
+
+The recommendation names a next action, not a scoped review mode. There is no flag that restricts a review to recently-changed regions: document fixes are left uncommitted in the working tree (the fixer never commits, and orchestrate commits once per phase, spanning both iterations), so no git ref can isolate the last fix pass. Rule 2 therefore names the sections and lets the reader decide.
 
 ## Iteration Log Format
 
