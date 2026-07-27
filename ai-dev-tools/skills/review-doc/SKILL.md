@@ -24,7 +24,7 @@ Parse arguments after `/review-doc`:
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
-| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker) |
+| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, verifier) |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
 | `--verify-fixes` | false | true, false | When true, runs a verifier after each fix phase to check the fixer's output (report-only — appends issues, never re-fixes) |
 | `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Honors option Y early-exit when pre-fix criticals == 0 |
@@ -119,7 +119,7 @@ for iter in 1..max_iterations:
 2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
 3. Early exit only on `pre_fix_criticals == 0` (option Y — always measure at review output, before fact-check).
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
-5. All dispatches in that invocation — reviewer, fixer, and fact-checker — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
+5. All dispatches in that invocation — reviewer, fixer, fact-checker, and verifier — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
 6. `validate(json)` runs right after `review()`: schema-check the reviewer's JSON; on invalid JSON or a schema failure, retry the reviewer once, and abort the iteration on a second failure (mirrors review-code's Validation step + Error Handling).
 7. `verify()` runs after `fix()` when `--verify-fixes true`, in every iteration where the fixer ran. It is report-only — it appends issues and never triggers another fix pass. On iterations 1..N-1 its findings are carried forward by the next reviewer and fixed normally; on the final iteration they surface as remaining issues in the summary. It never rewrites `critical_count` or `high_count` (see the Verifier dispatch section).
 
@@ -372,7 +372,7 @@ After each fix phase, **before dispatching the next iteration's reviewer** (whic
 
 If a carried-forward `id` has been displaced from a later iteration's JSON (e.g., it dropped out of the active issues set), use the cached severity from the iteration where the id was first introduced — never silently skip a disposition just because its id is no longer in the latest JSON.
 
-**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker), so their IDs stay valid. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
+**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker and `verify` entries appended by the verifier), so their IDs stay valid. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
 
 ## Status Logic
 
