@@ -168,6 +168,8 @@ Produces `tmp/_reviews_errors/review-doc-fix-report.json` (or `<run_id>-review-d
 - `deferred` -- out of scope, with reason
 - `pushed-back` -- reviewer finding is incorrect, with reason
 
+A `fixed` disposition may also carry `collateral: [{location, why}]` — edits the fixer made outside the findings because its own fix to a flagged location invalidated that location (a count, a rule, a cross-reference, a table cell). Unrelated improvements, restyling, and reorganisation remain prohibited; collateral is only the consequence of a sanctioned fix.
+
 
 ## Hash Verification
 
