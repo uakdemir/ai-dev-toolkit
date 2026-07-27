@@ -366,7 +366,7 @@ The orchestrator maintains the following state across the loop:
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 - `found_this_round = {critical: 0, high: 0, medium: 0}` -- severity breakdown of the `issues` array in the CURRENT iteration, measured after review and fact-check but before the fix phase. Overwritten each iteration; the final iteration's value populates the "Found this round:" line and rule 1 of the recommendation.
-- `collateral_count = 0` -- number of `collateral` entries in the CURRENT iteration's fix report, with their `location` values retained for rendering. Reset each iteration; the final iteration's value drives rule 2 of the recommendation.
+- `collateral_count = 0` -- running total of `collateral` entries across every fix phase in this invocation, with their `location` values retained for rendering. **Not reset between iterations.** Scoping it to the final iteration would make recommendation rule 2 unreachable: `fix()` only runs when `total_criticals > 0`, so any iteration that records collateral also leaves `found_this_round.critical > 0` and matches rule 1 first, while an iteration that reaches rule 2 is by definition one where the fixer did not run and recorded nothing.
 
 After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`.
 
@@ -392,7 +392,7 @@ Inputs:
 |---|---|
 | `found_this_round` | Severity breakdown of the `issues` array in the FINAL iteration, measured after review and fact-check but before the fix phase — the same point as `total_criticals`. Medium is `len(issues) - critical_count - high_count`. |
 | `fact_check_accuracy` | The final `review-doc.json` |
-| `collateral_count` | Total number of `collateral` entries across all dispositions in the final iteration's fix report (0 when the fix phase did not run) |
+| `collateral_count` | Running total of `collateral` entries across **every** fix phase in this invocation, not just the final iteration's |
 
 Rules, first match wins:
 
@@ -403,6 +403,8 @@ Rules, first match wins:
 | 3 | otherwise | continue to implementation |
 
 Rule 1 dominates rule 2 — a full round covers the collateral regions as well, so there is no point recommending the narrower action when the broader one is already warranted.
+
+**When each rule fires.** Rule 1 matches whenever the final iteration's review still found criticals, which includes every `--max-iterations 1` run in which the fixer ran. Rule 2 therefore describes a specific multi-iteration shape: an earlier iteration fixed criticals and recorded collateral, and the final iteration's review came back clean. That is why `collateral_count` accumulates across the whole invocation rather than being scoped to the last fix phase — scoped to the last one, rule 2 could never match.
 
 **Rule 1** — reprint the invocation exactly as it was given, so it can be pasted directly:
 
