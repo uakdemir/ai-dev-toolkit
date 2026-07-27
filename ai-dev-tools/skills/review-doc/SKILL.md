@@ -31,7 +31,9 @@ Parse arguments after `/review-doc`:
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
 
-**Removed flags:** `--min-model`, `--max-model`, `--model` (clean break, no backward compat shim). The reviewer, fixer, and fact-checker inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
+**Removed flags:** `--min-model`, `--max-model`, `--model` (clean break, no backward compat shim). The reviewer, fixer, fact-checker, and verifier inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
+
+If any of the three is present, print `Warning: <flag> is no longer supported; all agents inherit the caller's session model. Ignoring.` — substituting the flag actually passed — and continue. Do not exit: the flag is inert, not invalid. Accepting it silently was the previous behaviour and gave the caller no signal that it had done nothing.
 
 If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
 
@@ -46,6 +48,7 @@ Usage: /review-doc <path1> [path2 ...] [flags]
 Iterative document review. Dispatches a single merged reviewer for
 completeness, consistency, and implementability. Fixes issues automatically
 between rounds. Fact-checker runs when --fact-check true is passed.
+Verifier checks the fixer's output when --verify-fixes true is passed.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
@@ -55,6 +58,10 @@ Flags:
   --max-iterations N      Safety cap, 0=skip                 (default: 3)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
+
+Removed:
+  --model, --min-model, --max-model   Ignored with a warning; all agents
+                                      inherit the caller's session model
 
 Examples:
   /review-doc docs/spec.md                                  Default review
@@ -67,8 +74,10 @@ Examples:
 
 1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
 2. Delete stale files from prior runs:
-   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-iteration-*.md`
-   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
+   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-iteration-*.md`
+   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
+
+   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's fact-check or verify phase would otherwise survive into the next run.
 
 ## Pre-Flight Checks
 
@@ -141,7 +150,7 @@ The reviewer writes `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_erro
 
 Runs **after the reviewer, before the fixer** in each iteration. It is not terminal — the fixer follows to resolve any fact-check-added criticals.
 
-Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` (or the run-id-prefixed variant). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
+Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
 
 **Abort detection contract:** the fact-checker signals a controlled abort (e.g., on malformed reviewer JSON) by leaving the JSON file unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, and proceeds to the fixer using the original reviewer output. Any other failure mode (agent crash, exception, no response) is treated identically: restore backup, print a generic warning, continue.
 
