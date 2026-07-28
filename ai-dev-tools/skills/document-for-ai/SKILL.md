@@ -10,6 +10,26 @@ document-for-ai — Generate AI-optimized documentation
 USAGE
   /document-for-ai [command] [path] [flags]
 
+RECOMMENDED WORKFLOW (start here)
+  In a monorepo, generate interface-tier docs first — one page per package
+  barrel, written to the repo root:
+
+    1. /document-for-ai --tier interface --subsystems all   (from the repo root)
+    2. /document-for-ai --mode audit                        (reconcile drift)
+
+  Why this first: interface docs are the smallest artifact and the cheapest to
+  keep fresh. Their code_paths is the barrel file alone, so edits inside a
+  subsystem never invalidate them — only a barrel export added, removed, or
+  renamed does. They also target the one navigation step grep is bad at:
+  finding which package owns a concept.
+
+  Add internal-tier docs (the default, no --tier) per subsystem only where you
+  keep re-deriving the same structure. Generating them everywhere costs far
+  more to maintain and competes with grep, which is cheaper and never stale.
+
+  Prerequisite: each documented subsystem needs a barrel (index.ts). Use
+  /api-contract-guard for packages that lack one.
+
 COMMANDS
   humanize [path]    Render AI docs for human readers
   adr <spec_path>    Extract architectural decisions from spec
