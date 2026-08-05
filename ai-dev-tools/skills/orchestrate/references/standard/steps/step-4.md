@@ -6,7 +6,7 @@
 
 ## Action
 
-Invoke `superpowers:writing-plans`. Prepend to dispatch prompt: "After saving the plan, do NOT present the Execution Handoff section. Return control to the caller. Orchestrate manages execution model selection at Step 5."
+Invoke `superpowers:writing-plans`. Prepend to dispatch prompt: "Give every task a `Rollback:` field stating how to undo it — `Forward-fix only` is a valid value when stated deliberately. After saving the plan, do NOT present the Execution Handoff section. Return control to the caller. Orchestrate manages execution model selection at Step 5."
 
 If writing-plans still presents an Execution Handoff, ignore it and proceed.
 

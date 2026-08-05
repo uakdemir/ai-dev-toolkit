@@ -62,6 +62,7 @@ Reference each issue by its `id` (the `ISSUE-NNN` value from the reviewer's JSON
 ## Rules
 
 - Every issue in the review MUST have a disposition entry (fixed, deferred, or pushed-back).
+- A `cross-reference` finding reporting the same document diverging across two locations is never `fixed` — mark it `deferred` with the reason "requires a human decision on which copy is authoritative". Never edit either copy to reconcile them.
 - Use the Edit tool for targeted fixes. Use Write only for creating `tmp/_reviews_errors/review-doc-fix-report.json` (or its `<run_id>-` prefixed variant).
 - Do not make unrelated improvements, restyling, or reorganisation. Content you did not have to touch stays untouched.
 - You MAY edit a location no finding flagged, but ONLY where your own edit to a flagged location made that location wrong. Record every such edit as a `collateral` entry on the disposition that caused it. If you cannot name the disposition that caused it, it is not collateral — do not make the edit.

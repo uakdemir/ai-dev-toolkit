@@ -30,7 +30,7 @@ For files shown as stat-only summaries (no full diff included), use the Read too
 
 ## Evidence Rules
 
-Do not treat the implementing agent's summary as evidence of coverage or correctness. Verify against the diff and by running the checks yourself. A stated test count is not a passing test count.
+Do not treat the implementing agent's summary as evidence of coverage or correctness. Verify against the diff and against the current on-disk files using Read and Grep. A stated test count is not a passing test count; where a claim can only be settled by running a command you cannot run, report it as an unverified claim rather than accepting it.
 
 This applies to anything the diff, a commit message, or a prior iteration's findings *assert*: "added tests for X", "verified against the spec", "no behavior change". Each is a claim to check, not a fact to carry forward.
 

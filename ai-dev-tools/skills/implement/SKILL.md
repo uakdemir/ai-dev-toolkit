@@ -129,7 +129,7 @@ Before building the task graph, perform this refactor-unit check (moved verbatim
    - Load `references/refactor-execution.md` and execute directly following its **Pre-flight → File Operations → Verification** sequence.
    - Perform the checklist pre-flight surfacing: read `tmp/checklists/index.md` if it exists, filter for rows where Phase is `coding` or `both` AND Recommended Skill contains `refactor-to-monorepo` or `refactor-to-layers`. Surface any matching entries to the user before beginning execution. Note: the `refactor-to-layers` filter branch currently returns empty (no checklist crystallization section) — do not warn on an empty result from that branch.
    - **`--model` flag handling:** The `--model` flag is **ignored** on the refactor-unit path because refactor execution is inherently single-agent. If `--model` was explicitly passed, print `warning: --model ignored for refactor-unit execution` and continue.
-   - After the refactor-execution sequence completes, return control to the caller (orchestrate or standalone shell).
+   - After the refactor-execution sequence completes, return control to the caller (orchestrate or standalone shell), ending the report with the `## Validation` hand-back block defined in `references/refactor-execution.md`.
 4. **If the match fails (normal-feature path) → proceed to the normal-feature dispatch below.**
 
 ### Normal-feature path
@@ -139,7 +139,9 @@ Load `references/implementation-step.md` (which transitively loads `references/t
 1. Build the task graph from the plan (per `references/task-graph.md`).
 1.5. **Plan gate — rollback stated per task.** Every task states how to undo it before implementation begins. **"Forward-fix only" is an acceptable answer when stated deliberately** — what is unacceptable is discovering at failure time that nobody considered it. Treat schema migrations and infrastructure applies as requiring an explicit rollback, never a default.
 
-   List every task whose `Rollback:` field is missing or empty, and ask the user to supply one or confirm forward-fix-only. Do not dispatch until each is resolved. Under `--auto` the gate does not prompt (auto mode takes no user input): name the tasks in the status line, carry them into the dispatched agent's Validation hand-back under "Checks SKIPPED, and why", and continue.
+   If NO task carries a `Rollback:` field, the plan predates the field: print `Plan predates the Rollback field; no per-task rollback stated` and continue without prompting — except for any task touching a schema migration or an infrastructure apply, which is prompted regardless. Otherwise list every task whose `Rollback:` field is missing or empty, and ask the user to supply one or confirm forward-fix-only. Do not dispatch until each is resolved.
+
+   Under `--auto` the gate does not prompt (auto mode takes no user input): print `Rollback not stated: <task names>` before dispatch, append that same list to the dispatch prompt after the override preamble instructing the agent to record it under "Checks SKIPPED, and why", and continue.
 2. Compute the execution model recommendation (per `references/implementation-step.md` Execution Model Recommendation section).
 3. **If `--model` flag was provided** → short-circuit the picker, dispatch directly with that model. The preamble block in `implementation-step.md` Override Dispatch section is still prepended.
 3.5. **If `--auto` flag is active (and `--model` is NOT provided):**

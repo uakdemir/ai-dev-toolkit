@@ -17,7 +17,7 @@ If the user's arguments contain `--help`, output ONLY the text inside <help-text
 
 # session-handoff
 
-Generate a structured handoff document at `./tmp/session-handoff.md` for consumption by the next AI agent session. Gathers facts from git state and context from conversation, producing a terse, machine-parseable file with YAML frontmatter + 5 sections.
+Generate a structured handoff document at `./tmp/session-handoff.md` for consumption by the next AI agent session. Gathers facts from git state and context from conversation, producing a terse, machine-parseable file with YAML frontmatter + 6 sections.
 
 **Prerequisite:** Auto-discovery requires a one-time setup — a CLAUDE.md instruction or SessionStart hook that reads `./tmp/session-handoff.md` on startup. Without this setup, the file is written but not automatically consumed.
 
@@ -199,7 +199,7 @@ Before writing the Pending section, validate ordering:
 
 1. Create `tmp/` directory if it doesn't exist.
 2. Write the composed document to `./tmp/session-handoff.md`, overwriting any existing file.
-2.5. **Update the tasks file** (only when one was found in Step 1). For each task this session advanced, update its `Evidence:` field to the commit, PR, or `file:line` that proves the current state, and update `Blocked by:` if the blocker changed or cleared. Apply the completion rule from `${CLAUDE_PLUGIN_ROOT}/references/tasks-file.md`: check the box only when the acceptance criteria and required validation pass. Where validation was skipped, record the gap on the task and leave the box unchecked. Do not add tasks the session did not touch. Leave the edit uncommitted — session-handoff does not commit.
+2.5. **Update the tasks file** (only when one was found in Step 1). For each task this session advanced, update its `Evidence:` field to the commit, PR, or `file:line` that proves the current state, and update `Blocked by:` if the blocker changed or cleared. Apply the completion rule from `${CLAUDE_PLUGIN_ROOT}/references/tasks-file.md`: check the box only when the acceptance criteria and required validation pass. Where validation was skipped, record the gap on the task and leave the box unchecked. Do not add tasks the session did not touch. Leave the edit uncommitted — session-handoff does not commit. After editing, re-run `git status --short` and update `uncommitted_changes` and `uncommitted_files` in the written handoff so the tasks-file edit appears there.
 3. **Self-check:** Read the file back and confirm: frontmatter contains `git_available`, `branch`, `uncommitted_changes`, `uncommitted_files`, `session_commits`, `pending_items`; all 6 section headers (`## Done`, `## Pending`, `## Decisions`, `## Gotchas`, `## Git State`, `## Validation`) are present, and each `## Validation` bullet has content or `none stated`. If validation fails, attempt one rewrite. If second attempt also fails, write as-is and warn: "Handoff written but missing: {list of missing elements}."
 4. Print confirmation: "Handoff written to `./tmp/session-handoff.md`." Check the project's root `CLAUDE.md` for a reference to `session-handoff.md`. If not found, append: "Note: Add this line to your CLAUDE.md for auto-discovery: `If ./tmp/session-handoff.md exists, read it before starting any work.`"
 5. Print a continuation prompt the user can paste into a new session:

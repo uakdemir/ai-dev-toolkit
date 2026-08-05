@@ -36,6 +36,6 @@ This is a one-time setup. The skill does not modify CLAUDE.md.
 | Not a git repository | Skip git analysis. Conversation only. Warn: "No git repo — handoff will be conversation-based only." Non-git frontmatter: `git_available: false`, `branch: null`, `uncommitted_changes: false`, `uncommitted_files: []`, `session_commits: 0`. |
 | No commits today | Git State shows branch + uncommitted changes only. `session_commits: 0`. |
 | No conversation context | Git-only handoff. Done from git. Decisions, Gotchas, Pending: "No conversation context available." |
-| Nothing to hand off | Warn, do not write. Condition: no git changes AND all four content sections empty. Placeholders don't count as content — if git produced Done items but conversation produced nothing, the file IS written (with placeholders for Pending/Decisions/Gotchas). |
+| Nothing to hand off | Warn, do not write. Condition: no git changes AND Done, Pending, Decisions, and Gotchas all empty (`## Validation` is excluded from this test — it always carries content or `none stated`). Placeholders don't count as content — if git produced Done items but conversation produced nothing, the file IS written (with placeholders for Pending/Decisions/Gotchas). |
 | Context compressed | Scan available context, prioritize recent. Note: "Conversation partially scanned." |
 | Detached HEAD | Use commit hash from `git rev-parse --short HEAD`. |

@@ -16,15 +16,15 @@ single-session scratch state; `TASKS.md` is the durable, reviewable record.
 
 ## Discovery
 
-Search in this order and stop at the first hit:
+Probe all three locations — do not stop at the first hit:
 
 1. `TASKS.md` (repo root)
 2. `docs/TASKS.md`
 3. `docs/project-management/TASKS.md`
 
-Do not assume one location. **If the file exists in more than one of these locations, read all
-of them and surface the conflict to the user** — name each path and what differs. Never silently
-prefer one copy.
+Exactly one hit → that is the tasks file. Do not assume one location. **If the file exists in
+more than one of these locations, read all of them and surface the conflict to the user** — name
+each path and what differs. Never silently prefer one copy, including the earliest in this list.
 
 If no tasks file exists anywhere, skip tasks-file handling entirely. Do not create one
 unprompted.

@@ -90,7 +90,7 @@ Examples:
 7. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
 8. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output). When a document exists in more than one location:
    - Print every matched path. Never resolve the ambiguity silently — the user must see that more than one copy exists whatever happens next.
-   - Add the copies to the review set if that keeps the total within the 20-file cap. The reviewer then reads **both** and surfaces the conflict as a `cross-reference` finding.
+   - Pass the copies to the reviewer as read-only context if that keeps the total within the 20-file cap. The reviewer then reads **both** and surfaces the conflict as a `cross-reference` finding. Read-only copies never enter the fixer's document paths: which copy is authoritative is the user's call, not the fixer's.
    - If adding them would exceed the cap, do NOT expand and do NOT error — a common basename (`README.md`, `index.md`) is not a duplicated document. Print `Warning: <basename> exists at N locations; not expanded (20-file cap). Copies not reviewed: <paths>` and continue with the explicit paths. This is a skipped check, so it is stated, not dropped.
 
 ## Review Loop
@@ -146,6 +146,11 @@ The dispatch prompt must include:
   - path2.md
   ```
   For single file, use the same list format with one entry.
+- Any duplicate copies found by pre-flight check 8, as a separate list:
+  ```
+  Additional copies (read-only, do not fix):
+  - other/path/doc.md
+  ```
 - The `--against` reference path (if provided)
 
 The reviewer writes `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active).

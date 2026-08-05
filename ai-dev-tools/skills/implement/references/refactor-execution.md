@@ -49,3 +49,18 @@ Loaded at Step 5 only when a refactor roadmap exists (`docs/monorepo-strategy/ro
 | Node.js | `npx tsc --noEmit` | `npx eslint .` |
 | .NET | `dotnet build` | N/A (build covers it) |
 | Python | `python -m py_compile <file>` | `python -c "import <package>"` |
+
+---
+
+## Validation Hand-Back
+
+End the refactor-execution report with:
+
+```
+## Validation
+- Commands run (exact) and their results
+- Checks SKIPPED, and why
+- Residual risk
+```
+
+All three bullets are required. **A bullet with nothing to report prints `none stated` rather than being omitted** — an explicit "none" is a claim someone can challenge; silence is indistinguishable from having forgotten. Never write "the build passes" unless you ran the command in this session and can quote its output; if you did not run it, it goes under Checks SKIPPED.
