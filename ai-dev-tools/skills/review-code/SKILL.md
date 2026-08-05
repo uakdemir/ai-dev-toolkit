@@ -423,7 +423,7 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
         "required": ["severity", "category", "location", "confidence", "problem", "suggested_fix"],
         "properties": {
           "severity": { "type": "string", "enum": ["critical", "high", "medium"] },
-          "category": { "type": "string", "enum": ["bug", "architecture", "spec-drift", "security", "test-gap"] },
+          "category": { "type": "string", "enum": ["bug", "architecture", "spec-drift", "security", "verification-gap"] },
           "location": { "type": "string" },
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },
           "problem": { "type": "string" },

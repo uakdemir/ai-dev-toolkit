@@ -25,7 +25,7 @@ Each entry is a block separated by `---`:
 - **Date:** YYYY-MM-DDTHH:MM:SSZ
 - **Source:** review-code
 - **Severity:** critical | high | medium | low
-- **Category:** bug | architecture | spec-drift | security | test-gap
+- **Category:** bug | architecture | spec-drift | security | verification-gap
 - **Location:** path/to/file.ext:line_number
 - **Commit:** short_hash (when available)
 - **Status:** found | fixed | pushed-back

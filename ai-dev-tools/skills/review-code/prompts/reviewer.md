@@ -40,13 +40,29 @@ This applies to anything the diff, a commit message, or a prior iteration's find
 - **architecture**: conflicts with CLAUDE.md constraints or ADR decisions
 - **spec-drift**: divergences from the spec (if provided), and documents left referencing something the diff removed (see Required Check below)
 - **security**: OWASP Top 10, injection risks, auth bypass, exposed secrets
-- **test-gap**: risky logic without meaningful test coverage
+- **verification-gap**: changed behaviour that could break without verification catching it (see the Verification Gap section below)
 
 ## Required Check — Stale References
 
 When the diff deletes or renames a shared concept (a symbol, a table, an event, a config key), search the repository for documents that still reference it — specs, runbooks, task files, READMEs. Report each as a `spec-drift` finding located at the stale document, not at the diff. Landing the change without that sweep is incomplete work, not a follow-up.
 
 This check is required, not conditional on the diff looking risky. Run it on every review where the diff removes or renames anything a second file could name.
+
+## Verification Gap
+
+Ask one question: **if the behaviour this change is supposed to produce broke where it is actually used, would verification fail?**
+
+Three shapes:
+
+- **Regression gap** — the changed code regresses where it is used, and no test covering that use would fail.
+- **Broken-verification gap** — a test appears to cover the behaviour but would not protect it: skipped, flaky, not run in the normal verification path, or too weak to observe the regression.
+- **Removed verification** — a deleted test or a weakened assertion leaves behaviour unpinned. Check every removed or replaced chunk in the diff: did it carry behaviour or a contract that the change neither re-established nor intentionally retired?
+
+For what counts as a test and what does not, read `${CLAUDE_PLUGIN_ROOT}/references/verification-evidence.md`. Do not re-derive it here.
+
+**Demonstration — required for every `verification-gap` finding.** Name the smallest realistic regression the consumer would observe — invert the branch, drop the default, omit the field, return the old error code — then state which test would fail. If a test would fail, there is no finding. Put the demonstration in `problem`.
+
+**Evidence rules.** Read a test before claiming what it covers. Before claiming no test exists, search by the symbol under test **and** by import references — an expected file location is not enough. State what you actually checked ("none of the tests I read cover this") and how far you looked. Drop any finding you cannot ground.
 
 ## Do NOT Flag
 
@@ -55,6 +71,10 @@ This check is required, not conditional on the diff looking risky. Run it on eve
 - Missing comments or documentation
 - Hypothetical requirements not in the spec
 - Missing backward-compat shims, deprecation pathways, or dual-path support — unless the spec or CLAUDE.md explicitly requires legacy support. Default policy is clean break. Instead, flag dual-path code (`if old_format`, v1+v2 branches, legacy fallbacks) that exceeds what the spec requires.
+- Low coverage, or a missing test file, as a finding in itself — without a demonstration of what would ship broken
+- Behaviour already verified by an integration, contract, or e2e test
+- Cases the compiler or type checker already enforces
+- Legacy untested code the change did not touch
 
 ## Output
 
@@ -67,7 +87,7 @@ Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_revi
   "issues": [
     {
       "severity": "critical|high|medium",
-      "category": "bug|architecture|spec-drift|security|test-gap",
+      "category": "bug|architecture|spec-drift|security|verification-gap",
       "location": "path/to/file.ext:line_number",
       "confidence": <integer 40-100>,
       "problem": "<clear explanation>",
