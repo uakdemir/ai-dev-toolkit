@@ -219,6 +219,26 @@ $SCRATCHPAD/verification-fixture/
 
 Criterion 2 is the load-bearing one: it is the regression the whole change exists to catch. If it does not fire, the lens is not working and the design is wrong, not the test.
 
+### Results as of 2.9.1
+
+Criteria 2 and 3 were run twice: once against 2.9.0's reviewer prompt, and again after the two review rounds changed it — including the line governing which severities may be emitted, which made the first run's evidence stale.
+
+| # | Result | Evidence |
+|---|---|---|
+| 1 | PASS | zero `test-gap` hits in `ai-dev-tools/`; the unhyphenated "test gaps" was caught separately by the focused round |
+| 2 | **PASS, and stronger on re-run** | 2.9.0: one `verification-gap` finding. 2.9.1: **two** — the second is the *broken-verification gap* shape firing for the first time (no runner manifest exists, so the test file would throw before asserting). Both demonstrations name a concrete regression and the test that would fail |
+| 3 | PASS both runs | zero `verification-gap` findings on the comment-only diff; the pre-existing weak assertion was correctly placed out of scope under `Do NOT Flag → legacy untested code the change did not touch` |
+| 4 | **PASS by run, no longer by reading** | the re-run produced a finding at `severity: high, confidence: 50`. Under the deleted mapping, confidence 50 was mechanically `medium`. The axes are demonstrably independent |
+| 5a | PASS | hand-built artifact with 0 criticals and non-empty `not_inspected` traces to Incomplete at rule 3 |
+| 5b | **not run** | needs a diff over the 3000-line budget; on a fixture small enough to read it can only pass vacuously |
+| 6 | PASS | criterion 3's zero-finding run exercises the same termination path |
+| 7, 8 | PASS | 4 malformed fixtures exit 1 naming the offending key or value; valid exits 0; missing and no-arg exit 2; a count mismatch exits 1 after the fail-closed change |
+| 9 | PASS | no fail-open language survives in `ai-dev-tools/` |
+
+**`low` is enabled end to end but has never been emitted.** Both re-runs considered it and declined with stated reasons — the candidates fell under `Do NOT Flag`. That is correct behaviour, and it is not evidence that `low` works: the path from producer to display has been verified by inspection only. Recorded as an open gap rather than a pass.
+
+**The `node`-absent fallback remains unverified.** No machine without Node was available. It is stated in four places and exercised in none.
+
 `claude plugin validate ./ai-dev-tools --strict` must pass after every commit (project CLAUDE.md gate).
 
 ## Commit strategy
