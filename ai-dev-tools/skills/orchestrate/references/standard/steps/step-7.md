@@ -11,6 +11,7 @@ Present:
 ── Step 7: Complete ──────────────────────────────
 Feature: <feature-name>
 Status: <Approved | Approved with suggestions | Incomplete>
+Not inspected: <files from coverage.not_inspected, or omit this line entirely>
 
 Ready to finalize?
 ```

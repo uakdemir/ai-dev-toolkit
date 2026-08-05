@@ -26,7 +26,9 @@ This guarantees every iteration sees both original quality AND fix-introduced re
 
 ## Early Exit
 
-If pre-fix criticals == 0 at any iteration → skip remaining iterations, advance to stage iv.
+If pre-fix criticals == 0 **AND `coverage.not_inspected` is empty** at any iteration → skip remaining iterations, advance to stage iv.
+
+If criticals are 0 but `not_inspected` is non-empty, do NOT early-exit. The review did not see every changed file, and a later iteration may open what this one skipped — the standard-mode counterpart is step-6's Case C. Continue to the next iteration. If the final iteration still reports a non-empty `not_inspected`, record the uninspected files in the stage's error log and advance: auto mode has no user to ask, and a coverage hole that is written down is not the silent green this pipeline exists to avoid.
 
 ---
 
@@ -42,6 +44,8 @@ After every successful agent iii iteration, orchestrate:
 This commit is load-bearing for rollback anchors. The hash update in step 4 always runs regardless of whether a commit was created.
 
 **Successful iteration definition:** agent returned without exception AND the iteration artifact exists (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`) AND that artifact passes `scripts/validate-review-json.cjs`.
+
+**If `node` is unavailable**, the validator cannot run and the third clause is waived — the artifact's existence and a clean agent return are sufficient. Record `schema validation not run: node unavailable` in the stage's error log, matching the same carve-out in `review-code`'s VALIDATION step and reviewer prompt. Without this waiver a machine without Node could never produce a successful iteration, so every spec in every auto run would be skipped.
 
 An artifact that exists but does not validate is a crash (`retry-semantics.md` crash item 4), not a successful iteration. Without the third clause `last_iteration_head` advances past a review that never validated, and the crash path's soft-reset to that anchor becomes a no-op — the same advance-as-clean behaviour the Output Validation section below removes, arriving by a different route.
 
