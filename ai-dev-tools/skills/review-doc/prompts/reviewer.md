@@ -85,6 +85,12 @@ Review each document for completeness gaps, internal contradictions, implementab
 - Use the `cross-reference` category for cross-file issues.
 - Include both filenames in the location field: `strategy.md + module-map.md > Module counts`
 
+### Duplicate Locations
+
+When the same document exists in more than one location (the dispatch prompt lists both paths, e.g. `TASKS.md` and `docs/TASKS.md`), read **both** and surface the conflict as a `cross-reference` finding: name each path and state exactly what differs. Never silently prefer one copy, and never treat the newer or longer one as authoritative. Deciding which copy wins is the reader's call; your job is to make the divergence visible.
+
+If the copies are byte-identical, report nothing — duplication without divergence is not a review finding.
+
 ## What to Ignore
 
 - Grammar, punctuation, or formatting preferences

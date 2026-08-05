@@ -88,6 +88,10 @@ Examples:
 5. All explicit file paths are validated for existence. If any are missing: print `"Error: file not found: <path>"` for each and exit.
 6. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
 7. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
+8. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output). When a document exists in more than one location:
+   - Print every matched path. Never resolve the ambiguity silently — the user must see that more than one copy exists whatever happens next.
+   - Add the copies to the review set if that keeps the total within the 20-file cap. The reviewer then reads **both** and surfaces the conflict as a `cross-reference` finding.
+   - If adding them would exceed the cap, do NOT expand and do NOT error — a common basename (`README.md`, `index.md`) is not a duplicated document. Print `Warning: <basename> exists at N locations; not expanded (20-file cap). Copies not reviewed: <paths>` and continue with the explicit paths. This is a skipped check, so it is stated, not dropped.
 
 ## Review Loop
 

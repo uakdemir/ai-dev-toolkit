@@ -84,6 +84,22 @@ From user messages, extract:
 **Gotchas:** User-stated warnings ("be careful with", "don't forget",
   "this breaks if"). Do not extract gotchas from tool results.
 
+### Validation Facts (Session Commands)
+
+Collect what this session actually proved, for the `## Validation` section:
+
+- **Commands run:** test, build, lint, and verification commands executed in this session, quoted exactly, with their results. A command's result is its output — not your recollection of it. If you cannot quote the output, the command belongs under Checks SKIPPED.
+- **Checks SKIPPED:** commands the session was expected to run and did not, and why. Includes gates deferred ("skipping the integration suite, it needs a live database"), gates that failed to start, and gates nobody thought about until now.
+- **Residual risk:** what the next session should not assume is safe. Uncommitted work, a task left BLOCKED, a fix applied without a regression test, a validated happy path with untested error paths.
+
+### Tasks File
+
+Read `${CLAUDE_PLUGIN_ROOT}/references/tasks-file.md` for the discovery order, task shape, and completion rule.
+
+If a tasks file exists, read it. Its open items are a source for the Pending section and its owners/blockers are a source for Gotchas — both alongside conversation scanning, not instead of it. If the file exists in more than one location, read all copies and record the conflict as a Gotcha.
+
+If no tasks file exists, skip this. Do not create one.
+
 ### In-Progress Skill Detection
 
 After scanning user messages, check TodoWrite for active tasks.
@@ -145,7 +161,16 @@ pending_items: <count>
 - **Uncommitted changes:** <yes/no, list of files if yes>
 - **Session commits:**
   - <hash> <message>
+
+## Validation
+- Commands run (exact) and their results
+- Checks SKIPPED, and why
+- Residual risk
 ```
+
+All three `## Validation` bullets are required. **An empty bullet prints `none stated` rather than being omitted** — an explicit "none" is a claim the next session can challenge; silence is indistinguishable from having forgotten. A session that ran no commands writes `none stated` under Commands run; that is a meaningful handoff fact, not an empty line to drop.
+
+Never write "tests pass" here unless you ran the command this session and can quote its output. If you did not run it, it goes under Checks SKIPPED.
 
 ### Next Action Validation
 
@@ -174,7 +199,8 @@ Before writing the Pending section, validate ordering:
 
 1. Create `tmp/` directory if it doesn't exist.
 2. Write the composed document to `./tmp/session-handoff.md`, overwriting any existing file.
-3. **Self-check:** Read the file back and confirm: frontmatter contains `git_available`, `branch`, `uncommitted_changes`, `uncommitted_files`, `session_commits`, `pending_items`; all 5 section headers (`## Done`, `## Pending`, `## Decisions`, `## Gotchas`, `## Git State`) are present. If validation fails, attempt one rewrite. If second attempt also fails, write as-is and warn: "Handoff written but missing: {list of missing elements}."
+2.5. **Update the tasks file** (only when one was found in Step 1). For each task this session advanced, update its `Evidence:` field to the commit, PR, or `file:line` that proves the current state, and update `Blocked by:` if the blocker changed or cleared. Apply the completion rule from `${CLAUDE_PLUGIN_ROOT}/references/tasks-file.md`: check the box only when the acceptance criteria and required validation pass. Where validation was skipped, record the gap on the task and leave the box unchecked. Do not add tasks the session did not touch. Leave the edit uncommitted — session-handoff does not commit.
+3. **Self-check:** Read the file back and confirm: frontmatter contains `git_available`, `branch`, `uncommitted_changes`, `uncommitted_files`, `session_commits`, `pending_items`; all 6 section headers (`## Done`, `## Pending`, `## Decisions`, `## Gotchas`, `## Git State`, `## Validation`) are present, and each `## Validation` bullet has content or `none stated`. If validation fails, attempt one rewrite. If second attempt also fails, write as-is and warn: "Handoff written but missing: {list of missing elements}."
 4. Print confirmation: "Handoff written to `./tmp/session-handoff.md`." Check the project's root `CLAUDE.md` for a reference to `session-handoff.md`. If not found, append: "Note: Add this line to your CLAUDE.md for auto-discovery: `If ./tmp/session-handoff.md exists, read it before starting any work.`"
 5. Print a continuation prompt the user can paste into a new session:
    ```
@@ -191,5 +217,7 @@ Before writing the Pending section, validate ordering:
 |----------|----------|
 | `tmp/` doesn't exist | Create it. |
 | Previous handoff exists | Overwrite. Each invocation is a cumulative snapshot. |
+| No tasks file found | Skip Step 2.5. Do not create one. |
+| Tasks file found in more than one location | Read every copy, record the conflict as a Gotcha naming each path. Do not pick one. Update none of them until the user resolves it. |
 
 See references/edge-cases.md for non-standard scenarios (no git repo, no commits, detached HEAD, nothing to hand off).

@@ -213,6 +213,20 @@ After each iteration, append all issues to `tmp/past-issues-backlog.md`:
 - **Iteration 1:** `git diff <ref>..HEAD`
 - **Iteration 2+:** `git diff <ref>..$after_sha` — always reviews full scope since the ref, including prior iteration fixes. This ensures every iteration sees both original implementation quality AND any regressions introduced by earlier fixes.
 
+### Ancestry is not a merge test
+
+Under **squash-merge**, merging a pull request creates a new commit with no ancestry link to the branch's commits. So `git log origin/master..<branch>` lists commits whose content **already landed**, and `rev-list --count` will report a fully merged branch as "156 commits ahead".
+
+To test whether work landed, ask the forge, not the graph:
+
+```bash
+gh pr list --repo <owner>/<repo> --head "<branch>" --state all --json number,state,mergedAt
+```
+
+A tree comparison (`git diff --shortstat origin/master <branch>`) is a secondary check — and a large diff on an old branch usually means the branch is *behind* the base, not ahead.
+
+Never report work as unlanded on ancestry evidence alone. When the forge cannot be reached, say so under "Checks SKIPPED, and why" rather than substituting a commit count. The ancestry answer is confident, wrong, and alarming.
+
 ## Output Artifacts
 
 | File | Purpose | Consumer |
@@ -244,9 +258,13 @@ Remaining: A Critical | B High | C Medium
 Last round: X Critical fixed | Y High fixed | Z Medium fixed
 Pushed back: P
 
-## Verification
-command1: PASS
-command2: PASS
+## Validation
+- Commands run (exact) and their results
+  - `<cmd>` — PASS | REGRESSION (exit N, baseline exit M)
+- Checks SKIPPED, and why
+  - `<cmd>` — not run: <reason>
+- Residual risk
+  - <what could still be wrong after this run>
 
 ## Remaining Issues (top 10 by severity)
 
@@ -257,6 +275,13 @@ command2: PASS
 
 [... up to 10 items]
 ```
+
+The three `## Validation` bullets are required. **An empty bullet prints `none stated` rather than being omitted** — an explicit "none" is a claim someone can challenge; silence is indistinguishable from having forgotten.
+
+What belongs under each:
+- **Commands run** — every `--verify` command that executed, quoted exactly, with its result against baseline.
+- **Checks SKIPPED** — every command that did not execute, and why. This includes commands excluded as non-deterministic during baseline capture (see Verification Commands), which are otherwise reported only once at baseline and never appear again. It also includes `none configured` when `--verify` was not passed: the checks were skipped, and the reason is that no checks were defined.
+- **Residual risk** — what this run could not establish. Max-iterations exhausted with criticals remaining, pushed-back findings, files reviewed as stat-only summaries, verification that passed but does not cover the changed paths.
 
 ## Terminal Output
 

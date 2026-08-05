@@ -14,6 +14,15 @@ Generate an ASCII task dependency graph for an implementation plan.
 5. **Sequential dependencies** shown with simple `│` vertical lines
 6. **Total time estimate** at the bottom (both sequential and parallel-optimized)
 
+## Task Shape
+
+Each task in the plan is expected to carry:
+
+- **Files:** the paths it creates or modifies. Drives dependency mapping (step 1 below) and the coupling assessment in `implementation-step.md`; both fall back to conservative defaults when tasks omit it.
+- **Rollback:** how to undo the task, decided at plan time. `Forward-fix only` is a valid value when stated deliberately.
+
+The graph renders regardless of which fields are present. A missing `Rollback:` is caught by the plan gate in `implement/SKILL.md` before dispatch, not here.
+
 ## How to Generate from a Plan
 
 1. **Map dependencies**: For each task, identify which prior tasks must complete before it can start. A task depends on another if it reads/modifies files that the prior task creates or changes. If fewer than half of tasks have a Files section, treat all tasks as sequential and note this in the graph footer.

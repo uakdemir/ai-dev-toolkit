@@ -28,13 +28,25 @@ Effort sets analysis DEPTH — it never gates which severities you report (criti
 
 For files shown as stat-only summaries (no full diff included), use the Read tool to inspect the changed files. Do not skip files just because their full diff was not included. These files exceeded the 3000-line diff budget but still need review.
 
+## Evidence Rules
+
+Do not treat the implementing agent's summary as evidence of coverage or correctness. Verify against the diff and by running the checks yourself. A stated test count is not a passing test count.
+
+This applies to anything the diff, a commit message, or a prior iteration's findings *assert*: "added tests for X", "verified against the spec", "no behavior change". Each is a claim to check, not a fact to carry forward.
+
 ## Review Categories
 
 - **bug**: logic errors, unhandled edge cases, race conditions, data integrity, boundary errors
 - **architecture**: conflicts with CLAUDE.md constraints or ADR decisions
-- **spec-drift**: divergences from the spec (if provided)
+- **spec-drift**: divergences from the spec (if provided), and documents left referencing something the diff removed (see Required Check below)
 - **security**: OWASP Top 10, injection risks, auth bypass, exposed secrets
 - **test-gap**: risky logic without meaningful test coverage
+
+## Required Check — Stale References
+
+When the diff deletes or renames a shared concept (a symbol, a table, an event, a config key), search the repository for documents that still reference it — specs, runbooks, task files, READMEs. Report each as a `spec-drift` finding located at the stale document, not at the diff. Landing the change without that sweep is incomplete work, not a follow-up.
+
+This check is required, not conditional on the diff looking risky. Run it on every review where the diff removes or renames anything a second file could name.
 
 ## Do NOT Flag
 
