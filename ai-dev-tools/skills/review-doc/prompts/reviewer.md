@@ -92,6 +92,8 @@ When the same document exists in more than one location (the dispatch prompt lis
 
 If the copies are byte-identical, report nothing — duplication without divergence is not a review finding.
 
+**Cap this finding at `high`, never `critical`, regardless of confidence.** No agent can resolve it — the fixer is required to defer it — so a critical would survive every iteration, hold `critical_count` above zero until the cap is exhausted, and lock the run's status to "Issues Found", which suppresses triage for every *other* remaining issue. At `high` the loop converges and the divergence still surfaces in the summary.
+
 ## What to Ignore
 
 - Grammar, punctuation, or formatting preferences

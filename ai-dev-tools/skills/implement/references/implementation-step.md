@@ -91,7 +91,7 @@ Any input other than 1, 2, 3, or 4 re-presents the options.
 
 ## Override Dispatch
 
-After user selects [1], [2], or [4], dispatch to the chosen superpowers skill with a behavioral override block prepended to the dispatch prompt.
+Once [1], [2], or [4] is selected — by the user at the picker, by `--model`, or by the `--auto` algorithm — dispatch to the chosen superpowers skill with a behavioral override block prepended to the dispatch prompt. Every dispatch path prepends one; there is no path that dispatches without a preamble.
 
 The `## Validation` block that every preamble requires is `/implement`'s hand-back format — it is what orchestrate and the user receive when the dispatched agent returns. Its bullets are spelled out inside each preamble rather than referenced from here, because the preamble is copied into another agent's prompt and that agent never reads this file. **Empty bullets print `none stated` rather than being omitted:** an explicit "none" is a claim someone can challenge; silence is indistinguishable from having forgotten.
 

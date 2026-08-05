@@ -139,7 +139,7 @@ Load `references/implementation-step.md` (which transitively loads `references/t
 1. Build the task graph from the plan (per `references/task-graph.md`).
 1.5. **Plan gate — rollback stated per task.** Every task states how to undo it before implementation begins. **"Forward-fix only" is an acceptable answer when stated deliberately** — what is unacceptable is discovering at failure time that nobody considered it. Treat schema migrations and infrastructure applies as requiring an explicit rollback, never a default.
 
-   **Under `--auto` the gate never prompts** — auto mode takes no user input, and this branch overrides both interactive branches below, including the schema-migration exception. Print `Rollback not stated: <task names>` before dispatch, append that same list to the dispatch prompt after the override preamble instructing the agent to record it under "Checks SKIPPED, and why", and continue.
+   **Under `--auto` the gate never prompts** — auto mode takes no user input, and this branch overrides both interactive branches below, including the schema-migration exception. If one or more tasks lack the field, print `Rollback not stated: <task names>` before dispatch and append that same list to the dispatch prompt after the override preamble, instructing the agent to record it under "Checks SKIPPED, and why". If every task carries the field, print nothing and append nothing — an empty list is not a skipped check. Either way, continue without prompting.
 
    Interactive runs (no `--auto`):
    - **No task carries a `Rollback:` field** → the plan predates the field. Print `Plan predates the Rollback field; no per-task rollback stated` and continue without prompting — except for any task the plan itself describes as a schema migration or an infrastructure apply, which is prompted regardless. Judge that from the task's own text and `Files:` paths; do not infer it from anything outside the plan.
@@ -153,7 +153,7 @@ Load `references/implementation-step.md` (which transitively loads `references/t
    ELSE                           → dispatch option [1]: single-agent
    ```
    Options [2] subagent-per-task and [3] clear-context are **excluded**.
-   Skip the picker presentation — dispatch directly.
+   Skip the picker presentation — dispatch directly. The preamble block for the selected option in `implementation-step.md` Override Dispatch section is still prepended, exactly as in step 3.
 4. **Else** → present the 4-option dispatch picker exactly as defined in `references/implementation-step.md`:
    ```
    [1] Single-agent <(recommended) if applicable>

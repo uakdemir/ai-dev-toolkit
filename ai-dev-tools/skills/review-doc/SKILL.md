@@ -320,6 +320,8 @@ After printing the terminal output, auto-triage each remaining issue from `tmp/_
 - **Defer:** The fix requires information the agent doesn't have, depends on future work, or is explicitly a future concern.
 - **Push back:** The finding is incorrect, irrelevant, or based on a misunderstanding of the document/spec. Record the agent's reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected.
 
+A `cross-reference` finding reporting the same document diverging across two locations is **always deferred**, never applied — the same rule the fixer follows (`prompts/coder.md`). Reason: "requires a human decision on which copy is authoritative." This phase commits what it applies, so reconciling the copies here would land the fixer's forbidden edit through a different door.
+
 The agent never asks the user. Every remaining issue resolves to apply, defer, or push back — including critical-severity items the agent cannot confidently fix (push back with explicit reasoning).
 
 After auto-triage, print a summary and commit applied fixes:
