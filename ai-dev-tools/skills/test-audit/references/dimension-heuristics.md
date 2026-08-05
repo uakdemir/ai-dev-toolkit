@@ -62,24 +62,10 @@ Agent 2 reads test files only. This is a composite agent covering 3 sub-concerns
 
 ### Weak Assertions
 
-Scan test files for assertion patterns that check existence/type but not value:
-
-**Node.js (Jest/Vitest):**
-- `expect(…).toBeDefined()` — weak, should check actual value
-- `expect(…).toBeTruthy()` — weak unless checking a boolean
-- `expect(…).not.toBeNull()` — weak, should check actual value
-- `expect(…).toBeInstanceOf(…)` without subsequent value check — weak
-
-**Python (pytest):**
-- `assert result is not None` — weak
-- `assert isinstance(result, …)` without value check — weak
-- `assert result` (truthy check only) — weak unless checking boolean
-- `assert len(result) > 0` without checking contents — weak
-
-**.NET (xUnit):**
-- `Assert.NotNull(…)` without subsequent value assertion — weak
-- `Assert.IsType<…>(…)` without value check — weak
-- `Assert.True(result != null)` — weak
+Scan test files for assertion patterns that check existence/type but not value. The per-stack
+pattern lists live in `${CLAUDE_PLUGIN_ROOT}/references/verification-evidence.md` §
+"Weak Assertion Patterns by Stack" — read them there. They are shared with `review-code` so the
+two skills cannot disagree about what a weak assertion is; do not restate them here.
 
 Risk: 2-3 depending on what's being tested. Effort: 1.
 
