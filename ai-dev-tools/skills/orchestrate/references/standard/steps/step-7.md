@@ -19,7 +19,7 @@ Ready to finalize?
 
 1. Update hint to `finalized`.
 2. If `--use-roadmap` was active: load `references/standard/refactor-roadmap-check.md` for roadmap marking logic.
-3. **Tasks file** (only when one exists — discovery order in `${CLAUDE_PLUGIN_ROOT}/references/tasks-file.md`): update the tasks this cycle advanced. Set `Evidence:` to the commit or `file:line` that proves the current state. Apply the completion rule — check the box only when the acceptance criteria and required validation pass. Where validation was skipped, record the gap on the task and leave the box unchecked; do not mark incomplete work done. The `/commit` breadcrumb below carries the edit, which is the point: a cycle that finalized without touching the tasks file shows the omission in the diff.
+3. **Tasks file** (only when one exists — discovery order in `${CLAUDE_PLUGIN_ROOT}/references/tasks-file.md`): update the tasks this cycle advanced. Set `Evidence:` to the commit or `file:line` that proves the current state. Apply the completion rule — check the box only when the acceptance criteria and required validation pass. Where validation was skipped, record the gap on the task and leave the box unchecked; do not mark incomplete work done. If the file exists in more than one location, update none of them — surface the conflict and leave every copy untouched until the user says which is authoritative. The `/commit` breadcrumb below carries the edit, which is the point: a cycle that finalized without touching the tasks file shows the omission in the diff.
 
 ## Breadcrumb
 

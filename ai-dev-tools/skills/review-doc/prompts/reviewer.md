@@ -12,10 +12,11 @@ Review each document for completeness gaps, internal contradictions, implementab
 ## Inputs
 
 - Document paths: newline-separated list provided in dispatch prompt (may be a single path)
+- Additional copies (read-only, do not fix): newline-separated list provided in dispatch prompt, or absent. These are same-basename copies found at other locations — review them, never propose editing them.
 - Reference document path: provided in dispatch prompt (or "none")
 - Read the project's CLAUDE.md for conventions and constraints
 
-**Location format:** When multiple documents are provided, prefix each finding's location with the filename: `strategy.md > Section 3.2`. For cross-file findings, use: `strategy.md + module-map.md > Module counts`. When only one document is provided, omit the filename prefix.
+**Location format:** When multiple documents are provided, prefix each finding's location with the filename: `strategy.md > Section 3.2`. For cross-file findings, use: `strategy.md + module-map.md > Module counts`. When only one document is provided, omit the filename prefix — unless read-only copies are also in scope, in which case always prefix with the full path, so a duplicate-divergence finding names exactly which copy it is about.
 
 ## What to Check
 

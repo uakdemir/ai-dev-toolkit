@@ -139,9 +139,11 @@ Load `references/implementation-step.md` (which transitively loads `references/t
 1. Build the task graph from the plan (per `references/task-graph.md`).
 1.5. **Plan gate — rollback stated per task.** Every task states how to undo it before implementation begins. **"Forward-fix only" is an acceptable answer when stated deliberately** — what is unacceptable is discovering at failure time that nobody considered it. Treat schema migrations and infrastructure applies as requiring an explicit rollback, never a default.
 
-   If NO task carries a `Rollback:` field, the plan predates the field: print `Plan predates the Rollback field; no per-task rollback stated` and continue without prompting — except for any task touching a schema migration or an infrastructure apply, which is prompted regardless. Otherwise list every task whose `Rollback:` field is missing or empty, and ask the user to supply one or confirm forward-fix-only. Do not dispatch until each is resolved.
+   **Under `--auto` the gate never prompts** — auto mode takes no user input, and this branch overrides both interactive branches below, including the schema-migration exception. Print `Rollback not stated: <task names>` before dispatch, append that same list to the dispatch prompt after the override preamble instructing the agent to record it under "Checks SKIPPED, and why", and continue.
 
-   Under `--auto` the gate does not prompt (auto mode takes no user input): print `Rollback not stated: <task names>` before dispatch, append that same list to the dispatch prompt after the override preamble instructing the agent to record it under "Checks SKIPPED, and why", and continue.
+   Interactive runs (no `--auto`):
+   - **No task carries a `Rollback:` field** → the plan predates the field. Print `Plan predates the Rollback field; no per-task rollback stated` and continue without prompting — except for any task the plan itself describes as a schema migration or an infrastructure apply, which is prompted regardless. Judge that from the task's own text and `Files:` paths; do not infer it from anything outside the plan.
+   - **Some tasks carry it and some do not** → list every task whose `Rollback:` field is missing or empty, and ask the user to supply one or confirm forward-fix-only. Do not dispatch until each is resolved.
 2. Compute the execution model recommendation (per `references/implementation-step.md` Execution Model Recommendation section).
 3. **If `--model` flag was provided** → short-circuit the picker, dispatch directly with that model. The preamble block in `implementation-step.md` Override Dispatch section is still prepended.
 3.5. **If `--auto` flag is active (and `--model` is NOT provided):**
