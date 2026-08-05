@@ -12,9 +12,9 @@
 - ② **The per-stack patterns move, they are not copied.** `test-audit/references/dimension-heuristics.md` loses its inline Node/Python/.NET weak-assertion lists and points at the shared reference. Copying would reintroduce the drift ① exists to prevent.
 - ③ **`test-audit` gets the extraction and nothing else.** No demonstration requirement, no Change 2, no removed-verification detection. Rationale in Scope §3.
 - ④ **No auto/standard divergence — the divergence was the defect.** An earlier draft kept auto mode's fail-open (`stage-iii-code-review.md`: *"Missing or malformed → treat as 'no criticals' and advance"*) and scoped Incomplete to standard mode. That was wrong on two counts. `advanced-as-clean` is a silent false green — the exact failure the 2.8.x practices were written to eliminate, institutionalised in this plugin's own pipeline while it enforced the opposite on users. And it is not a safety net: it **overrides** failure machinery that already exists and is non-destructive (`retry-semantics.md` retry-once → `crash-code-review.md` soft-reset, stash, `skipped-crash-code-review`, continue to next spec). The override is deleted so the built path runs. Malformed output fails closed in both modes.
-- ⑦ **Validation is a machine check, and the duty sits with the writer.** Today neither side is real: the reviewer is never asked to check its own output, and the orchestrator's VALIDATION step is the orchestrating LLM reading the file. A single stdlib validator is shipped and invoked by both — the reviewer before `Write` (duty), the orchestrator at VALIDATION (verification) — with retry-once and then failure in between. Parse-only checking was rejected as a proxy: it catches fences and trailing commas but not invented fields or out-of-enum values, which is most of what actually goes wrong.
 - ⑤ **Four corrections to the source work order** are folded in — see Scope §4. One of them (`additionalProperties`) is the difference between the change working and aborting every run.
 - ⑥ **Acceptance criteria are verified empirically** via a throwaway fixture repo in the session scratchpad. `review-code` reads diffs and never executes tests, so the fixture is text files and commits, not a working project.
+- ⑦ **Validation is a machine check, and the duty sits with the writer.** Today neither side is real: the reviewer is never asked to check its own output, and the orchestrator's VALIDATION step is the orchestrating LLM reading the file. A single dependency-free Node validator is shipped and invoked by both — the reviewer before `Write` (duty), the orchestrator at VALIDATION (verification) — with retry-once and then failure in between. Parse-only checking was rejected as a proxy: it catches fences and trailing commas but not invented fields or out-of-enum values, which is most of what actually goes wrong.
 
 ## Problem & goal
 
@@ -124,16 +124,16 @@ Incomplete names the files that were not inspected rather than announcing the ru
 
 **Change 4 — validate the output with a machine, not a claim.** Not in the source work order; added because Change 3 makes the schema stricter and neither existing check is real.
 
-New file `ai-dev-tools/scripts/validate-review-json.py` — Python 3 standard library only, no third-party dependency, no network:
+New file `ai-dev-tools/scripts/validate-review-json.cjs` — Node built-ins only, no dependency, no network, no `package.json` required. Named `.cjs` rather than `.js` so its module type cannot change if a `package.json` is ever added to the plugin:
 
 ```
-usage: validate-review-json.py <path-to-review-code.json>
+usage: node validate-review-json.cjs <path-to-review-code.json>
 exit 0  valid
 exit 1  invalid — one human-readable error per line on stderr
 exit 2  file missing or unreadable
 ```
 
-It checks what `additionalProperties: false` and the enums actually mean: the file parses; required top-level keys are present; no unlisted top-level key exists; `coverage` has its three fields with the right types; every issue carries exactly the required keys and no others; `severity` and `category` are in enum; `confidence` is an integer in 40–100. It also **prints the recount** of severities from the `issues` array, so the orchestrator's "never trust the declared counts" rule is executed rather than remembered.
+It uses only `JSON.parse`, `fs.readFileSync`, `process.argv` and `process.exit`, so no Node version floor applies and none is declared. It checks what `additionalProperties: false` and the enums actually mean: the file parses; required top-level keys are present; no unlisted top-level key exists; `coverage` has its three fields with the right types; every issue carries exactly the required keys and no others; `severity` and `category` are in enum; `confidence` is an integer in 40–100. It also **prints the recount** of severities from the `issues` array, so the orchestrator's "never trust the declared counts" rule is executed rather than remembered.
 
 Two callers, one script:
 
@@ -142,7 +142,7 @@ Two callers, one script:
 
 This requires a narrow carve-out in the reviewer prompt's Tool Usage Rules, which otherwise forbid Bash for file operations. The carve-out permits exactly one command shape — the validator, against its own output path — and nothing else. It is stated as an exception so it cannot be read as a general relaxation.
 
-**When `python3` is unavailable** (a .NET-only or Node-only machine is a realistic case), the validator is skipped, both callers fall back to reading the file, and the skip is recorded under `## Validation → Checks SKIPPED, and why` with the reason. An unavailable check that is stated is acceptable; one that is silently absent is the failure this whole change set exists to prevent.
+**When `node` is unavailable** (a native Claude Code install on a .NET-only or Python-only machine is a realistic case — `claude` ships as a native binary and does not imply a Node runtime), the validator is skipped, both callers fall back to reading the file, and the skip is recorded under `## Validation → Checks SKIPPED, and why` with the reason. An unavailable check that is stated is acceptable; one that is silently absent is the failure this whole change set exists to prevent.
 
 ### §3 — `skills/test-audit/` changes
 
@@ -211,7 +211,7 @@ $SCRATCHPAD/verification-fixture/
 | 5a | Status logic honours `not_inspected` | hand-construct a `review-code.json` with non-empty `not_inspected` and zero criticals; run the Final Report logic | status **Incomplete**, files named, not "Approved" |
 | 5b | Reviewer populates `not_inspected` honestly | fixture commit 3: change `big.js` so the diff exceeds 3000 lines; run review-code | either the file is read and `not_inspected` is `[]`, or it is skipped and appears in `not_inspected` — never skipped *and* absent |
 | 6 | Clean diff still terminates | run review-code on a clean in-repo diff | status "Approved", no spurious Incomplete |
-| 7 | Validator rejects bad artifacts | run `validate-review-json.py` against hand-crafted files: an invented top-level key, an out-of-enum `severity`, `confidence: 30`, a trailing comma | exit 1 each time, naming the offending key or value |
+| 7 | Validator rejects bad artifacts | run `node validate-review-json.cjs` against hand-crafted files: an invented top-level key, an out-of-enum `severity`, `confidence: 30`, a trailing comma | exit 1 each time, naming the offending key or value |
 | 8 | Validator accepts a good artifact | run it against a real `review-code.json` produced this session | exit 0, recount printed |
 | 9 | Fail-open is gone | `grep -rn "fail open\|advanced-as-clean\|Optimistic trust" ai-dev-tools/` | zero hits |
 
@@ -230,7 +230,7 @@ Small commits on `master`, in dependency order:
 3. `feat(review-code): replace test-gap with a verification-gap lens` — rename across 4 files + new definition + Do NOT Flag additions
 4. `feat(review-code): separate severity from confidence` — schemas, mapping line, `low`
 5. `feat(review-code): report unopened files and add the Incomplete status` — coverage field, `additionalProperties`/`required`, Status Logic, Validation rendering
-6. `feat(review-code): validate reviewer output with a script, not a claim` — `scripts/validate-review-json.py`, the reviewer's pre-write duty, the Tool Usage carve-out, the orchestrator's VALIDATION step, and the `python3`-absent fallback
+6. `feat(review-code): validate reviewer output with a script, not a claim` — `scripts/validate-review-json.cjs`, the reviewer's pre-write duty, the Tool Usage carve-out, the orchestrator's VALIDATION step, and the `node`-absent fallback
 7. `fix(orchestrate): stop advancing malformed review output as clean` — delete the Unusable-Output Policy and its iter-4 exception; extend the crash signal to cover written-but-invalid artifacts
 8. `chore(release): ai-dev-tools 2.9.0` — bump **after** the fixes land, not before (2.8.0 was stamped ahead of its own review fixes and the version described a tree that no longer existed)
 
@@ -238,10 +238,10 @@ Commit 7 depends on commit 6: deleting the fail-open before a real validator exi
 
 ## Success criteria
 
-- All nine acceptance criteria pass by execution, with results quoted. The one thing verified by reading rather than running is the `python3`-absent fallback path; it is recorded as such under Checks SKIPPED rather than claimed.
+- All nine acceptance criteria pass by execution, with results quoted. The one thing verified by reading rather than running is the `node`-absent fallback path; it is recorded as such under Checks SKIPPED rather than claimed.
 - `grep -rn "test-gap"` from the repo root returns nothing.
 - The shared reference has exactly one definition of the per-stack weak patterns; `test-audit` references it and does not restate it.
-- `validate-review-json.py` runs on Python 3 with no third-party import, exits 1 on each malformed fixture, and exits 0 on a real artifact.
+- `validate-review-json.cjs` runs on Node with no dependency and no `package.json`, exits 1 on each malformed fixture, and exits 0 on a real artifact.
 - No fail-open language survives anywhere in `ai-dev-tools/`.
 - `claude plugin validate ./ai-dev-tools --strict` passes.
 - The release commit's `## Validation` section states commands run, checks skipped, and residual risk — the practice this plugin now enforces on everyone else applies to its own release.
