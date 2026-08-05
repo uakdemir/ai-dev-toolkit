@@ -311,7 +311,7 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (below).
 4. Print terminal output.
-5. If status is "Approved with suggestions", run the Respond to Remaining Issues phase (below).
+5. If status is "Approved with suggestions" or "Incomplete", run the Respond to Remaining Issues phase (below).
 
 ## Respond to Remaining Issues
 
