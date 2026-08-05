@@ -122,6 +122,24 @@ if (!isObj(doc)) {
   }
 }
 
+// A declared count that contradicts the issues array is invalid output, not a
+// warning. The auto-pipeline gates read these fields off disk with jq
+// (see references/common/error-logs-format.md), so a file that passes
+// validation while under-declaring criticals trips an early exit on a review
+// that found them. Fail closed; the writer fixes its own artifact.
+if (errors.length === 0) {
+  if (counts.critical !== doc.critical_count) {
+    errors.push('critical_count: declared ' + doc.critical_count +
+      ' but the issues array holds ' + counts.critical +
+      '; set it to the recount');
+  }
+  if (counts.high !== doc.high_count) {
+    errors.push('high_count: declared ' + doc.high_count +
+      ' but the issues array holds ' + counts.high +
+      '; set it to the recount');
+  }
+}
+
 if (errors.length > 0) {
   for (const e of errors) process.stderr.write(e + '\n');
   process.exit(1);
@@ -129,12 +147,4 @@ if (errors.length > 0) {
 
 process.stdout.write('recount: critical=' + counts.critical + ' high=' + counts.high +
   ' medium=' + counts.medium + ' low=' + counts.low + '\n');
-if (counts.critical !== doc.critical_count) {
-  process.stdout.write('note: declared critical_count=' + doc.critical_count +
-    ' differs from recount ' + counts.critical + '; the recount is authoritative\n');
-}
-if (counts.high !== doc.high_count) {
-  process.stdout.write('note: declared high_count=' + doc.high_count +
-    ' differs from recount ' + counts.high + '; the recount is authoritative\n');
-}
 process.exit(0);

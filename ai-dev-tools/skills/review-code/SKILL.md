@@ -315,7 +315,9 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 
 ## Respond to Remaining Issues
 
-**Trigger:** Status is "Approved with suggestions" (high/medium issues remain, zero criticals).
+**Trigger:** Status is "Approved with suggestions" OR "Incomplete", and issues remain (zero criticals).
+
+Incomplete triggers it too. A finding is real whether or not some *other* file went unread — the coverage hole makes the verdict incomplete, it does not make the findings less true, and suppressing triage would punish the run twice. The status stays Incomplete; only the triage phase is unblocked.
 
 After printing the terminal output, auto-triage each remaining issue from `tmp/_reviews_errors/review-code.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
 
@@ -360,6 +362,8 @@ Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cann
 ```
 
 **When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" means criticals remain — the loop should have handled them, or max iterations were exhausted (user needs to fix manually).
+
+**When status is "Incomplete":** run the phase, and add one line to its summary naming the files in `coverage.not_inspected`, so a reader knows the triage happened over a partial view. An applied fix could in principle conflict with something in an unopened file; naming them is what makes that risk visible rather than hidden.
 
 ## Cross-Iteration Tracking
 
