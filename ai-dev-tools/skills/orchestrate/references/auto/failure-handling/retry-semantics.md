@@ -8,6 +8,9 @@ An agent crash is any of:
 1. The agent dispatch throws an exception
 2. The agent times out after 10 minutes without returning
 3. The agent returns without writing its expected output artifact
+4. The agent writes its expected output artifact but the artifact fails schema validation
+
+Item 4 matters because without it, malformed-but-present output falls through the crash definition entirely — it is neither a crash nor a usable result, and nothing routes it anywhere.
 
 **Expected output artifacts:**
 - Agent i → `tmp/_reviews_errors/<run_id>-review-doc-phase{N}.json`

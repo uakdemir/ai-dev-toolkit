@@ -53,11 +53,13 @@ At iter 4's REVIEW output, pre-fix:
 
 ---
 
-## Unusable-Output Policy
+## Output Validation
 
-Optimistic trust. Orchestrate does NOT validate review JSON for agent iii. Missing or malformed → treat as "no criticals" and advance. Residual criticals caught by the next iteration. This optimistic policy is authoritative for agent iii and **overrides** the generic crash-then-retry rule in `references/auto/failure-handling/retry-semantics.md`: a missing agent-iii artifact is advanced-as-clean, not retried.
+Agent iii's output is validated like any other artifact — by `scripts/validate-review-json.cjs`, per `review-code`'s VALIDATION step. There is no optimistic-trust exemption and no fail-open at the final iteration.
 
-**Exception:** If iter 4 JSON is unreadable, assume critical count = 0 (fail open).
+Malformed or missing output is a crash (`references/auto/failure-handling/retry-semantics.md`), which means retry-once and then `crash-code-review.md`: soft-reset to `last_iteration_head`, stash, state `skipped-crash-code-review`, continue to the next spec. One spec is skipped loudly and the reason is recorded; the batch is not halted and no work is destroyed.
+
+Advancing unvalidated output as clean was a silent false green — a review that never ran, reported as a review that passed.
 
 ---
 

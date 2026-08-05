@@ -26,10 +26,12 @@ Load this file when any failure occurs. Then load the specific failure-type refe
 
 ---
 
-## Unusable-Output Policy (Asymmetric)
+## Unusable-Output Policy
 
 | Stage | Policy | Rationale |
 |---|---|---|
 | Agent i | Optimistic trust | Text artifacts — bad JSON doesn't corrupt downstream |
 | Agent ii | **Strict validation → crash on failure** | Bad commits leave disk inconsistent |
-| Agent iii | Optimistic trust | Next iteration re-reads git state from scratch |
+| Agent iii | **Strict validation → crash on failure** | A review that could not be read is a review that did not happen |
+
+Agent iii previously used optimistic trust, on the reasoning that the next iteration re-reads git state from scratch. That reasoning does not survive the final iteration, where there is no next iteration to recover — and it made an unreadable review indistinguishable from a clean one. Its output is now validated by `scripts/validate-review-json.cjs` and a failure routes into the normal crash path (retry-once, then soft-reset and skip the spec), which is non-destructive.
