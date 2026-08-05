@@ -36,6 +36,14 @@ Phase boundary advancing to Step 7 (Complete).
 /clear → /orchestrate
 ```
 
+**Case C (status Incomplete — review did not see every changed file):**
+Do NOT advance to Step 7. A run with 0 criticals and 0 highs can still be Incomplete, and routing on counts alone would send a coverage hole through as a success. Name the files from `coverage.not_inspected` and re-review with the scope narrowed to them:
+```
+/commit
+/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 1)
+```
+Case C is checked **before** Case B, since both match on the same counts. If the user explicitly accepts the coverage hole, advance to Step 7 with the uninspected files carried into the Step 7 status line.
+
 Edge: >50% non-feature commits interleaved → warn.
 
 `/respond-to-review` is never rendered here — review-code applies fixes during iterations.
