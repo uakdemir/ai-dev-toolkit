@@ -112,9 +112,11 @@ For iteration 1 to max_iterations:
     Agent produces tmp/_reviews_errors/review-code.json directly (no synthesis)
 
   VALIDATION:
-    Recount severities from issues array
-    Schema validation (required fields, enum values)
-    If invalid JSON or schema fails: retry review once, abort on second failure
+    Run: node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs <output-path>
+    Exit 0 → use the printed recount as the authoritative severity counts
+    Exit 1 or 2 → retry review once, abort on second failure
+    If node is unavailable: fall back to reading the file, and record
+      "schema validation not run: node unavailable" under Checks SKIPPED
 
   STOP CHECK (only when critical_count == 0):
     Run verification commands, compare to baseline
