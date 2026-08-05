@@ -28,6 +28,12 @@ Effort sets analysis DEPTH — it never gates which severities you report (criti
 
 For files shown as stat-only summaries (no full diff included), use the Read tool to inspect the changed files. Do not skip files just because their full diff was not included. These files exceeded the 3000-line diff budget but still need review.
 
+## Coverage Accounting
+
+Record every changed file you actually inspected — via the diff or via `Read`. Any changed file you did not open goes in `not_inspected`, with no exceptions. An empty `not_inspected` is a claim someone can challenge; an omitted one is not.
+
+`files_in_diff` is the count of files in the diff, including stat-only ones. `files_inspected` is how many of them you opened. They are equal only when `not_inspected` is empty.
+
 ## Evidence Rules
 
 Do not treat the implementing agent's summary as evidence of coverage or correctness. Verify against the diff and against the current on-disk files using Read and Grep. A stated test count is not a passing test count; where a claim can only be settled by running a command you cannot run, report it as an unverified claim rather than accepting it.
@@ -84,6 +90,11 @@ Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_revi
 {
   "critical_count": <integer>,
   "high_count": <integer>,
+  "coverage": {
+    "files_in_diff": <integer>,
+    "files_inspected": <integer>,
+    "not_inspected": ["path/one.ts"]
+  },
   "issues": [
     {
       "severity": "critical|high|medium|low",

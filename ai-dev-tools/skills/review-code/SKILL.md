@@ -280,7 +280,7 @@ The three `## Validation` bullets are required. **An empty bullet prints `none s
 
 What belongs under each:
 - **Commands run** — every `--verify` command that executed, quoted exactly, with its result against baseline.
-- **Checks SKIPPED** — every command that did not execute, and why. This includes commands excluded as non-deterministic during baseline capture (see Verification Commands), which are otherwise reported only once at baseline and never appear again. It also includes `none configured` when `--verify` was not passed: the checks were skipped, and the reason is that no checks were defined.
+- **Checks SKIPPED** — every command that did not execute, and why. This includes commands excluded as non-deterministic during baseline capture (see Verification Commands), which are otherwise reported only once at baseline and never appear again. It also includes `none configured` when `--verify` was not passed: the checks were skipped, and the reason is that no checks were defined. It also includes every file in `coverage.not_inspected` — a changed file that was never opened is a skipped check, and it is what makes the run Incomplete rather than Approved.
 - **Residual risk** — what this run could not establish. Max-iterations exhausted with criticals remaining, pushed-back findings, files reviewed as stat-only summaries, verification that passed but does not cover the changed paths.
 
 ## Terminal Output
@@ -379,10 +379,13 @@ If no `--verify` commands are configured, skip verification comparison and treat
 ## Status Logic
 
 First match wins:
-1. **Error**: loop aborted
+1. **Error**: loop aborted — includes reviewer output that failed validation twice
 2. **Issues Found**: `critical_count > 0` OR verification regressions present
-3. **Approved with suggestions**: any high, medium, or low issues remain
-4. **Approved**: all other cases
+3. **Incomplete**: `coverage.not_inspected` is non-empty
+4. **Approved with suggestions**: any high, medium, or low issues remain
+5. **Approved**: all other cases
+
+**Incomplete** names the files that were not inspected rather than announcing the run clean. It has exactly one trigger. Output that fails validation resolves to **Error** at rule 1 in both standard and auto mode, so it never reaches rule 3.
 
 ## Iteration Log Format
 
@@ -411,10 +414,20 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["critical_count", "high_count", "issues"],
+  "required": ["critical_count", "high_count", "coverage", "issues"],
   "properties": {
     "critical_count": { "type": "integer", "minimum": 0 },
     "high_count": { "type": "integer", "minimum": 0 },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files_in_diff", "files_inspected", "not_inspected"],
+      "properties": {
+        "files_in_diff": { "type": "integer", "minimum": 0 },
+        "files_inspected": { "type": "integer", "minimum": 0 },
+        "not_inspected": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "issues": {
       "type": "array",
       "items": {
