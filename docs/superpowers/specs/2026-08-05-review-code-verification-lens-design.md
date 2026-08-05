@@ -204,7 +204,7 @@ $SCRATCHPAD/verification-fixture/
 
 | # | Criterion | Method | Expected |
 |---|---|---|---|
-| 1 | Rename complete | `grep -rn "test-gap"` from the **repo root** (not `skills/`) | zero hits |
+| 1 | Rename complete | `grep -rn "test-gap"` from the **repo root** (not `skills/`), excluding `docs/superpowers/` | zero hits |
 | 2 | Weakened assertion fires the lens | fixture commit 1: `expect(total).toBe(19.99)` → `expect(total).toBeDefined()`; run review-code | ≥1 `verification-gap` finding |
 | 3 | No-op diff stays silent | fixture commit 2: comment/whitespace only; run review-code | zero `verification-gap` findings |
 | 4 | Axes are independent | hand-check a constructed high-severity/low-confidence finding | not demoted to medium |
@@ -239,7 +239,7 @@ Commit 7 depends on commit 6: deleting the fail-open before a real validator exi
 ## Success criteria
 
 - All nine acceptance criteria pass by execution, with results quoted. The one thing verified by reading rather than running is the `node`-absent fallback path; it is recorded as such under Checks SKIPPED rather than claimed.
-- `grep -rn "test-gap"` from the repo root returns nothing.
+- `grep -rn "test-gap"` from the repo root returns nothing outside `docs/superpowers/`. That exclusion is not a loophole: this spec and its plan quote the old value deliberately as historical record, so a criterion demanding zero hits repo-wide would be unachievable by construction and could only ever be reported as passing by quietly narrowing the grep.
 - The shared reference has exactly one definition of the per-stack weak patterns; `test-audit` references it and does not restate it.
 - `validate-review-json.cjs` runs on Node with no dependency and no `package.json`, exits 1 on each malformed fixture, and exits 0 on a real artifact.
 - No fail-open language survives anywhere in `ai-dev-tools/`.

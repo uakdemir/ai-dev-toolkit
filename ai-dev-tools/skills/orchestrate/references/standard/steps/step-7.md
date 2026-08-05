@@ -10,7 +10,7 @@ Present:
 ```
 ── Step 7: Complete ──────────────────────────────
 Feature: <feature-name>
-Status: <Approved | Approved with suggestions>
+Status: <Approved | Approved with suggestions | Incomplete>
 
 Ready to finalize?
 ```

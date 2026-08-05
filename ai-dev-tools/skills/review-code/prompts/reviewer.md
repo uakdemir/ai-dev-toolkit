@@ -131,7 +131,7 @@ If `node` is not installed, skip this step and say so explicitly in your respons
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Write (not echo/cat heredoc via Bash) for writing files
 - Do not use Bash for file operations — only for git log, git diff, git status commands, and the one exception below
-- **Exception, and the only one:** `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs {{OUTPUT_PATH}}`, to validate your own output as described in Output. This permits that one command against that one path. It is not a general relaxation of the Bash rule.
-- Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
+- **Exception, and the only one:** the validator command described in Output, run against your own output path. This permits that one command against that one path. It is not a general relaxation of the Bash rule.
+- Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths. `${CLAUDE_PLUGIN_ROOT}` and `{{OUTPUT_PATH}}` in the validator command are substituted before this prompt reaches you — run the resulting literal path. If either still appears literally in your copy of this prompt, the substitution did not happen: report `validator skipped: path not substituted` rather than guessing at the path.
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)

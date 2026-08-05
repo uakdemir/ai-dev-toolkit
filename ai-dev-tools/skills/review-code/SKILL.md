@@ -251,13 +251,13 @@ Generate `tmp/_reviews_errors/review-code-summary.md` using this template:
 **Date:** YYYY-MM-DD HH:MM
 **Scope:** last N commits
 **Against:** <spec-path or "standalone">
-**Status:** Approved | Approved with suggestions | Issues Found
+**Status:** Approved | Approved with suggestions | Incomplete | Issues Found
 **Iterations:** N/M
 
 ## Aggregate
-X Critical fixed | Y High fixed | Z Medium fixed
-Remaining: A Critical | B High | C Medium
-Last round: X Critical fixed | Y High fixed | Z Medium fixed
+X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed
+Remaining: A Critical | B High | C Medium | D Low
+Last round: X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed
 Pushed back: P
 
 ## Validation
@@ -294,9 +294,9 @@ Review Code Complete
   Scope: last N commits against <spec or "standalone">
   Iterations: N/M
   Status: Approved with suggestions
-  Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed
-  Remaining: 0 Critical | 2 High | 1 Medium
-  Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed
+  Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed | 1 Low fixed
+  Remaining: 0 Critical | 2 High | 1 Medium | 0 Low
+  Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed | 0 Low fixed
   Verification: all passing
   Commits added: abc1234, def5678
   Summary: tmp/_reviews_errors/review-code-summary.md
@@ -329,7 +329,7 @@ After auto-triage, print a summary and commit applied fixes:
 
 ```
 ── Remaining Issues ────────────────────────────
-N issues triaged (H high, M medium).
+N issues triaged (H high, M medium, L low).
 
   [Applied]     #1 high: <title>
   [Applied]     #2 medium: <title>
@@ -364,8 +364,8 @@ Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cann
 ## Cross-Iteration Tracking
 
 Orchestrator maintains running counters across iterations:
-- `total_fixed` (per-severity: critical, high, medium)
-- `last_round_fixed` (per-severity: critical, high, medium) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
+- `total_fixed` (per-severity: critical, high, medium, low)
+- `last_round_fixed` (per-severity: critical, high, medium, low) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
 - `total_pushed_back` (flat count)
 
 Parse `tmp/_reviews_errors/review-code-fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `after_sha != before_sha`, append the short SHA. This populates the "Commits added" line in terminal output.
@@ -399,7 +399,7 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 **Model:** inherited from caller session
 **Effort:** <--effort value>
 **Scope:** last N commits | commits before_sha..after_sha
-**Issues found:** X critical, Y high, Z medium
+**Issues found:** X critical, Y high, Z medium, W low
 **Outcome:** "Fixed N issues (P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>"
 **Issues fixed:** [category] [severity] at [location]
 **Issues pushed back:** [category] [severity] at [location] — reason

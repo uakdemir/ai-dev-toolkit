@@ -41,7 +41,9 @@ After every successful agent iii iteration, orchestrate:
 
 This commit is load-bearing for rollback anchors. The hash update in step 4 always runs regardless of whether a commit was created.
 
-**Successful iteration definition:** agent returned without exception AND iteration log file exists (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`).
+**Successful iteration definition:** agent returned without exception AND the iteration artifact exists (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`) AND that artifact passes `scripts/validate-review-json.cjs`.
+
+An artifact that exists but does not validate is a crash (`retry-semantics.md` crash item 4), not a successful iteration. Without the third clause `last_iteration_head` advances past a review that never validated, and the crash path's soft-reset to that anchor becomes a no-op — the same advance-as-clean behaviour the Output Validation section below removes, arriving by a different route.
 
 ---
 
