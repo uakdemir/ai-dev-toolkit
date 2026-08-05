@@ -381,7 +381,7 @@ If no `--verify` commands are configured, skip verification comparison and treat
 First match wins:
 1. **Error**: loop aborted
 2. **Issues Found**: `critical_count > 0` OR verification regressions present
-3. **Approved with suggestions**: high/medium issues remain
+3. **Approved with suggestions**: any high, medium, or low issues remain
 4. **Approved**: all other cases
 
 ## Iteration Log Format
@@ -422,7 +422,7 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
         "additionalProperties": false,
         "required": ["severity", "category", "location", "confidence", "problem", "suggested_fix"],
         "properties": {
-          "severity": { "type": "string", "enum": ["critical", "high", "medium"] },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
           "category": { "type": "string", "enum": ["bug", "architecture", "spec-drift", "security", "verification-gap"] },
           "location": { "type": "string" },
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },

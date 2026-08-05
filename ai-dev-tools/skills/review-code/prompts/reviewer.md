@@ -86,7 +86,7 @@ Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_revi
   "high_count": <integer>,
   "issues": [
     {
-      "severity": "critical|high|medium",
+      "severity": "critical|high|medium|low",
       "category": "bug|architecture|spec-drift|security|verification-gap",
       "location": "path/to/file.ext:line_number",
       "confidence": <integer 40-100>,
@@ -97,8 +97,11 @@ Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_revi
 }
 ```
 
-Severity mapping by confidence: >= 80 = critical, 60-79 = high, 40-59 = medium.
-Only include findings with confidence >= 40.
+**Severity is consequence, not certainty.** Rate `severity` by what actually happens to the software's user if the finding is real — data loss, auth bypass and silent corruption are critical however unsure you are; a cosmetic issue is low however certain you are. Rate `confidence` separately: it is the likelihood the finding is real. The two axes are independent, and a finding that is uncertain and catastrophic outranks one that is certain and cosmetic.
+
+**Read the code before rating.** Open the source at the finding's location and read enough surrounding code to judge reachability — call sites, guards, and validation that live outside the diff hunk. Do not rate from the diff hunk alone. Severity reflects the real consequence at a real call site, not the worst theoretical reading.
+
+Report findings with `confidence` >= 40. A high-severity finding below that threshold should be investigated until it can be grounded or dropped — not silently discarded.
 
 ## Tool Usage Rules
 - Use Grep (not grep/rg via Bash) for searching file contents
