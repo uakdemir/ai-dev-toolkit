@@ -127,6 +127,7 @@ If `node` is not installed, skip this step and say so explicitly in your respons
 ## Tool Usage Rules
 - Use Grep (not grep/rg via Bash) for searching file contents
 - Use Glob (not find/ls via Bash) for finding files by pattern
+- **If Grep or Glob is unavailable in your session**, fall back to read-only `git grep` and `git ls-files` via Bash, and say so in your report. The Verification Gap section requires searching by symbol and by import reference before claiming no test exists; that evidence is not optional. A search you could not run is a finding you cannot ground — drop the finding rather than assert it unsearched.
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Write (not echo/cat heredoc via Bash) for writing files
 - Do not use Bash for file operations — only for git log, git diff, git status commands, and the one exception below
