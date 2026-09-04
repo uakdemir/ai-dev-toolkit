@@ -67,10 +67,18 @@ Fact-check every verifiable claim in each document against the actual source cod
    - `"location"`: the document section where the claim appears
    - `"problem"`: the claim text + your evidence
    - `"suggested_fix"`: the correction
-   - Set both `confidence` and `severity`:
-     - INACCURATE → confidence 85, severity "critical"
-     - STALE → confidence 70, severity "high"
-     - PARTIALLY ACCURATE → confidence 50, severity "medium"
+   - `"severity"`: rate it by consequence — **an inaccuracy's severity depends on what rests on
+     it.** A wrong count in a paragraph that gates a deletion pass is critical; a wrong attribution
+     in a background sentence is low. Read enough of the surrounding document to see what an
+     implementer does differently because the claim is wrong, and rate that. The verdict class does
+     not fix the severity: an INACCURATE claim nothing is built on is low, and a STALE claim a
+     migration step reads is critical.
+   - `"confidence"`: rate it separately — the likelihood your verdict is right. This is where the
+     verdict class does carry weight: INACCURATE against code you read directly is near-certain,
+     PARTIALLY ACCURATE is by nature less so.
+
+   Severity semantics are shared with `review-code` and defined once, in
+   `references/shared-rules/severity-is-consequence.md`.
 4. Populate the `fact_check_claims` array with ALL claims checked (including ACCURATE):
    ```json
    {"claim": "description of claim", "verdict": "ACCURATE"}

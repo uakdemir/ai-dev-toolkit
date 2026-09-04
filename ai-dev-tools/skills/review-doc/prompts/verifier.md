@@ -47,11 +47,23 @@ Three things, and only these three:
    - `"location"`: where the defect is
    - `"problem"`: what is wrong, naming the disposition id whose fix caused or falsely claimed it
    - `"suggested_fix"`: the correction
-   - Set both `confidence` and `severity`:
-     - `fixed` claimed but not applied → confidence 85, severity "critical"
-     - two fixes from this pass contradict each other → confidence 85, severity "critical"
-     - a fix invalidated a location it did not touch → confidence 70, severity "high"
-     - a recorded `collateral` repair is itself wrong → confidence 70, severity "high"
+   - `"severity"`: rate it by consequence — what happens to the reader or the implementer if this
+     defect is real. A fix that silently left the document asserting something untrue, or that
+     invalidated an instruction another step executes, is critical however unsure you are; a
+     cosmetic slip is low however certain you are.
+   - `"confidence"`: rate it separately — the likelihood the defect is real. A disposition claiming
+     `fixed` where the text is plainly unchanged is near-certain; a fix that *may* have invalidated
+     a location elsewhere is not.
+
+   The defect classes below say what to look for, not what to rate. Judge each one's consequence in
+   the document in front of you:
+     - a `fixed` disposition whose edit was never applied
+     - two fixes from this pass that contradict each other
+     - a fix that invalidated a location it did not touch
+     - a recorded `collateral` repair that is itself wrong
+
+   Severity semantics are shared with `review-code` and defined once, in
+   `references/shared-rules/severity-is-consequence.md`.
 5. **Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts that `/orchestrate`'s endless-loop gate reads; recounting would make post-fix findings look like reviewer findings and trip spurious pipeline failures. Your issues are folded into the counts by the next iteration's reviewer.
 6. **Do NOT touch `fact_check_claims` or `fact_check_accuracy`.**
 7. Rewrite the review JSON with the updated `issues` array using the Write tool. If you found nothing, leave the file untouched and return a one-line summary saying so.

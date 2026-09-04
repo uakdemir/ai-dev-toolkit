@@ -212,7 +212,7 @@ The dispatch prompt must include:
 
 The verifier reads the fix report, re-reads only the document regions it names (issue `location` values and `collateral` entries), and appends any defects to the `issues` array with `category: "verify"`, minting ids from `max + 1` exactly as the fact-checker does.
 
-**Count invariant:** the verifier does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i endless-loop gate reads (`references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 1 → Q2 failure"). A verifier that recounted them would make post-fix findings indistinguishable from reviewer findings and trip spurious pipeline failures. Verifier issues are folded into the counts by the NEXT iteration's reviewer, which recomputes both fields from the full issues array.
+**Count invariant:** the verifier does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i endless-loop gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 1 → Q2 failure"). A verifier that recounted them would make post-fix findings indistinguishable from reviewer findings and trip spurious pipeline failures. Verifier issues are folded into the counts by the NEXT iteration's reviewer, which recomputes both fields from the full issues array.
 
 ## Hash Verification
 
@@ -244,9 +244,9 @@ The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly 
 **Iterations:** N/M
 
 ## Aggregate
-X Critical fixed | Y High fixed | Z Medium fixed
-Remaining: A Critical | B High | C Medium
-Last round: X Critical fixed | Y High fixed | Z Medium fixed
+X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed
+Remaining: A Critical | B High | C Medium | D Low
+Last round: X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed
 Deferred: D | Pushed back: P
 
 ## Fact-Check Accuracy
@@ -274,9 +274,9 @@ Review Doc Complete
   Against: <ref-path or "standalone">
   Iterations: N/M
   Status: Approved with suggestions
-  Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed
-  Remaining: 0 Critical | 2 High | 1 Medium
-  Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed
+  Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed | 1 Low fixed
+  Remaining: 0 Critical | 2 High | 1 Medium | 0 Low
+  Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed | 0 Low fixed
   Fact-check: X/Y claims accurate (Z%)
   Summary: tmp/_reviews_errors/[<run_id>-]review-doc-summary.md
   Full review: tmp/_reviews_errors/[<run_id>-]review-doc.json
@@ -284,7 +284,7 @@ Review Doc Complete
 Recommended next: focused review — collateral recorded in § 3 rule 3, § 7
 /review-doc docs/spec.md --fact-check true --max-iterations 2 --verify-fixes true
 
-Found this round: 3 Critical | 4 High | 2 Medium
+Found this round: 3 Critical | 4 High | 2 Medium | 1 Low
 ```
 
 `Found this round:` is always the **last line printed**. It reports what this invocation's final review surfaced, not an aggregate across rounds, and it is deliberately last because it is the number the next decision keys off. It differs from `Last round:`, which counts issues *fixed*; the gap between the two is what the fixer could not resolve.
@@ -311,7 +311,7 @@ When the loop completes (final gate passes or max iterations exhausted):
 
 ## Respond to Remaining Issues
 
-**Trigger:** Status is "Approved with suggestions" (high/medium issues remain, zero criticals).
+**Trigger:** Status is "Approved with suggestions" (high, medium, or low issues remain, zero criticals).
 
 After printing the terminal output, auto-triage each remaining issue from `tmp/_reviews_errors/review-doc.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
 
@@ -372,14 +372,14 @@ review-doc does **NOT** write to `tmp/past-issues-backlog.md`. Document reviews 
 
 The orchestrator maintains the following state across the loop:
 
-- `total_fixed = {critical: 0, high: 0, medium: 0}` -- per-severity breakdown (populates "X Critical fixed | Y High fixed | Z Medium fixed")
-- `last_round_fixed = {critical: 0, high: 0, medium: 0}` -- per-severity breakdown for the most recent iteration only (populates "Last round:" line)
+- `total_fixed = {critical: 0, high: 0, medium: 0, low: 0}` -- per-severity breakdown (populates "X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed")
+- `last_round_fixed = {critical: 0, high: 0, medium: 0, low: 0}` -- per-severity breakdown for the most recent iteration only (populates "Last round:" line)
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
-- `found_this_round = {critical: 0, high: 0, medium: 0}` -- severity breakdown of the `issues` array in the CURRENT iteration, measured after review and fact-check but before the fix phase. Overwritten each iteration; the final iteration's value populates the "Found this round:" line and rule 1 of the recommendation.
+- `found_this_round = {critical: 0, high: 0, medium: 0, low: 0}` -- severity breakdown of the `issues` array in the CURRENT iteration, measured after review and fact-check but before the fix phase. Overwritten each iteration; the final iteration's value populates the "Found this round:" line and rule 1 of the recommendation.
 - `collateral_count = 0` -- running total of `collateral` entries across every fix phase in this invocation, with their `location` values retained for rendering. **Not reset between iterations.** Scoping it to the final iteration would make recommendation rule 2 unreachable: `fix()` only runs when `total_criticals > 0`, so any iteration that records collateral also leaves `found_this_round.critical > 0` and matches rule 1 first, while an iteration that reaches rule 2 is by definition one where the fixer did not run and recorded nothing.
 
-After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0}` before each iteration and increment it alongside `total_fixed`.
+After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
 
 If a carried-forward `id` has been displaced from a later iteration's JSON (e.g., it dropped out of the active issues set), use the cached severity from the iteration where the id was first introduced — never silently skip a disposition just because its id is no longer in the latest JSON.
 
@@ -390,7 +390,7 @@ If a carried-forward `id` has been displaced from a later iteration's JSON (e.g.
 First match wins:
 
 1. **Issues Found**: `critical_count > 0` OR `fact_check_accuracy < 75`
-2. **Approved with suggestions**: `fact_check_accuracy < 90` OR high/medium issues remain
+2. **Approved with suggestions**: `fact_check_accuracy < 90` OR any high, medium, or low issues remain
 3. **Approved**: all other cases
 
 ## Next-Round Recommendation
@@ -401,7 +401,7 @@ Inputs:
 
 | Input | Source |
 |---|---|
-| `found_this_round` | Severity breakdown of the `issues` array in the FINAL iteration, measured after review and fact-check but before the fix phase — the same point as `total_criticals`. Medium is `len(issues) - critical_count - high_count`. |
+| `found_this_round` | Severity breakdown of the `issues` array in the FINAL iteration, measured after review and fact-check but before the fix phase — the same point as `total_criticals`. Medium and low are counted directly from the `issues` array by `severity`; do not derive either by subtraction from `len(issues)`, which folds one into the other. |
 | `fact_check_accuracy` | The final `review-doc.json` |
 | `collateral_count` | Running total of `collateral` entries across **every** fix phase in this invocation, not just the final iteration's |
 
@@ -490,7 +490,7 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
         "required": ["id", "severity", "category", "location", "confidence", "problem", "suggested_fix"],
         "properties": {
           "id": { "type": "string", "pattern": "^ISSUE-\\d{3,}$" },
-          "severity": { "type": "string", "enum": ["critical", "high", "medium"] },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
           "category": { "type": "string", "enum": [
             "completeness", "consistency", "scope", "structure",
             "fact-check", "verify", "vague-action", "vague-step",

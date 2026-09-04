@@ -92,7 +92,7 @@ When the same document exists in more than one location (the dispatch prompt lis
 
 If the copies are byte-identical, report nothing — duplication without divergence is not a review finding.
 
-**Cap this finding at `high`, never `critical`, regardless of confidence.** No agent can resolve it — the fixer is required to defer it — so a critical would survive every iteration, hold `critical_count` above zero until the cap is exhausted, and lock the run's status to "Issues Found", which suppresses triage for every *other* remaining issue. At `high` the loop converges and the divergence still surfaces in the summary.
+**Cap this finding at `high`, never `critical`.** Its consequence is bounded by what it actually is: two copies of a document disagree, and a reader has to decide which one governs. That is a question the artefact cannot answer for itself, not a defect in the software — nothing is built wrong until the decision is made, and making it visible is the whole remedy. The operational consequence points the same way: no agent can resolve it — the fixer is required to defer it — so a critical would survive every iteration, hold `critical_count` above zero until the cap is exhausted, and lock the run's status to "Issues Found", which suppresses triage for every *other* remaining issue. At `high` the loop converges and the divergence still surfaces in the summary.
 
 ## What to Ignore
 
@@ -102,22 +102,29 @@ If the copies are byte-identical, report nothing — duplication without diverge
 - Architectural alternatives — the document has already chosen an approach
 - Missing backward-compat language — silence is fine; the project default (clean break) applies. Only flag this if the document explicitly references legacy users/clients/versions but fails to specify the compatibility contract. Conversely, DO flag specs that mandate dual-path or legacy support without justification when the project policy is clean break.
 
+## Rating Findings
+
+**Severity is consequence, not certainty.** Rate `severity` by what actually happens to the reader or the implementer if the finding is real — a step that destroys data, a contract the system cannot keep, an instruction that silently builds the wrong thing are critical however unsure you are; a miscount in a sentence nobody builds from is low however certain you are. Rate `confidence` separately: it is the likelihood the finding is real. The two axes are independent, and a finding that is uncertain and catastrophic outranks one that is certain and cosmetic.
+
+This rule is shared with `review-code` and is defined once, in `references/shared-rules/severity-is-consequence.md`. The paragraph above is its operative statement; read the rule file when a rating is genuinely unclear.
+
+**An inaccuracy's severity depends on what rests on it.** A wrong count in a paragraph that gates a deletion pass is critical; a wrong attribution in a background sentence is low. Ask what an implementer does differently because the text is wrong, and rate that.
+
+**Read the surrounding document before rating.** Open the sections the finding depends on and judge whether anything is actually built on the flawed text. Severity reflects the real consequence at a real point of use, not the worst theoretical reading.
+
 ## Output Processing
 
 After collecting all findings:
 
 1. **Deduplicate** — merge findings that flag the same location AND same underlying deficiency. Keep the higher-confidence version.
-2. **Filter** — drop findings with confidence < 40.
-3. **Categorize by severity** using confidence score:
-   - confidence >= 80 → `"critical"`
-   - confidence 60-79 → `"high"`
-   - confidence 40-59 → `"medium"`
-4. **Cap at 20** — include all critical + high first, then fill with medium by descending confidence. If critical + high exceed 20, raise the cap to include all of them.
+2. **Rate both axes** — assign `severity` and `confidence` independently, per Rating Findings above.
+3. **Filter** — report findings with `confidence` >= 40. A high-severity finding below that threshold should be investigated until it can be grounded or dropped — not silently discarded.
+4. **Cap at 20** — include all critical + high first, then fill with medium and low by descending confidence. If critical + high exceed 20, raise the cap to include all of them.
 5. **Assign stable IDs** — every issue gets an `id` of the form `ISSUE-NNN`, zero-padded to **at least** 3 digits (`ISSUE-001`, `ISSUE-007`, `ISSUE-1024`). The algorithm depends on whether a prior iteration's JSON exists.
 
    **First, read the prior file** at `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active). If it doesn't exist, run the **fresh-start** branch below; otherwise run the **carry-forward** branch.
 
-   **Fresh-start branch (no prior file):** Sort the capped issues array by severity descending (critical → high → medium), with confidence descending as the tiebreaker and alphabetical-by-`location` as the deterministic fallback. Assign IDs sequentially in that order starting from `ISSUE-001`.
+   **Fresh-start branch (no prior file):** Sort the capped issues array by severity descending (critical → high → medium → low), with confidence descending as the tiebreaker and alphabetical-by-`location` as the deterministic fallback. Assign IDs sequentially in that order starting from `ISSUE-001`.
 
    **Carry-forward branch (prior file exists):**
    a. Compute `next_id_seed` as the largest numeric suffix across every well-formed id in the prior file's `issues` array, plus 1. A well-formed id matches `^ISSUE-\d{3,}$`; ignore malformed entries when computing the max. If the prior issues array is empty, set `next_id_seed = 1`.
@@ -159,9 +166,12 @@ Valid categories: completeness, consistency, scope, structure, vague-action, vag
 
 ## Confidence Scoring Guide
 
-- **40-59:** Moderate gap — implementer might need to guess or ask questions
-- **60-79:** Real issue — could lead to building the wrong thing or getting stuck
-- **80-100:** Critical gap — guaranteed to cause implementation failure
+`confidence` is the likelihood the finding is real. It says nothing about how bad it would be — that
+is `severity`, rated separately.
+
+- **40-59:** Plausible — the document is ambiguous and you are reading it one of several defensible ways
+- **60-79:** Likely — the evidence is on the page, but a charitable reading could still dissolve it
+- **80-100:** Near-certain — you can point at the exact text that makes it true
 
 ## Tool Usage Rules
 - Use Grep (not grep/rg via Bash) for searching file contents
