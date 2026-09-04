@@ -76,3 +76,18 @@ The auto-pipeline gates (stage-i / stage-iii early-exit, stage-i endless-loop, a
 ```bash
 jq '.critical_count' tmp/_reviews_errors/<run_id>-review-code-iter<N>.json
 ```
+
+**The recount excludes the review loop's own churn.** Every issue carries an `origin` — `"document"` or `"self-review"`. Findings raised by a round's own self-review pass, against text that same round's fixer had just written, carry `origin: "self-review"`, and the recount skips them:
+
+```
+critical_count = count(severity == "critical" AND origin != "self-review")
+high_count     = count(severity == "high"     AND origin != "self-review")
+```
+
+An issue with no `origin` counts as `"document"`.
+
+**The exclusion is round-local, and it flips at the round boundary.** It holds only within the round that wrote those lines — that round both authored and reviewed them, so counting them there reports the loop's own sloppiness as evidence against the authored artefact, and the endless-loop gate (`>1 criticals remaining`, `../auto/failure-handling/endless-loop.md`) can skip a spec over it. From the next round onward those lines are ordinary artefact text: the next reviewer re-reads the whole artefact and emits anything it finds in them as `origin: "document"`, counted normally. An implementation that suppresses self-review findings permanently is a different — and wrong — rule.
+
+Excluded from the counts is never excluded from the output. Self-review findings print on their own line in the terminal output and appear in the summary; without that, the loop would have a sanctioned channel for silent degradation.
+
+Enforced by `scripts/validate-review-json.cjs` (`--schema code` / `--schema doc`), which fails closed when a declared count contradicts this recount. Rule: `references/shared-rules/counts-exclude-self-review.md`.

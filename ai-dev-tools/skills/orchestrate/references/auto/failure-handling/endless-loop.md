@@ -8,6 +8,8 @@
 
 Criticals counted at the final iteration's REVIEW output, BEFORE that iteration's fix phase runs. The fix phase always runs regardless.
 
+"Criticals" is the `critical_count` field, which counts findings in the artefact under review and excludes those the round's own self-review pass raised against its own fixer's edits (`origin: "self-review"`). The exclusion is round-local and flips at the round boundary — see `../../common/error-logs-format.md`.
+
 - **≤1 critical remaining** → acceptable, treat as success
 - **>1 criticals remaining** → endless-loop failure:
 
