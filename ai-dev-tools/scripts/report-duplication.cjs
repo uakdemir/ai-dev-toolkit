@@ -59,9 +59,27 @@ const files = [];
 const rel = (f) => path.relative(pluginRoot, f);
 const skillOf = (f) => path.relative(skillsDir, f).split(path.sep)[0];
 
+// A registered rule's canonical sentence is duplicated ON PURPOSE: check A2 in
+// check-shared-semantics.cjs requires every governed skill to state it verbatim, precisely so that
+// citing a rule cannot pass for agreeing with it. Reporting that as duplication would tell the
+// reader to undo the thing the contract demands.
+const canonicals = [];
+const rulesDir = path.join(pluginRoot, 'references', 'shared-rules');
+if (fs.existsSync(rulesDir)) {
+  for (const name of fs.readdirSync(rulesDir)) {
+    if (!name.endsWith('.md')) continue;
+    const fm = fs.readFileSync(path.join(rulesDir, name), 'utf8').match(/^---\n([\s\S]*?)\n---/);
+    if (!fm) continue;
+    const c = fm[1].match(/^canonical:\s*(.+)$/m);
+    if (c) canonicals.push(c[1].trim().replace(/^["']|["']$/g, '').replace(/\s+/g, ' '));
+  }
+}
+const isContractual = (norm) => canonicals.some((c) => c && norm.includes(c));
+
 // Paragraphs, normalised. Tables and fenced blocks are excluded: shared JSON examples and shared
 // option tables are duplicated on purpose and drown everything else.
 const paras = [];
+let contractual = 0;
 for (const f of files) {
   let fenced = false;
   const chunks = fs.readFileSync(f, 'utf8').split(/\n\s*\n/);
@@ -71,6 +89,7 @@ for (const f of files) {
     const norm = chunk.replace(/\s+/g, ' ').trim();
     if (norm.length < MIN_CHARS) continue;
     if ((norm.match(/\|/g) || []).length > 6) continue;
+    if (isContractual(norm)) { contractual += 1; continue; }
     paras.push({ file: f, skill: skillOf(f), norm, text: chunk.trim() });
   }
 }
@@ -115,6 +134,8 @@ const trunc = (t, n) => (t.length > n ? t.slice(0, n) + '…' : t);
 process.stdout.write('paragraphs compared : ' + paras.length +
   ' (>= ' + MIN_CHARS + ' chars, across ' + files.length + ' files)\n');
 process.stdout.write('exact duplicates    : ' + exact.length + '\n');
+process.stdout.write('contractual repeats : ' + contractual +
+  ' (a shared rule\'s canonical sentence, required verbatim by check A2 — not duplication)\n');
 process.stdout.write('near duplicates     : ' + near.length + ' (>= ' + NEAR + ' similarity, cross-skill)\n');
 
 if (near.length) {

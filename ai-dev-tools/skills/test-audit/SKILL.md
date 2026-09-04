@@ -74,7 +74,7 @@ For options 1-3, optionally note the frontend framework (React / Vue / other / n
 - **.NET** — "xUnit / NUnit / MSTest / Other?"
 - **Python** — "pytest / unittest / Other?"
 
-**Validation:** After selection (options 1-3), scan the project root for the stack's validation file as defined in `references/tech-stacks.md`. If missing, warn: "Expected {file} for {stack} but did not find it. Continue anyway?"
+**Validation:** Validate the selected stack against its validation file before proceeding. Options here are 1-3; the shared procedure and its exact warning text are defined once, in `references/shared-rules/stack-validation.md`.
 
 **If "Other" is selected,** ask these 5 follow-up questions:
 
