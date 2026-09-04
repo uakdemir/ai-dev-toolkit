@@ -252,6 +252,7 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 | `tmp/_reviews_errors/[<run_id>-]review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` | Items needing a human decision; its absolute path is the run's last line | Humans |
 
 ## Review Summary Format
 
@@ -316,9 +317,10 @@ Recommended next: focused review — collateral recorded in § 3 rule 3, § 7
 /review-doc docs/spec.md --fact-check true --max-iterations 2
 
 Found this round: 3 Critical | 4 High | 2 Medium | 1 Low
+Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-doc-brainstorm.md
 ```
 
-`Found this round:` is always the **last line printed**. It reports what this invocation's final review surfaced, not an aggregate across rounds, and it is deliberately last because it is the number the next decision keys off. It differs from `Last round:`, which counts issues *fixed*; the gap between the two is what the fixer could not resolve.
+`Found this round:` is the last of the count lines. It reports what this invocation's final review surfaced, not an aggregate across rounds, and it comes after the others because it is the number that drives the next review round. Exactly one line follows it: the `Brainstorm (needs your decisions):` path (see Brainstorm Document). It differs from `Last round:`, which counts issues *fixed*; the gap between the two is what the fixer could not resolve.
 
 `Self-review:` reports what the self-review pass found against this run's own fixes. Those findings are excluded from every other count on the screen — `Aggregate`, `Remaining`, `Last round`, `Found this round` — because the round that wrote those lines both authored and reviewed them. **They are excluded from the counts, never from the output.** A fixer edit can genuinely damage a document, and a count-only view would make that damage invisible. Print the line whenever the self-review pass ran, including when it found nothing (`0 found`).
 
@@ -345,6 +347,7 @@ When the loop completes (final gate passes or max iterations exhausted):
 4. Derive the next-round recommendation (see Next-Round Recommendation below).
 5. Print terminal output (see Terminal Output above), ending with the `Found this round:` line.
 6. If status is "Approved with suggestions", run the Respond to Remaining Issues phase (below).
+7. Write the brainstorm document and print its absolute path as the run's last line (see Brainstorm Document below). This runs whatever the status is — a run with nothing to hand back still prints the line.
 
 ## Respond to Remaining Issues
 
@@ -400,6 +403,14 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 ```
 
 **When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" means criticals remain — the loop should have handled them, or max iterations were exhausted (user needs to fix manually).
+
+## Brainstorm Document
+
+**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-code`. This skill writes it to `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` after the triage phase, and ends the run with:
+
+```
+Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-doc-brainstorm.md
+```
 
 ## Backlog Writing
 

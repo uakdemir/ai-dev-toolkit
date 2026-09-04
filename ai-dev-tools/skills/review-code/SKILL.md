@@ -222,6 +222,14 @@ Scope-based filtering:
 4. If total ADR content exceeds 200 lines, truncate to the most recent files (by file modification time, newest first) that fit.
 5. If no ADRs found, skip — the Architecture category still applies if CLAUDE.md exists.
 
+## Brainstorm Document
+
+**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-doc`. This skill writes it to `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` after the triage phase, and ends the run with:
+
+```
+Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-code-brainstorm.md
+```
+
 ## Backlog Writing
 
 After each iteration, append all issues to `tmp/past-issues-backlog.md`:
@@ -271,6 +279,7 @@ Never report work as unlanded on ancestry evidence alone. When the forge cannot 
 | `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json` | Coder dispositions per issue | Orchestrator |
 | `tmp/past-issues-backlog.md` | Full issue history across iterations | Pattern mining |
 | `tmp/_reviews_errors/[<run_id>-]review-code-iteration-N.md` | Per-iteration log | Debugging, audit |
+| `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` | Items needing a human decision; its absolute path is the run's last line | Humans |
 
 **Run-id prefixing (applies throughout):** every `tmp/_reviews_errors/review-code*` path referenced anywhere in this document (Iteration Flow, Backlog, Terminal, Final Report, Respond, Cross-Iteration, Iteration Log, Schema) is prefixed to `tmp/_reviews_errors/<run_id>-review-code*` when `--run-id` is active — matching the run-id-aware paths the reviewer/fixer prompts write to. The `[<run_id>-]` prefix is elided inline for brevity and shown explicitly only in the Output Artifacts table above.
 
@@ -336,6 +345,8 @@ Review Code Complete
   Summary: tmp/_reviews_errors/review-code-summary.md
   Full review: tmp/_reviews_errors/review-code.json
   Backlog: tmp/past-issues-backlog.md
+
+Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-code-brainstorm.md
 ```
 
 `Self-review:` reports what the self-review pass found against this run's own fixes. Those findings are excluded from every other count on the screen — `Aggregate`, `Remaining`, `Last round` — because the iteration that wrote those lines both authored and reviewed them. **They are excluded from the counts, never from the output.** Print the line whenever the self-review pass ran, including when it found nothing (`0 found`).
@@ -350,6 +361,7 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 3. Apply status logic (below).
 4. Print terminal output.
 5. If status is "Approved with suggestions" or "Incomplete", run the Respond to Remaining Issues phase (below).
+6. Write the brainstorm document and print its absolute path as the run's last line (see Brainstorm Document below). This runs whatever the status is — a run with nothing to hand back still prints the line.
 
 ## Respond to Remaining Issues
 

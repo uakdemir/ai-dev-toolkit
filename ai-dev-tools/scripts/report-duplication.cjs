@@ -64,17 +64,26 @@ const skillOf = (f) => path.relative(skillsDir, f).split(path.sep)[0];
 // citing a rule cannot pass for agreeing with it. Reporting that as duplication would tell the
 // reader to undo the thing the contract demands.
 const canonicals = [];
+const rulePaths = [];
 const rulesDir = path.join(pluginRoot, 'references', 'shared-rules');
 if (fs.existsSync(rulesDir)) {
   for (const name of fs.readdirSync(rulesDir)) {
     if (!name.endsWith('.md')) continue;
+    rulePaths.push('references/shared-rules/' + name);
     const fm = fs.readFileSync(path.join(rulesDir, name), 'utf8').match(/^---\n([\s\S]*?)\n---/);
     if (!fm) continue;
     const c = fm[1].match(/^canonical:\s*(.+)$/m);
     if (c) canonicals.push(c[1].trim().replace(/^["']|["']$/g, '').replace(/\s+/g, ' '));
   }
 }
-const isContractual = (norm) => canonicals.some((c) => c && norm.includes(c));
+// A short paragraph that cites a rule file is a POINTER, and check C requires every governed skill
+// to carry one. Two skills' pointers read alike because they say the same true thing; the only way
+// to make them differ is to say it worse. Same logic as the canonical sentence, with a length guard
+// so a long paragraph that merely happens to mention a rule is still compared.
+const POINTER_MAX = 400;
+const isContractual = (norm) =>
+  canonicals.some((c) => c && norm.includes(c)) ||
+  (norm.length <= POINTER_MAX && rulePaths.some((r) => norm.includes(r)));
 
 // Paragraphs, normalised. Tables and fenced blocks are excluded: shared JSON examples and shared
 // option tables are duplicated on purpose and drown everything else.
