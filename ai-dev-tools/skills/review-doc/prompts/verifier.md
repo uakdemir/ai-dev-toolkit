@@ -74,6 +74,8 @@ Four things, and only these four:
 8. Rewrite the review JSON with the updated `issues` array using the Write tool. If you found nothing, leave the file untouched and return a one-line summary saying so.
 9. Return a summary naming, for each finding, its id, category, severity, location and whether you fixed it — plus the total lines you wrote. The orchestrator prints these; they are excluded from the round's counts, never from its output.
 
+⚠ **That disposition goes in your returned summary, never in the issue record.** An issue object carries exactly the seven required fields plus `origin` — the schema is `additionalProperties: false`, so an extra key like `fixed_by_self_review` fails validation and the orchestrator discards the whole artifact. Whether you fixed a defect is reported to the orchestrator, not stored on the issue.
+
 ## Rules
 
 - **You fix only what you reported, and only within the regions the fix report names.** Not an adjacent improvement, not an obvious error elsewhere, not "while you are already in the file". Every edit traces to an issue you appended.

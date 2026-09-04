@@ -45,6 +45,11 @@ Append to the `issues` array in the review JSON. Every issue you append carries 
 
 Never renumber, reorder, or remove existing issues. You append only.
 
+⚠ An issue object carries exactly the six required fields plus `origin`, and nothing else — the
+schema is `additionalProperties: false`, so an invented key such as `fixed_by_self_review` fails
+validation and the orchestrator discards the whole artifact. Whether you fixed a defect belongs in
+your returned summary and in the commit, never on the issue record.
+
 ## Fixing
 
 Fix each defect you reported, exactly once. Surgical edits — the correction the defect calls for and nothing else. Then commit:

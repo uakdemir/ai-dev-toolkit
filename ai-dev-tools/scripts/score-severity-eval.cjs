@@ -38,7 +38,13 @@ function readJson(p) {
 
 const review = readJson(reviewPath);
 const expected = readJson(expectPath);
-const issues = Array.isArray(review.issues) ? review.issues : [];
+// The eval measures the REVIEWER's severity judgement. The self-review pass now always runs and
+// appends to this same file, so its findings — which rate the fixer's edits, not the authored
+// document — are excluded here exactly as they are from the gate counts. An issue with no `origin`
+// counts as "document", so a review JSON written before the field existed scores unchanged.
+const allIssues = Array.isArray(review.issues) ? review.issues : [];
+const issues = allIssues.filter((i) => i && i.origin !== 'self-review');
+const selfReviewed = allIssues.length - issues.length;
 
 if (issues.length === 0) {
   process.stderr.write('no issues in ' + reviewPath + ' -- nothing to score\n');
@@ -167,6 +173,11 @@ for (const r of rows) {
 // heuristic, not a proof: a fixed pipeline could coincidentally agree on a small sample. It is
 // only treated as a failure when the sample is big enough and spans more than one bucket, and
 // its false-positive mode is that a genuinely consequence-rated run happened to line up.
+
+if (selfReviewed > 0) {
+  process.stdout.write('scoring ' + issues.length + ' reviewer findings; ' + selfReviewed +
+    " self-review findings excluded (they rate the fixer's edits, not the authored document)\n");
+}
 
 const scored = issues.filter((i) => typeof i.confidence === 'number');
 const agreeing = scored.filter((i) => i.severity === oldMapping(i.confidence));
