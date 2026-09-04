@@ -1,12 +1,12 @@
 ---
 name: review-doc
-argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] --fact-check <true|false> [--verify-fixes <true|false>] [--max-iterations N] [--run-id <id>]"
+argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] --fact-check <true|false> [--max-iterations N] [--run-id <id>]"
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
 # Review Doc
 
-Iterative document review. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. When `--fact-check true` is passed, a sequential fact-checker verifies claims against the codebase within each iteration (before the fixer, so fact-check findings get fixed in the same pass). When `--verify-fixes true` is passed, a verifier checks the fixer's own output after each fix phase and reports what it finds. Produces a curated human-readable summary.
+Iterative document review. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. When `--fact-check true` is passed, a sequential fact-checker verifies claims against the codebase within each iteration (before the fixer, so fact-check findings get fixed in the same pass). A self-review pass always follows the fixer: it checks the fixer's own edits, corrects what it finds once, and reports those findings outside the round's gate counts. Produces a curated human-readable summary.
 
 **Output:** `tmp/_reviews_errors/review-doc.json` (structured, machine-readable) + `tmp/_reviews_errors/review-doc-summary.md` (curated human summary, max 10 items + aggregates). When `--run-id` is provided, files are prefixed: `tmp/_reviews_errors/<run_id>-review-doc.json`.
 
@@ -16,7 +16,7 @@ Parse arguments after `/review-doc`:
 
 ```
 /review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
-            --fact-check <true|false> [--verify-fixes <true|false>]
+            --fact-check <true|false>
             [--max-iterations N] [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
@@ -24,16 +24,17 @@ Parse arguments after `/review-doc`:
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
-| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, verifier) |
+| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, self-reviewer) |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
-| `--verify-fixes` | false | true, false | When true, runs a verifier after each fix phase to check the fixer's output (report-only — appends issues, never re-fixes) |
 | `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Honors option Y early-exit when pre-fix criticals == 0 |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
 
-**Removed flags:** `--min-model`, `--max-model`, `--model` (clean break, no backward compat shim). The reviewer, fixer, fact-checker, and verifier inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
+**Removed flags:** `--min-model`, `--max-model`, `--model` (clean break, no backward compat shim). The reviewer, fixer, fact-checker, and self-reviewer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
 
 If any of the three is present, print `Warning: <flag> is no longer supported; all agents inherit the caller's session model. Ignoring.` — substituting the flag actually passed — and continue. Do not exit: the flag is inert, not invalid. Accepting it silently was the previous behaviour and gave the caller no signal that it had done nothing.
+
+`--verify-fixes` is also removed. The self-review pass it used to gate is now unconditional — it runs after every fix phase, in every iteration where the fixer ran. If it is present, print `Warning: --verify-fixes is no longer supported; the self-review pass always runs. Ignoring.` and continue.
 
 If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
 
@@ -47,14 +48,14 @@ Usage: /review-doc <path1> [path2 ...] [flags]
 
 Iterative document review. Dispatches a single merged reviewer for
 completeness, consistency, and implementability. Fixes issues automatically
-between rounds. Fact-checker runs when --fact-check true is passed.
-Verifier checks the fixer's output when --verify-fixes true is passed.
+between rounds. A self-review pass always follows the fixer, checking and
+correcting the fixer's own edits once. Fact-checker runs when --fact-check
+true is passed.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
   --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
   --fact-check <bool>     Run fact-checker each iteration    (default: false)
-  --verify-fixes <bool>   Verify fixer output after each fix (default: false)
   --max-iterations N      Safety cap, 0=skip                 (default: 3)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
@@ -62,6 +63,8 @@ Flags:
 Removed:
   --model, --min-model, --max-model   Ignored with a warning; all agents
                                       inherit the caller's session model
+  --verify-fixes                      Ignored with a warning; the self-review
+                                      pass always runs
 
 Examples:
   /review-doc docs/spec.md                                  Default review
@@ -77,7 +80,7 @@ Examples:
    - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-iteration-*.md`
    - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
 
-   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's fact-check or verify phase would otherwise survive into the next run.
+   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's fact-check or self-review phase would otherwise survive into the next run.
 
 ## Pre-Flight Checks
 
@@ -114,8 +117,9 @@ for iter in 1..max_iterations:
     if total_criticals == 0:            # final iter, 0 criticals: skip fixer, clean exit
         break
     fix()                               # fixer runs when total_criticals > 0
-    if verify_fixes:
-        verify()                        # report-only: appends issues, never re-fixes
+    self_review()                       # always: checks the fixer's own edits, fixes what it
+                                        # finds ONCE, appends its findings with
+                                        # origin: "self-review" (never counted this round)
 ```
 
 **Key behavioral properties:**
@@ -123,9 +127,16 @@ for iter in 1..max_iterations:
 2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
 3. Early exit only on `pre_fix_criticals == 0` (option Y — always measure at review output, before fact-check).
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
-5. All dispatches in that invocation — reviewer, fixer, fact-checker, and verifier — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
-6. `validate(json)` runs right after `review()`: schema-check the reviewer's JSON; on invalid JSON or a schema failure, retry the reviewer once, and abort the iteration on a second failure (mirrors review-code's Validation step + Error Handling).
-7. `verify()` runs after `fix()` when `--verify-fixes true`, in every iteration where the fixer ran. It is report-only — it appends issues and never triggers another fix pass. On iterations 1..N-1 its findings are carried forward by the next reviewer and fixed normally; on the final iteration they surface as remaining issues in the summary. It never rewrites `critical_count` or `high_count` (see the Verifier dispatch section).
+5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
+6. `validate(json)` runs right after `review()`:
+
+   ```bash
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>
+   ```
+
+   Exit 0 → use the printed recount as the authoritative severity counts. Exit 1 or 2 → retry the reviewer once, and abort the iteration on a second failure (mirrors review-code's Validation step + Error Handling). If node is unavailable, fall back to reading the file and record `schema validation not run: node unavailable` in the iteration log. The validator enforces the count-exclusion invariant, so a `critical_count` that includes this round's self-review findings fails closed here.
+7. `self_review()` runs after `fix()`, in every iteration where the fixer ran. It is **always on** — there is no flag. It reads the fix report, re-reads only the regions that report names, and both **reports and fixes** what it finds, exactly once (depth 1). It never rewrites `critical_count` or `high_count`, and everything it appends carries `origin: "self-review"` (see the Self-Review dispatch section).
+8. **Depth 1, and the tail is disclosed rather than carried.** The text the self-review pass itself writes is not re-reviewed within the same round — unbounded self-review is the same loop with more steps. If another round runs, its reviewer covers those lines as ordinary document text, because every round re-reads the whole document. The tail is only a real gap on the **final** round, and the summary states how many lines the final self-review pass wrote unreviewed. There is no cross-round carry mechanism: the next round's full re-read already is one.
 
 ## Agent Dispatch
 
@@ -195,24 +206,36 @@ Produces `tmp/_reviews_errors/review-doc-fix-report.json` (or `<run_id>-review-d
 A `fixed` disposition may also carry `collateral: [{location, why}]` — edits the fixer made outside the findings because its own fix to a flagged location invalidated that location (a count, a rule, a cross-reference, a table cell). Unrelated improvements, restyling, and reorganisation remain prohibited; collateral is only the consequence of a sanctioned fix.
 
 
-### Verifier (when `--verify-fixes true`)
+### Self-Review
 
-Runs **after the fixer**, in every iteration where the fixer ran. Report-only: it never edits a document and never triggers another fix pass.
+Runs **after the fixer**, in every iteration where the fixer ran. Always on — there is no flag.
 
-Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants), exactly as it does for the fact-checker. If the verifier fails, the orchestrator restores the backup and prints a warning.
+**Scope** is the fixer's own edits: only the regions the fix report names (issue `location` values and `collateral` entries). **Remit** is both halves of how a fix goes wrong:
 
-**Abort detection contract:** identical to the fact-checker's — the verifier signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: verify aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
+- **Fidelity** — a `fixed` disposition whose edit was never applied; two fixes from this pass that contradict each other; a fix that invalidated a location it did not touch; a recorded `collateral` repair that is itself wrong.
+- **Accuracy of the new text** — the claims the fixer just wrote, checked against the rest of the document and, when `--fact-check true`, against the codebase. The fixer's second failure mode is internal inconsistency: a new paragraph contradicting a section it never read. That is neither pure fidelity nor pure fact-check, and the two already overlap ("a fix invalidated a location it did not touch"), so they are one pass rather than two.
 
-Read `prompts/verifier.md` and dispatch: `Agent(prompt: <verifier-prompt>)`.
+**It fixes what it finds, exactly once.** Depth 1 — it edits the documents to correct the defects it reports, and the text it writes is not re-reviewed in the same round. Unbounded self-review is the same loop with more steps.
+
+Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants), exactly as it does for the fact-checker. If the pass fails, the orchestrator restores the backup and prints a warning.
+
+**Abort detection contract:** identical to the fact-checker's — the self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
+
+Read `prompts/verifier.md` and dispatch: `Agent(prompt: <self-review-prompt>)`.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive
 - The document paths list
 - The fix report path for this run
+- Whether `--fact-check` is true, so the pass knows whether the codebase is in scope for the accuracy half
 
-The verifier reads the fix report, re-reads only the document regions it names (issue `location` values and `collateral` entries), and appends any defects to the `issues` array with `category: "verify"`, minting ids from `max + 1` exactly as the fact-checker does.
+It appends every defect to the `issues` array with `origin: "self-review"` and either `category: "verify"` (a fidelity defect) or `category: "fact-check"` (a defect in the accuracy of the new text), minting ids from `max + 1` exactly as the fact-checker does.
 
-**Count invariant:** the verifier does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i endless-loop gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 1 → Q2 failure"). A verifier that recounted them would make post-fix findings indistinguishable from reviewer findings and trip spurious pipeline failures. Verifier issues are folded into the counts by the NEXT iteration's reviewer, which recomputes both fields from the full issues array.
+**Count invariant:** the self-review pass does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i endless-loop gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 1 → Q2 failure"). Its findings carry `origin: "self-review"` and are excluded from this round's counts: the round that wrote those lines both authored and reviewed them, so counting them here would report the loop's own churn as evidence against the authored document — and via the endless-loop gate, that churn could fail the whole auto-pipeline. Self-review issues are folded into the counts by the NEXT iteration's reviewer, which re-reads the whole document, emits anything still wrong in those lines as `origin: "document"`, and recomputes both fields from the full issues array.
+
+The exclusion is **round-local** and flips at the round boundary. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-code`.
+
+**Not counted is not not-shown.** A fixer edit can genuinely damage a document. Self-review findings print on their own line in the terminal output and appear in the summary — outside the round's gate counts, never invisible. Without that, the loop would have a sanctioned channel for silent degradation.
 
 ## Hash Verification
 
@@ -249,6 +272,12 @@ Remaining: A Critical | B High | C Medium | D Low
 Last round: X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed
 Deferred: D | Pushed back: P
 
+## Self-Review
+S findings against this run's own fixes (F fixed, R remaining) — excluded from the counts above.
+  [ISSUE-NNN] verify | high | <location> — <problem> (fixed)
+  [ISSUE-NNN] fact-check | critical | <location> — <problem> (remaining)
+Final pass wrote L lines that no review pass read.
+
 ## Fact-Check Accuracy
 X/Y verifiable claims accurate (Z%)
 
@@ -277,17 +306,25 @@ Review Doc Complete
   Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed | 1 Low fixed
   Remaining: 0 Critical | 2 High | 1 Medium | 0 Low
   Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed | 0 Low fixed
+  Self-review: 3 found, 3 fixed — not counted above (this run's own churn)
+  Unreviewed tail: 18 lines written by the final self-review pass
   Fact-check: X/Y claims accurate (Z%)
   Summary: tmp/_reviews_errors/[<run_id>-]review-doc-summary.md
   Full review: tmp/_reviews_errors/[<run_id>-]review-doc.json
 
 Recommended next: focused review — collateral recorded in § 3 rule 3, § 7
-/review-doc docs/spec.md --fact-check true --max-iterations 2 --verify-fixes true
+/review-doc docs/spec.md --fact-check true --max-iterations 2
 
 Found this round: 3 Critical | 4 High | 2 Medium | 1 Low
 ```
 
 `Found this round:` is always the **last line printed**. It reports what this invocation's final review surfaced, not an aggregate across rounds, and it is deliberately last because it is the number the next decision keys off. It differs from `Last round:`, which counts issues *fixed*; the gap between the two is what the fixer could not resolve.
+
+`Self-review:` reports what the self-review pass found against this run's own fixes. Those findings are excluded from every other count on the screen — `Aggregate`, `Remaining`, `Last round`, `Found this round` — because the round that wrote those lines both authored and reviewed them. **They are excluded from the counts, never from the output.** A fixer edit can genuinely damage a document, and a count-only view would make that damage invisible. Print the line whenever the self-review pass ran, including when it found nothing (`0 found`).
+
+`Unreviewed tail:` names the one gap the depth-1 rule leaves: the lines the final iteration's self-review pass wrote itself, which no review pass read. Omit the line entirely when the count is 0. Earlier iterations need no such line — the next round re-reads the whole document.
+
+When `--fact-check false` (default), the self-review pass still runs; only the accuracy-against-the-codebase half of its remit is out of scope.
 
 The `Recommended next:` block and its command line are described in Next-Round Recommendation below. Under rule 3 the command line is omitted and only the `Recommended next:` line prints.
 
@@ -377,13 +414,15 @@ The orchestrator maintains the following state across the loop:
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 - `found_this_round = {critical: 0, high: 0, medium: 0, low: 0}` -- severity breakdown of the `issues` array in the CURRENT iteration, measured after review and fact-check but before the fix phase. Overwritten each iteration; the final iteration's value populates the "Found this round:" line and rule 1 of the recommendation.
+- `self_review_found = {found: 0, fixed: 0}` -- running total across every self-review pass in this invocation, with each finding's id, category, severity, location and disposition retained for rendering. These populate the `Self-Review` section and the `Self-review:` terminal line. They are **never** added to `total_fixed`, `found_this_round`, `critical_count` or `high_count` for the round that produced them: `references/shared-rules/counts-exclude-self-review.md`.
+- `self_review_tail_lines = 0` -- lines written by the FINAL iteration's self-review pass. Those lines are the one part of the document no review pass read, because depth is 1 and no further round follows. Earlier iterations' tails need no tracking: the next round re-reads the whole document. Populates the `Unreviewed tail:` line, which is omitted when the value is 0.
 - `collateral_count = 0` -- running total of `collateral` entries across every fix phase in this invocation, with their `location` values retained for rendering. **Not reset between iterations.** Scoping it to the final iteration would make recommendation rule 2 unreachable: `fix()` only runs when `total_criticals > 0`, so any iteration that records collateral also leaves `found_this_round.critical > 0` and matches rule 1 first, while an iteration that reaches rule 2 is by definition one where the fixer did not run and recorded nothing.
 
 After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
 
 If a carried-forward `id` has been displaced from a later iteration's JSON (e.g., it dropped out of the active issues set), use the cached severity from the iteration where the id was first introduced — never silently skip a disposition just because its id is no longer in the latest JSON.
 
-**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker and `verify` entries appended by the verifier), so their IDs stay valid. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
+**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker and `verify` entries appended by the self-review pass), so their IDs stay valid. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
 
 ## Status Logic
 
@@ -424,11 +463,11 @@ Recommended next: another review round — 3 criticals found this round
 /review-doc docs/spec.md --fact-check true --max-iterations 2
 ```
 
-**Rule 2** — name every distinct `location` appearing in a `collateral` entry, then offer the same invocation with verification on:
+**Rule 2** — name every distinct `location` appearing in a `collateral` entry, then offer the same invocation again:
 
 ```
 Recommended next: focused review — collateral recorded in § 3 rule 3, § 7, § 12.2
-/review-doc docs/spec.md --fact-check true --max-iterations 2 --verify-fixes true
+/review-doc docs/spec.md --fact-check true --max-iterations 2
 ```
 
 **Rule 3** — no command; review-doc does not know the implementation plan path:
@@ -448,7 +487,7 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 
 **Model:** inherited from caller session
 **Effort:** <--effort value>
-**Agents:** 1 (merged reviewer), plus fact-checker (when --fact-check true), plus verifier (when --verify-fixes true and the fixer ran)
+**Agents:** 1 (merged reviewer), plus fact-checker (when --fact-check true), plus self-reviewer (whenever the fixer ran)
 **Issues found:** X critical, Y high, Z medium
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, early exit" | "0 criticals, loop complete" | "Max iterations reached" | "Fix phase failed: <error>"
 **Issues fixed:** [ISSUE-NNN] [category] [severity] at [location]
@@ -500,7 +539,8 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
           "location": { "type": "string" },
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },
           "problem": { "type": "string" },
-          "suggested_fix": { "type": "string" }
+          "suggested_fix": { "type": "string" },
+          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" }
         }
       }
     }
@@ -509,3 +549,5 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
 ```
 
 Note: `fact_check_claims` is only populated when `--fact-check true` is passed. When `--fact-check false` (default), set `fact_check_claims: []` and `fact_check_accuracy: 100`.
+
+Note: `origin` is the only optional per-issue key and the only one permitted beyond the seven required — `additionalProperties: false` still rejects everything else. It defaults to `"document"`; an issue without it counts as document-origin. The reviewer and the fact-checker emit `"document"`; the self-review pass emits `"self-review"` for the findings it raises against the fixer's own edits, and those are excluded from that round's `critical_count` and `high_count`. See `references/shared-rules/counts-exclude-self-review.md`.

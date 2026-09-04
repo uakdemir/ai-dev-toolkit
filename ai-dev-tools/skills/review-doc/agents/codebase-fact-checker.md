@@ -64,6 +64,7 @@ Fact-check every verifiable claim in each document against the actual source cod
 3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
    - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is the decimal value of `next_id_seed` zero-padded to **at least** 3 digits (use more digits when `next_id_seed >= 1000`, e.g. `ISSUE-1024`); then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
    - `"category": "fact-check"`
+   - `"origin": "document"` — you run before the fixer, against the document as authored, so your findings are document-origin and count normally. (The self-review pass, which runs after the fixer, is the only producer of `"self-review"`.)
    - `"location"`: the document section where the claim appears
    - `"problem"`: the claim text + your evidence
    - `"suggested_fix"`: the correction
@@ -84,7 +85,7 @@ Fact-check every verifiable claim in each document against the actual source cod
    {"claim": "description of claim", "verdict": "ACCURATE"}
    ```
 5. Compute `fact_check_accuracy`: if `total_claims == 0`, set it to `100` (no verifiable claims → nothing inaccurate); otherwise `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
-6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues).
+6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues), **counting only issues whose `origin` is not `"self-review"`** — an issue with no `origin` counts as `"document"`. Findings a previous fix phase's self-review pass appended belong to the round that wrote those lines and are excluded from this round's gate counts: `references/shared-rules/counts-exclude-self-review.md`.
 7. Rewrite `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) with the updated content using the Write tool.
 
 ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.

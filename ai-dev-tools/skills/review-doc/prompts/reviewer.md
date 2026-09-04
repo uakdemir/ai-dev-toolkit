@@ -129,12 +129,16 @@ After collecting all findings:
    **Carry-forward branch (prior file exists):**
    a. Compute `next_id_seed` as the largest numeric suffix across every well-formed id in the prior file's `issues` array, plus 1. A well-formed id matches `^ISSUE-\d{3,}$`; ignore malformed entries when computing the max. If the prior issues array is empty, set `next_id_seed = 1`.
    b. For each issue in your current (capped, sorted) output, **match against prior issues using the tuple `(normalized_location, category)`** where `normalized_location` is the `location` string lowercased with internal whitespace collapsed to single spaces and trailing punctuation stripped, and `category` must be an exact enum match. If exactly one prior issue matches, REUSE its `id` AND snap the output record's `location` field to the PRIOR issue's verbatim `location` string (so external references citing the prior `location` text stay valid); the issue's other fields (`severity`, `category`, `confidence`, `problem`, `suggested_fix`) come from the CURRENT iteration — only the `id` and `location` are preserved from the prior entry. If multiple prior issues share the tuple, reuse the highest-confidence one's id for the current finding; treat every OTHER matching prior issue as "not re-discovered" so step 5c preserves it (do not silently drop their IDs). If no prior issue matches, MINT a new id `ISSUE-NNN` from `next_id_seed`, then increment `next_id_seed`.
-   c. **Preserve every prior id that was not assigned to a current-iteration finding in 5b** — copy each such prior entry forward verbatim (id, severity, category, location, confidence, problem, suggested_fix). This includes fact-check entries (`category: "fact-check"`) and verifier entries (`category: "verify"`) appended in prior iterations: even though you produce neither category yourself, you must not drop their IDs, or the append-only invariant breaks. It also includes the "loser" entries when 5b had multiple prior matches for one tuple.
+   c. **Preserve every prior id that was not assigned to a current-iteration finding in 5b** — copy each such prior entry forward verbatim (id, severity, category, location, confidence, problem, suggested_fix), **except `origin`: set it to `"document"` on every entry you carry forward.**
+
+   ⚠ That reset is the round boundary. A prior entry marked `origin: "self-review"` was raised by an earlier round against text that round's own fixer had just written, and was excluded from *that* round's counts for exactly that reason. That round is over. The lines are now ordinary document text you have just re-read as part of the whole artefact, so the finding counts here like any other. Carrying `"self-review"` forward would suppress it permanently, which is a different rule and a wrong one.
+ This includes fact-check entries (`category: "fact-check"`) and verifier entries (`category: "verify"`) appended in prior iterations: even though you produce neither category yourself, you must not drop their IDs, or the append-only invariant breaks. It also includes the "loser" entries when 5b had multiple prior matches for one tuple.
    d. **Cap exemption:** Step 4's 20-cap applies ONLY to newly-minted IDs. Carried-forward issues (whether re-matched in 5b or copied through in 5c) are always included regardless of the cap, so external references to their IDs stay valid.
 
    **Append-only invariant:** existing IDs are never renumbered, even if their underlying issues were fixed, deferred, or pushed back in a prior iteration. IDs stay attached to their finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. A change in an issue's severity bucket between iterations is normal and reflected in the current JSON; the id does not change.
-6. **Compute counts** — `critical_count` and `high_count` from the FINAL `issues` array (current-iteration findings after step 4's cap, plus any prior issues carried forward by steps 5b and 5c, including fact-check entries). Carried-forward issues count toward these totals because the fixer still needs to address them, and the loop's exit gate depends on these counts being accurate.
-7. **Set fact-check fields** — `fact_check_claims: []` and `fact_check_accuracy: 100` (the fact-checker handles these separately).
+6. **Set `origin`** — every issue you emit gets `"origin": "document"`. Your findings are against the document as it stands, which is what these counts are for. The only issues carrying `"self-review"` are those the self-review pass appends after a fix phase, and per step 5c you reset those to `"document"` when you carry them forward.
+7. **Compute counts** — `critical_count` and `high_count` from the FINAL `issues` array (current-iteration findings after step 4's cap, plus any prior issues carried forward by steps 5b and 5c, including fact-check entries). Carried-forward issues count toward these totals because the fixer still needs to address them, and the loop's exit gate depends on these counts being accurate.
+8. **Set fact-check fields** — `fact_check_claims: []` and `fact_check_accuracy: 100` (the fact-checker handles these separately).
 
 ## JSON Output Format
 
@@ -154,7 +158,8 @@ Write `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-re
       "location": "Section 3.2",
       "confidence": 85,
       "problem": "Description of what's wrong",
-      "suggested_fix": "Concrete suggestion"
+      "suggested_fix": "Concrete suggestion",
+      "origin": "document"
     }
   ]
 }
@@ -162,7 +167,19 @@ Write `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-re
 
 Valid categories: completeness, consistency, scope, structure, vague-action, vague-step, dependency-gap, ordering-issue, agent-pitfall, missing-criteria, cross-reference.
 
-**Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix). No `title`, `description`, `metadata`, or `summary` fields.
+**Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix) plus `origin`, which you always set to `"document"`. That is the complete permitted set — no `title`, `description`, `metadata`, or `summary` fields.
+
+**Validate before you finish.** After writing your output path, run:
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>
+```
+
+Exit 0 means the artifact is well-formed and the recount is printed. On a non-zero exit, read the errors on stderr, fix the file, and re-run until it exits 0. Do not finish on a failing exit — your output is the deliverable, and checking it is your job, not the orchestrator's.
+
+`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the auto-pipeline gates read those fields off disk and would act on a wrong number.
+
+If `node` is not installed, skip this step and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
 
 ## Confidence Scoring Guide
 

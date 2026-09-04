@@ -133,6 +133,14 @@ For iteration 1 to max_iterations:
     Dispatch fixer agent (inherits session model; runs at --effort level)
     Fixer commits: "fix(review-code): resolve N issues from iteration M"
 
+  SELF-REVIEW (always, whenever the fix phase ran):
+    Scope = the fixer's own commits: git diff $before_sha..$after_sha
+    Dispatch self-review agent (prompts/self-review.md)
+    Reports defects in the fixer's own changes AND fixes them, exactly once (depth 1)
+    Appends issues with origin: "self-review" — excluded from THIS iteration's
+      critical_count and high_count, printed on their own line either way
+    Commits: "fix(review-code): self-review of iteration M's fixes"
+
   VERIFICATION (post-fix):
     Run --verify commands, compare to baseline
     Track regressions for next iteration's reviewer and fixer context
@@ -173,6 +181,28 @@ Single agent, inheriting the caller's session model and running at the `--effort
 - Spec content (if `--against` provided)
 
 Read `prompts/coder.md` from this skill's directory for dispatch instructions. Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/_reviews_errors/review-code-fix-report.json`.
+
+## Self-Review Agent
+
+Runs **after the fixer**, in every iteration where the fixer ran. Always on — there is no flag.
+
+**Scope is a git diff.** The fixer commits its own work, so its changes are mechanically identifiable: `git diff $before_sha..$after_sha`. No fix-report region matching is needed — this is the one thing that makes the pass simpler here than in `review-doc`.
+
+**Remit** is the fixer's own changes, on the same categories the reviewer uses: a fix that does not do what its disposition claims, two fixes that contradict each other, a fix that breaks a call site it did not touch, and a fix that is wrong on its own terms.
+
+**It fixes what it finds, exactly once.** Depth 1 — it edits and commits, and the code *it* writes is not re-reviewed within the iteration. The next iteration's reviewer covers it: both scope modes review the full scope since the resolved base, so nothing the self-review pass writes escapes review as long as another iteration runs.
+
+Read `prompts/self-review.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The dispatch prompt must include the effort level, the fixer's diff range, the fix report path, and the review JSON path.
+
+It appends every defect to the `issues` array with `origin: "self-review"`, following the same synthetic-issue shape the verification regressions use (all six schema-required fields), and commits with `fix(review-code): self-review of iteration M's fixes`.
+
+**Count invariant:** self-review findings are NOT counted in `critical_count` or `high_count` for the iteration that produced them. That iteration both wrote and reviewed those lines, so counting them there reports the loop's own churn as evidence against the code under review — and the endless-loop gate fails a spec at `>1 criticals remaining`. From the next iteration those lines are ordinary code: the reviewer re-reads the full scope and emits anything still wrong in them as `origin: "document"`, counted normally.
+
+The exclusion is **round-local** and flips at the iteration boundary. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-doc`.
+
+**Not counted is not not-shown.** Self-review findings print on their own line in the terminal output and appear in the summary. Without that, the loop would have a sanctioned channel for silent degradation.
+
+**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, `found_this_round.critical` in iteration N+1 measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. The Next-Round Recommendation and the endless-loop gate therefore gate on the right signal without either being rewritten. Do not "fix" those rules to compensate.
 
 ## Verification Commands
 
@@ -300,12 +330,17 @@ Review Code Complete
   Aggregate: 8 Critical fixed | 5 High fixed | 3 Medium fixed | 1 Low fixed
   Remaining: 0 Critical | 2 High | 1 Medium | 0 Low
   Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed | 0 Low fixed
+  Self-review: 3 found, 3 fixed — not counted above (this run's own churn)
   Verification: all passing
   Commits added: abc1234, def5678
   Summary: tmp/_reviews_errors/review-code-summary.md
   Full review: tmp/_reviews_errors/review-code.json
   Backlog: tmp/past-issues-backlog.md
 ```
+
+`Self-review:` reports what the self-review pass found against this run's own fixes. Those findings are excluded from every other count on the screen — `Aggregate`, `Remaining`, `Last round` — because the iteration that wrote those lines both authored and reviewed them. **They are excluded from the counts, never from the output.** Print the line whenever the self-review pass ran, including when it found nothing (`0 found`).
+
+`origin` is the only optional per-issue key and the only one permitted beyond the six required; `additionalProperties: false` still rejects everything else. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
 
 ## Final Report
 
@@ -449,7 +484,8 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
           "location": { "type": "string" },
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },
           "problem": { "type": "string" },
-          "suggested_fix": { "type": "string" }
+          "suggested_fix": { "type": "string" },
+          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" }
         }
       }
     }
