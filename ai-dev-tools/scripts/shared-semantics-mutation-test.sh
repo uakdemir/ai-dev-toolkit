@@ -451,6 +451,34 @@ chmod 000 "$BASE/$TARGET_REL"
 expect_rc 2 "$BASE" "F13 an unreadable file exits 2 (cannot run), not 1 (violated)"
 chmod 644 "$BASE/$TARGET_REL"
 
+# The --print-coverage flag added for check-detector-coverage.sh is output-only. If it ever changed
+# the verdict, the snapshot test and the gate would disagree about the same tree.
+build_base
+node "$GATE" --print-coverage "$BASE" >/dev/null 2>&1
+rc_flag=$?
+node "$GATE" "$BASE" >/dev/null 2>&1
+rc_plain=$?
+if [ "$rc_flag" -eq "$rc_plain" ]; then
+  ok "P1  --print-coverage does not change the verdict (green tree)"
+else
+  bad "P1  --print-coverage changed the verdict (green tree): $rc_plain -> $rc_flag"
+fi
+
+build_base
+cat >> "$BASE/$TARGET_REL" <<'EOF'
+
+   - confidence >= 80 → `"critical"`
+EOF
+node "$GATE" --print-coverage "$BASE" >/dev/null 2>&1
+rc_flag=$?
+node "$GATE" "$BASE" >/dev/null 2>&1
+rc_plain=$?
+if [ "$rc_flag" -eq "$rc_plain" ] && [ "$rc_plain" -eq 1 ]; then
+  ok "P2  --print-coverage does not change the verdict (red tree)"
+else
+  bad "P2  --print-coverage changed the verdict (red tree): $rc_plain -> $rc_flag"
+fi
+
 echo
 echo "-------- $pass passed, $fail failed --------"
 [ "$fail" -eq 0 ] || exit 1

@@ -493,7 +493,7 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
 }
 ```
 
-Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. Consumers reading these fields off disk (see `orchestrate/references/common/error-logs-format.md`) are therefore safe.
+Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. Consumers reading these fields off disk (see `../orchestrate/references/common/error-logs-format.md`) are therefore safe.
 
 ## Error Handling
 

@@ -118,7 +118,7 @@ If `--auto` is active:
 
 ### Refactor-Unit Branch Handling (pre-check)
 
-Before building the task graph, perform this refactor-unit check (moved verbatim from the previous `orchestrate/SKILL.md` Step 5):
+Before building the task graph, perform this refactor-unit check (moved verbatim from the previous `../orchestrate/SKILL.md` Step 5):
 
 1. Check if a refactor roadmap exists at `docs/monorepo-strategy/roadmap.md` OR `docs/layer-architecture/roadmap.md` with unchecked items.
 2. If so, perform a **case-insensitive substring match** of the feature name against the bold roadmap item labels (text between `**` markers in the checkbox line, not the full rationale). The feature name is derived from:

@@ -1,0 +1,6 @@
+detector severity-from-confidence:
+  skills/review-code/SKILL.md
+  skills/review-code/prompts/reviewer.md
+  skills/review-doc/SKILL.md
+  skills/review-doc/agents/codebase-fact-checker.md
+  skills/review-doc/prompts/reviewer.md

@@ -39,7 +39,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const pluginRoot = process.argv[2] || process.cwd();
+const argv = process.argv.slice(2);
+// --print-coverage lists, per detector, every file where `governs()` is true. It is output only:
+// the contract checks below still run and the exit code is unchanged.
+//
+// Why it exists: check D's two worst defects -- three false positives on the real corpus, and a
+// detector blind to the plainest phrasings of its own rule -- both came from ONE root cause. The
+// predicate was never run against the real tree in both its modes; it was reasoned about instead.
+// A committed snapshot of this output turns "we believe it is clean" into something that fires the
+// day the corpus moves. See scripts/check-detector-coverage.sh.
+const printCoverage = argv.includes('--print-coverage');
+const pluginRoot = argv.filter((a) => !a.startsWith('--'))[0] || process.cwd();
 const skillsDir = path.join(pluginRoot, 'skills');
 const RULES_DIR_REL = 'references/shared-rules';
 // A governed skill's prompt is not always Markdown, and `.endsWith('.md')` made a .txt prompt
@@ -496,6 +506,20 @@ for (const [key, detector] of Object.entries(DETECTORS)) {
 }
 
 // ---- report -------------------------------------------------------------------
+
+if (printCoverage) {
+  for (const [key, detector] of Object.entries(DETECTORS)) {
+    const hits = [];
+    for (const skill of allSkills) {
+      for (const f of skillFiles(skill) || []) {
+        if (isReferenceFile(skill, f)) continue;
+        if (detector.governs(fs.readFileSync(f, 'utf8'))) hits.push(rel(f));
+      }
+    }
+    process.stdout.write('detector ' + key + ':\n');
+    for (const h of hits.sort()) process.stdout.write('  ' + h + '\n');
+  }
+}
 
 process.stdout.write('shared rules: ' + rules.length + ' — ' +
   (rules.map((r) => r.name).join(', ') || 'none') + '\n');
