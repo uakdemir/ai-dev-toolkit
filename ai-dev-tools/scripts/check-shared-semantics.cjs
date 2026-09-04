@@ -22,7 +22,9 @@
 //   A  source    -- the rule file exists and contains its own canonical sentence
 //   B  detector  -- the named detector finds no violation in any governed skill
 //   C  contract  -- every governed skill references the rule file by path
-//   D  coverage  -- no skill OUTSIDE applies-to does the thing the rule governs
+//   D  coverage  -- no skill OUTSIDE applies-to produces findings the rule governs. Scans a
+//                  skill's SKILL.md, prompts/ and agents/; a skill's references/ tree is
+//                  reference material, not a finding producer (see isReferenceFile).
 //
 // D is the one that stops the next fork: a new sibling skill that starts assigning severities
 // without joining the contract is a violation the day it is written, not a year later.
@@ -217,6 +219,22 @@ function skillFiles(skill) {
   return out;
 }
 
+// Check D asks whether a skill PRODUCES review findings outside the contract. In this toolkit
+// findings are produced by dispatched agents whose instructions live in prompts/ and agents/,
+// orchestrated by SKILL.md. A skill's references/ tree is reference material those prompts read --
+// and it is where the corpus keeps `severity` tokens belonging to entirely other domains:
+// convention-enforcer's .editorconfig analyzer levels (`dotnet_diagnostic.CA2200.severity =
+// warning`) and its `suggested_severity` for lint conventions, orchestrate's `count(severity ==
+// "critical")` in the gate read contract. Scanning those with the loose `governs` predicate yields
+// three false positives in skills that have no confidence axis at all, and a coverage check that
+// cries wolf on the corpus it ships with is a check people switch off in week two.
+//
+// This narrows check D ONLY. Check B still reads every file of a governed skill, references/
+// included, so a rule relocated into a governed skill's references/ is still caught.
+function isReferenceFile(file) {
+  return file.split(path.sep).includes('references');
+}
+
 const allSkills = fs.readdirSync(skillsDir).filter((s) =>
   fs.statSync(path.join(skillsDir, s)).isDirectory()).sort();
 
@@ -276,7 +294,7 @@ for (const rule of rules) {
   if (detector) {
     for (const skill of allSkills) {
       if (governed.includes(skill)) continue;
-      const files = skillFiles(skill) || [];
+      const files = (skillFiles(skill) || []).filter((f) => !isReferenceFile(f));
       const doing = files.filter((f) => detector.governs(fs.readFileSync(f, 'utf8')));
       if (doing.length > 0) {
         errors.push('skills/' + skill + ': does ' + detector.describe.replace(/^severity derived from.*/, 'severity rating') +

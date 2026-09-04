@@ -35,8 +35,25 @@ expect() {  # expect <red|green> <root> <label>
 }
 
 echo
-echo "1. the unfixed plugin tree"
-expect red "$REAL_PLUGIN" "gate is RED on $REAL_PLUGIN"
+echo "1. a real tree, before and after the fix"
+# Once the fix lands the gate is GREEN on the real plugin, so this case is RE-POINTED at a pinned
+# pre-fix copy of that same tree rather than flipped to green. Flipped, it would say exactly what
+# case 2 already says, and nothing in the suite would prove the gate goes red on a REAL tree with
+# real prose -- which is the only thing separating a working gate from one that always passes.
+# The green-on-the-real-tree assertion is added alongside it, not in place of it.
+PREFIX_SHA="${PREFIX_SHA:-5153f53}"
+REPO="$(git -C "$REAL_PLUGIN" rev-parse --show-toplevel 2>/dev/null)"
+PREFIX_TREE="$WORK/prefix"
+mkdir -p "$PREFIX_TREE"
+if [ -n "$REPO" ] \
+   && git -C "$REPO" archive "$PREFIX_SHA" ai-dev-tools 2>/dev/null \
+      | tar -x -C "$PREFIX_TREE" --strip-components=1 2>/dev/null \
+   && [ -d "$PREFIX_TREE/skills" ]; then
+  expect red "$PREFIX_TREE" "gate is RED on the pre-fix tree pinned at $PREFIX_SHA"
+else
+  bad "gate is RED on the pre-fix tree pinned at $PREFIX_SHA (could not materialise it from git)"
+fi
+expect green "$REAL_PLUGIN" "gate is GREEN on $REAL_PLUGIN"
 
 BASE="$WORK/base"
 RULE_REL="references/shared-rules/severity-is-consequence.md"
@@ -183,6 +200,36 @@ cat > "$BASE/skills/review-plan/prompts/reviewer.md" <<'EOF'
 Emit issues with `severity: "critical"` for anything that blocks execution.
 EOF
 expect red "$BASE" "D1  a new sibling skill rates severity but is not in applies-to"
+
+# D2: check D asks whether a skill PRODUCES findings outside the contract. A non-governed skill's
+# references/ tree is reference material, and in the real corpus it is where `severity` tokens from
+# other domains live -- .editorconfig analyzer levels, `suggested_severity` for lint conventions, a
+# `count(severity == "critical")` formula. Measured on the real plugin, scanning those produced
+# three false positives in skills with no confidence axis at all.
+build_base
+mkdir -p "$BASE/skills/lint-tuner/references"
+cat > "$BASE/skills/lint-tuner/references/rule-mappings.md" <<'EOF'
+# Linter rule mappings
+
+```ini
+dotnet_diagnostic.CA2200.severity = warning
+```
+
+- **Suggested severity:** `high`
+EOF
+expect green "$BASE" "D2  a non-governed skill's references/ tree is not a coverage violation"
+
+# D3: and the narrowing applies to check D only. Inside a GOVERNED skill, check B still reads every
+# file, references/ included -- otherwise D2 would have opened a hiding place.
+build_base
+mkdir -p "$BASE/skills/review-fake/references"
+cat > "$BASE/skills/review-fake/references/severity-bands.md" <<'EOF'
+# Severity bands
+
+   - confidence >= 80 → `"critical"`
+   - confidence 60-79 → `"high"`
+EOF
+expect red "$BASE" "D3  the mapping relocated into a GOVERNED skill's references/ is still caught"
 
 # A: the rule file loses its own canonical sentence.
 build_base

@@ -110,6 +110,8 @@ Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_revi
 
 **Severity is consequence, not certainty.** Rate `severity` by what actually happens to the software's user if the finding is real — data loss, auth bypass and silent corruption are critical however unsure you are; a cosmetic issue is low however certain you are. Rate `confidence` separately: it is the likelihood the finding is real. The two axes are independent, and a finding that is uncertain and catastrophic outranks one that is certain and cosmetic.
 
+This rule is shared with `review-doc` and is defined once, in `references/shared-rules/severity-is-consequence.md`. The paragraph above is its operative statement; read the rule file when a rating is genuinely unclear.
+
 **Read the code before rating.** Open the source at the finding's location and read enough surrounding code to judge reachability — call sites, guards, and validation that live outside the diff hunk. Do not rate from the diff hunk alone. Severity reflects the real consequence at a real call site, not the worst theoretical reading.
 
 Report findings with `confidence` >= 40. A high-severity finding below that threshold should be investigated until it can be grounded or dropped — not silently discarded.
