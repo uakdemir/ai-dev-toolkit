@@ -43,7 +43,7 @@ After every successful agent iii iteration, orchestrate:
 
 This commit is load-bearing for rollback anchors. The hash update in step 4 always runs regardless of whether a commit was created.
 
-**Successful iteration definition:** agent returned without exception AND the iteration artifact exists (`tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`) AND that artifact passes `scripts/validate-review-json.cjs`.
+**Successful iteration definition:** agent returned without exception AND the review artifact exists (`tmp/_reviews_errors/<run_id>-review-code.json`) AND that artifact passes `scripts/validate-review-json.cjs`. There is one such file per run, overwritten each iteration — stage iii passes a bare `--run-id <run_id>`, so no per-iteration JSON is produced. The per-iteration record is `-review-code-iteration-{N}.md`.
 
 **If `node` is unavailable**, the validator cannot run and the third clause is waived — the artifact's existence and a clean agent return are sufficient. Record `schema validation not run: node unavailable` in the stage's error log, matching the same carve-out in `review-code`'s VALIDATION step and reviewer prompt. Without this waiver a machine without Node could never produce a successful iteration, so every spec in every auto run would be skipped.
 

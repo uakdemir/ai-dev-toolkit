@@ -13,9 +13,9 @@ An agent crash is any of:
 Item 4 matters because without it, malformed-but-present output falls through the crash definition entirely — it is neither a crash nor a usable result, and nothing routes it anywhere.
 
 **Expected output artifacts:**
-- Agent i → `tmp/_reviews_errors/<run_id>-review-doc-phase{N}.json`
+- Agent i → `tmp/_reviews_errors/<run_id>-phase{N}-review-doc.json` (the phase is in the run-id)
 - Agent ii → at least one new commit since `pre_implement_head`
-- Agent iii → `tmp/_reviews_errors/<run_id>-review-code-iter{N}.json`
+- Agent iii → `tmp/_reviews_errors/<run_id>-review-code.json` (one file, overwritten each iteration)
 
 ---
 
