@@ -1,0 +1,129 @@
+{
+  "_purpose": "Oracle for the severity-vs-confidence behavioural eval. Each planted defect occupies one cell of a (confidence x consequence) 2x2. The two off-diagonal cells are the discriminators: the confidence-derived mapping and a consequence-based mapping disagree there. The two diagonal cells are controls: both mappings agree, so a fix that merely inverts the rule fails them.",
+  "_assertion": "The only assertion is about the critical line: must_be_critical true means the produced severity has to be exactly \"critical\"; false means it has to be anything but \"critical\". High-vs-medium is not asserted because it is arguable, and an eval that asserts arguable things stops measuring the invariant.",
+  "_run_with": "--fact-check false --max-iterations 1 (see README.md for why)",
+  "planted": [
+    {
+      "id": "A1",
+      "doc": "spec-ledger-settlement.md",
+      "cell": "uncertain x catastrophic",
+      "role": "discriminator",
+      "must_be_critical": true,
+      "expected_confidence_band": [40, 75],
+      "defect": "The rail idempotency key is sha256(merchant_id || batch_date) (§ 4.2), but § 3.1 states a batch can be re-cut on the same calendar date after a partial cutter failure. The second batch therefore derives the same idempotency key as the first with different contents, so the rail treats the re-cut batch as a duplicate and returns the first transfer's result without moving money.",
+      "why_this_severity": "A merchant is never paid for the captures in the re-cut batch, and the ledger records the batch as settled against the first batch's rail reference. Silent, financial, and self-concealing: reconciliation matches on rail reference, which exists. Consequence is catastrophic however unsure the reviewer is that the re-cut path is real.",
+      "why_this_confidence": "Genuinely arguable. The spec never says whether a re-cut batch gets a distinguishing suffix, so a reviewer can reasonably read it either way and should land mid-band rather than at 85.",
+      "old_mapping_would_say": "medium or high (confidence < 80)",
+      "match_any": [
+        "settleBatchIdempotently",
+        "idempotency key",
+        "sha256(merchant_id",
+        "batch_date",
+        "re-cut",
+        "recut",
+        "§ 4.2",
+        "4.2"
+      ]
+    },
+    {
+      "id": "A2",
+      "doc": "spec-ledger-settlement.md",
+      "cell": "certain x cosmetic",
+      "role": "discriminator",
+      "must_be_critical": false,
+      "expected_confidence_band": [80, 100],
+      "defect": "§ 5 says \"The ledger holds four invariants\" and then lists five. Separately, the section numbering skips from § 4.2 to § 4.4.",
+      "why_this_severity": "Nothing an implementer builds changes because of either. The list is authoritative and complete; the count sentence and the heading number are decoration. Cosmetic however certain the reviewer is.",
+      "why_this_confidence": "Mechanically checkable by counting. A reviewer should be near-certain.",
+      "old_mapping_would_say": "critical (confidence >= 80)",
+      "match_any": [
+        "four invariants",
+        "five",
+        "invariant",
+        "§ 5",
+        "4.4",
+        "numbering",
+        "skips"
+      ]
+    },
+    {
+      "id": "B1",
+      "doc": "plan-ledger-migration.md",
+      "cell": "certain x catastrophic",
+      "role": "control",
+      "must_be_critical": true,
+      "expected_confidence_band": [80, 100],
+      "defect": "Step 3 runs ALTER TABLE settlement_batch DROP COLUMN legacy_ref. Step 5 backfills settlement_batch_v2.source_ref by SELECTing legacy_ref from settlement_batch. The column is dropped before the only step that reads it.",
+      "why_this_severity": "Irrecoverable loss of the historical source_ref for every pre-cutover batch, and step 5 also fails outright against a NOT NULL column. Both mappings agree this is critical.",
+      "why_this_confidence": "Both statements are explicit SQL in the same document. Near-certain.",
+      "old_mapping_would_say": "critical (confidence >= 80) - agrees",
+      "match_any": [
+        "legacy_ref",
+        "DROP COLUMN",
+        "step 3",
+        "step 5",
+        "backfill",
+        "source_ref"
+      ]
+    },
+    {
+      "id": "B2",
+      "doc": "plan-ledger-migration.md",
+      "cell": "uncertain x cosmetic",
+      "role": "control",
+      "must_be_critical": false,
+      "expected_confidence_band": [40, 65],
+      "defect": "Under \"Worker placement\": \"The reconciliation worker should probably reuse the existing payouts queue rather than getting its own\" - a hedged, unresolved choice stated as a maybe in a plan an agent is meant to execute.",
+      "why_this_severity": "Either queue works; the plan is merely undecided. An executing agent picks one and nothing breaks.",
+      "why_this_confidence": "Whether this even counts as a defect is a judgement call. Low band, and it may legitimately fall below the reporting floor and not be reported at all - that is NOT_DETECTED, not a failure.",
+      "old_mapping_would_say": "medium, or dropped below the confidence-40 floor - agrees",
+      "match_any": [
+        "should probably reuse",
+        "payouts",
+        "queue",
+        "worker placement",
+        "reconciliation worker"
+      ]
+    },
+    {
+      "id": "C1",
+      "doc": "strategy-ledger-overview.md",
+      "cell": "certain x cosmetic (cross-file)",
+      "role": "discriminator",
+      "must_be_critical": false,
+      "expected_confidence_band": [80, 100],
+      "defect": "The strategy says \"the three settlement services\", while spec-ledger-settlement.md § 2 tables four, and the strategy's own \"What we are not doing\" section says \"Four responsibilities in one database\". Three-way count disagreement, two of them inside one file.",
+      "why_this_severity": "A reader who trusts the wrong number looks for a fourth service and finds it in the next document. Nothing is built wrong. Cosmetic however certain.",
+      "why_this_confidence": "Two contradicting numbers are visible in one file and a third in another. Near-certain.",
+      "old_mapping_would_say": "critical (confidence >= 80)",
+      "match_any": [
+        "three settlement services",
+        "three services",
+        "four responsibilities",
+        "service count",
+        "settlement services"
+      ]
+    },
+    {
+      "id": "C2",
+      "doc": "strategy-ledger-overview.md",
+      "cell": "uncertain x catastrophic (cross-file)",
+      "role": "discriminator",
+      "must_be_critical": true,
+      "expected_confidence_band": [45, 78],
+      "defect": "The strategy commits, in the merchant agreement, that a closed merchant's settlement records are \"purged within 30 days\". spec-ledger-settlement.md § 6 states the backup set holding cold-storage settlement records is retained 400 days and is \"append-only and is not rewritten\", with deletion executed against the warm store only. The system cannot keep the commitment it makes to regulators.",
+      "why_this_severity": "A contractual and regulatory deletion promise the architecture contradicts by design, discovered after the agreement is signed. Consequence is catastrophic however unsure the reviewer is about backup carve-outs.",
+      "why_this_confidence": "Genuinely arguable - many retention regimes exempt immutable backups, and neither document says whether this one does. A reviewer should land mid-band.",
+      "old_mapping_would_say": "medium or high (confidence < 80)",
+      "match_any": [
+        "30 days",
+        "400 days",
+        "purge",
+        "deletion",
+        "retention",
+        "backup",
+        "merchant agreement"
+      ]
+    }
+  ]
+}

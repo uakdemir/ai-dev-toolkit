@@ -1,0 +1,268 @@
+#!/usr/bin/env bash
+# Mutation-tests check-shared-semantics.cjs.
+#
+# A gate that is merely red today proves nothing: so is a gate that always fails. This proves, in
+# order --
+#
+#   1. the gate is RED on the real, unfixed plugin tree
+#   2. the gate is GREEN on a minimal tree where the contract holds
+#   3. the gate goes RED under each EVASION a reviewer might reach for instead of fixing the rule
+#   4. the gate goes RED when the CONTRACT ITSELF is broken (checks A, C and D)
+#   5. the gate stays GREEN on constructs that only look like the bug
+#
+# Steps 3 and 4 are the ones that matter. Testing a gate against the bug it was written from proves
+# only that the author can grep.
+#
+# Usage:  ./mutation-test.sh [path-to-ai-dev-tools]
+
+set -uo pipefail
+GATE="$(cd "$(dirname "$0")" && pwd)/check-shared-semantics.cjs"
+REAL_PLUGIN="${1:-/home/umut/projects/interview/learning-cache/python/ai-dev-toolkit/ai-dev-tools}"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/sevgate.XXXXXX")"
+trap 'rm -rf "$WORK"' EXIT
+
+pass=0; fail=0
+ok()  { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass+1)); }
+bad() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); }
+
+expect() {  # expect <red|green> <root> <label>
+  local want="$1" root="$2" label="$3"
+  node "$GATE" "$root" >/dev/null 2>&1
+  local rc=$?
+  if [ "$want" = red   ] && [ "$rc" -eq 1 ]; then ok "$label"; return; fi
+  if [ "$want" = green ] && [ "$rc" -eq 0 ]; then ok "$label"; return; fi
+  bad "$label (wanted $want, gate exited $rc)"
+}
+
+echo
+echo "1. the unfixed plugin tree"
+expect red "$REAL_PLUGIN" "gate is RED on $REAL_PLUGIN"
+
+BASE="$WORK/base"
+RULE_REL="references/shared-rules/severity-is-consequence.md"
+build_base() {
+  rm -rf "$BASE"
+  mkdir -p "$BASE/references/shared-rules" "$BASE/skills/review-fake/prompts"
+  cat > "$BASE/$RULE_REL" <<'EOF'
+---
+name: severity-is-consequence
+applies-to: [review-fake]
+canonical: Severity is consequence, not certainty.
+detector: severity-from-confidence
+---
+
+# Severity is consequence, not certainty
+
+**Severity is consequence, not certainty.** Rate `severity` by what actually happens to the user if
+the finding is real. Rate `confidence` separately: it is the likelihood the finding is real. The two
+axes are independent, and a finding that is uncertain and catastrophic outranks one that is certain
+and cosmetic.
+EOF
+  cat > "$BASE/skills/review-fake/prompts/reviewer.md" <<'EOF'
+# Reviewer
+
+Rate every finding on both axes. Severity semantics are defined once, in
+`references/shared-rules/severity-is-consequence.md` — read it before rating.
+
+## Output Processing
+
+1. **Deduplicate** — merge findings flagging the same location.
+2. **Filter** — drop findings the rule's floor excludes.
+3. **Rate** — assign `severity` per the rule, and `confidence` independently.
+
+```json
+{
+  "issues": [
+    {
+      "severity": "critical",
+      "category": "completeness",
+      "location": "Section 3.2",
+      "confidence": 85,
+      "problem": "…",
+      "suggested_fix": "…"
+    }
+  ]
+}
+```
+EOF
+}
+build_base
+echo
+echo "2. a minimal tree where the contract holds"
+expect green "$BASE" "gate is GREEN on a compliant tree"
+
+TARGET_REL="skills/review-fake/prompts/reviewer.md"
+mutate() {  # mutate <label>  (mutation text on stdin, appended to the reviewer prompt)
+  local label="$1"
+  build_base
+  cat >> "$BASE/$TARGET_REL"
+  expect red "$BASE" "$label"
+}
+
+echo
+echo "3. evasions — each must put the gate back to RED"
+
+mutate "E1  the original spelling" <<'EOF'
+
+3. **Categorize by severity** using confidence score:
+   - confidence >= 80 → `"critical"`
+   - confidence 60-79 → `"high"`
+EOF
+
+mutate "E2  reworded into prose, no operators" <<'EOF'
+
+When the confidence score is 80 or above, mark the finding `"critical"`; between 60 and 79 it is
+`"high"`.
+EOF
+
+mutate "E3  unicode comparison operator" <<'EOF'
+
+Severity follows the confidence score: confidence ≥ 80 → `critical`.
+EOF
+
+mutate "E4  restated as a markdown table" <<'EOF'
+
+| confidence | severity |
+|---|---|
+| >= 80 | critical |
+| 60-79 | high |
+EOF
+
+mutate "E5  paired assignment, no threshold at all" <<'EOF'
+
+For each verdict, append an issue:
+   - INACCURATE → confidence 85, severity "critical"
+   - STALE → confidence 70, severity "high"
+EOF
+
+mutate "E6  'set both' preamble with the arrows reworded" <<'EOF'
+
+   - Set both `confidence` and `severity` from the verdict, using the table in the appendix.
+EOF
+
+mutate "E7  hidden inside a json fence" <<'EOF'
+
+```json
+{"rule": "severity \"critical\" when confidence 80"}
+```
+EOF
+
+build_base
+cat >> "$BASE/skills/review-fake/SKILL.md" <<'EOF'
+# Review-fake
+
+Severity is derived from the confidence score: confidence >= 80 → `"critical"`.
+EOF
+expect red "$BASE" "E8  relocated into SKILL.md"
+
+build_base
+mkdir -p "$BASE/skills/review-fake/agents"
+cat > "$BASE/skills/review-fake/agents/fact-checker.md" <<'EOF'
+# Fact checker
+
+   - Set both `confidence` and `severity`:
+     - INACCURATE → confidence 85, severity "critical"
+EOF
+expect red "$BASE" "E9  relocated into a new agents/ file"
+
+echo
+echo "4. the contract itself — checks A, C and D"
+
+# C: the rule governs the skill, but the skill never points at it. "Delete the rule and say nothing."
+build_base
+sed -i 's|`references/shared-rules/severity-is-consequence.md` — read it before rating.|nowhere in particular.|' "$BASE/$TARGET_REL"
+expect red "$BASE" "C1  governed skill stops referencing the rule"
+
+# D: a NEW sibling skill starts rating severities without joining the contract. This is the fork,
+# caught on the day it is written rather than a year later.
+build_base
+mkdir -p "$BASE/skills/review-plan/prompts"
+cat > "$BASE/skills/review-plan/prompts/reviewer.md" <<'EOF'
+# Reviewer for plans
+
+Emit issues with `severity: "critical"` for anything that blocks execution.
+EOF
+expect red "$BASE" "D1  a new sibling skill rates severity but is not in applies-to"
+
+# A: the rule file loses its own canonical sentence.
+build_base
+sed -i 's|\*\*Severity is consequence, not certainty\.\*\* Rate|Rate|' "$BASE/$RULE_REL"
+sed -i 's|^# Severity is consequence, not certainty$|# Severity|' "$BASE/$RULE_REL"
+expect red "$BASE" "A1  rule file loses its canonical sentence"
+
+# A': the mapping hides in the one file exempt from the detector.
+build_base
+cat >> "$BASE/$RULE_REL" <<'EOF'
+
+As a rough guide, a finding with confidence 80 is usually worth escalating.
+EOF
+expect red "$BASE" "A2  a threshold hidden in the rule file, which the detector exempts"
+
+# Registry extensibility: a second shared rule, no detector, properly referenced.
+build_base
+cat > "$BASE/references/shared-rules/counts-exclude-self-review.md" <<'EOF'
+---
+name: counts-exclude-self-review
+applies-to: [review-fake]
+canonical: Counts measure the artefact under review, never the review loop's own edits.
+---
+
+**Counts measure the artefact under review, never the review loop's own edits.**
+EOF
+cat >> "$BASE/$TARGET_REL" <<'EOF'
+
+Counting rules: `references/shared-rules/counts-exclude-self-review.md`.
+EOF
+expect green "$BASE" "R1  a second shared rule with no detector extends the registry cleanly"
+
+build_base
+cat > "$BASE/references/shared-rules/orphan.md" <<'EOF'
+---
+name: orphan
+applies-to: [review-fake]
+canonical: This sentence is nowhere to be found.
+---
+
+Some other text entirely.
+EOF
+# Reference it, so check C is satisfied and only check A can fire.
+echo 'See `references/shared-rules/orphan.md`.' >> "$BASE/$TARGET_REL"
+expect red "$BASE" "R2  a rule whose canonical sentence is missing from its own body"
+
+echo
+echo "5. negative controls — these must stay GREEN"
+
+build_base
+cat >> "$BASE/$TARGET_REL" <<'EOF'
+
+## Schema
+
+```json
+"properties": {
+  "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+  "confidence": { "type": "integer", "minimum": 40, "maximum": 100 }
+}
+```
+EOF
+expect green "$BASE" "N1  a JSON schema declaring both fields as siblings"
+
+build_base
+cat >> "$BASE/$TARGET_REL" <<'EOF'
+
+Regressions are injected as synthetic issues carrying all six required fields:
+`severity: "critical"`, `category: "bug"`, `location: "<cmd>"`, `confidence: 85`,
+`problem: "…"`, `suggested_fix: "…"`.
+EOF
+expect green "$BASE" "N2  a worked example record with both fields set to constants"
+
+build_base
+cat >> "$BASE/$TARGET_REL" <<'EOF'
+
+Report findings with `confidence` >= 40. A high-severity finding below that threshold should be
+investigated until it can be grounded or dropped, not silently discarded.
+EOF
+expect green "$BASE" "N3  a reporting floor stated without a severity mapping"
+
+echo
+echo "-------- $pass passed, $fail failed --------"
+[ "$fail" -eq 0 ] || exit 1
