@@ -206,14 +206,17 @@ After each iteration, append all issues to `tmp/past-issues-backlog.md`:
 ## Git Diff Scope
 
 **Count mode (integer argument):**
-- **Iteration 1:** `git diff HEAD~N..HEAD`
-  - If `HEAD~N` fails (fewer commits): fallback to `git diff $(git hash-object -t tree /dev/null)..HEAD`
-- **Iteration 2+:** `git diff $before_sha..$after_sha`
-  - If fixer made no commits: re-review original scope
+- **Iteration 1:** resolve the base **once** and keep it — `original_base=$(git rev-parse HEAD~N)` — then `git diff $original_base..HEAD`
+  - If `HEAD~N` fails (fewer commits): `original_base=$(git hash-object -t tree /dev/null)`, then `git diff $original_base..HEAD`
+- **Iteration 2+:** `git diff $original_base..$after_sha` — always reviews full scope since the resolved base, including prior iteration fixes.
+  - `original_base` is the SHA captured at iteration 1 and is **never recomputed**. A literal `HEAD~N` re-evaluated at iteration 2 points somewhere else, because the fixer's commits have moved `HEAD`: the expression silently narrows the scope every iteration and the original implementation is never reviewed again after iteration 1.
+  - If the fixer made no commits: `$after_sha` is unchanged and the same command re-reviews the same scope.
 
 **Since mode (git ref argument):**
 - **Iteration 1:** `git diff <ref>..HEAD`
-- **Iteration 2+:** `git diff <ref>..$after_sha` — always reviews full scope since the ref, including prior iteration fixes. This ensures every iteration sees both original implementation quality AND any regressions introduced by earlier fixes.
+- **Iteration 2+:** `git diff <ref>..$after_sha` — always reviews full scope since the ref, including prior iteration fixes.
+
+Both modes review the **full** scope every iteration, so each iteration sees both original implementation quality AND any regressions introduced by earlier fixes. The round-local count exclusion depends on this: a finding excluded from the counts of the iteration that produced it is counted by the next iteration, which is only sound if the next iteration re-reads everything. See `references/shared-rules/counts-exclude-self-review.md`.
 
 ### Ancestry is not a merge test
 
@@ -402,7 +405,7 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 
 **Model:** inherited from caller session
 **Effort:** <--effort value>
-**Scope:** last N commits | commits before_sha..after_sha
+**Scope:** last N commits | commits original_base..after_sha | commits <ref>..after_sha
 **Issues found:** X critical, Y high, Z medium, W low
 **Outcome:** "Fixed N issues (P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>"
 **Issues fixed:** [category] [severity] at [location]
