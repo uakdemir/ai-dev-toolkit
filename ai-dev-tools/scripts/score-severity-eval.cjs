@@ -61,15 +61,35 @@ const SEV_RANK = { critical: 3, high: 2, medium: 1, low: 0 };
 
 function findMatch(planted) {
   const keys = planted.match_any.map((k) => k.toLowerCase());
-  const hits = issues.filter((i) => {
-    const h = haystack(i);
-    return keys.some((k) => h.includes(k));
-  });
-  if (hits.length === 0) return null;
-  // Most severe match wins: if the reviewer split one defect across several findings, the
-  // strongest rating is the one the loop's gates will act on.
-  hits.sort((a, b) => (SEV_RANK[b.severity] ?? -1) - (SEV_RANK[a.severity] ?? -1));
-  return { issue: hits[0], matchCount: hits.length };
+  const scored = issues
+    .map((i) => {
+      const h = haystack(i);
+      return { issue: i, keyHits: keys.filter((k) => h.includes(k)).length };
+    })
+    .filter((x) => x.keyHits > 0);
+  if (scored.length === 0) return null;
+  // MOST SPECIFIC match wins, then most severe among equally specific ones.
+  //
+  // Severity alone was the original rule, on the reasoning that if the reviewer split one defect
+  // across several findings, the strongest rating is the one the loop's gates act on. That holds
+  // only while every match IS the same defect. Against a real review it is not: `match_any` lists
+  // carry broad tokens ("invariant", "backup", "queue", "payouts") that also occur in unrelated
+  // findings, and severity-first then hands the verdict to whichever unrelated finding happens to
+  // be rated highest.
+  //
+  // Measured: A2 ("four invariants" vs five listed — certain, cosmetic) matched four findings.
+  // The real one was rated `low` at confidence 95, exactly as the fix intends; an unrelated
+  // critical about the cutter's selection predicate clipped the bare token "invariant" and took
+  // the verdict, reporting a discriminator failure that had not happened. A1, B1 and C2 were
+  // PASSING for the same wrong reason — a critical existed among their matches, so nobody noticed.
+  //
+  // Key-hit count is the right discriminator because a planted defect's own finding matches
+  // several of its keys while a coincidental one usually clips a single broad token. Severity
+  // remains the tiebreak, so a genuinely split defect still resolves to its strongest rating.
+  scored.sort((a, b) =>
+    (b.keyHits - a.keyHits) ||
+    ((SEV_RANK[b.issue.severity] ?? -1) - (SEV_RANK[a.issue.severity] ?? -1)));
+  return { issue: scored[0].issue, matchCount: scored.length };
 }
 
 const rows = [];
