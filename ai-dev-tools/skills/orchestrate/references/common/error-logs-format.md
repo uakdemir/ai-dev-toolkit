@@ -71,11 +71,16 @@ tmp/_reviews_errors/
 
 ## Gate Read Contract — critical count
 
-The auto-pipeline gates (stage-i / stage-iii early-exit, stage-i endless-loop, and the success check) read the critical count from each review JSON (`tmp/_reviews_errors/<run_id>-review-doc-phase<N>.json` or `-review-code-iter<N>.json`). The field is **`critical_count`**, recounted from the `issues[]` array by the review skill (a stale emitted value is never trusted). Read recipe:
+The auto-pipeline gates (stage-i and stage-iii early-exit, stage-i and stage-iii endless-loop) read the critical count from each review JSON (`tmp/_reviews_errors/<run_id>-review-doc-phase<N>.json` or `-review-code-iter<N>.json`). The field is **`critical_count`**, recounted from the `issues[]` array by the review skill (a stale emitted value is never trusted). Read recipe:
 
 ```bash
-jq '.critical_count' tmp/_reviews_errors/<run_id>-review-code-iter<N>.json
+jq '.critical_count' tmp/_reviews_errors/<run_id>-review-code.json
 ```
+
+**Read it at the iteration's REVIEW output, before that iteration's fix phase.** Every consuming
+gate is specified pre-fix, and the field is rewritten mid-iteration: the fact-checker recomputes
+it after appending its findings, and the fixer's self-review pass appends more without
+recomputing. A read taken at any other point is a different number.
 
 **Counts measure the artefact under review, never the review loop's own edits.** **The recount excludes the review loop's own churn.** Every issue carries an `origin` — `"document"` or `"self-review"`. Findings raised by a round's own self-review pass, against text that same round's fixer had just written, carry `origin: "self-review"`, and the recount skips them:
 

@@ -28,6 +28,13 @@ are ordinary artefact text: the next reviewer re-reads the whole artefact and co
 finds, including defects in text an earlier round wrote. An implementation that suppresses
 self-review findings permanently is a different rule, and a wrong one.
 
+**The exception is the final round.** The argument above rests on there being a next round to do
+the counting, and on the last round there is not: findings the self-review pass raises there are
+excluded from the counts and never folded into any later ones. That is why the pass also *fixes*
+what it finds, and why the summary discloses how many lines the final pass wrote unreviewed —
+the disclosure is what stops "not counted" becoming "not known" at the one point where no
+later round will notice.
+
 Worked example. A 600-line document. Round 1's fixer writes 100 lines; round 1's self-review pass
 checks those and writes more; round 1's counts reflect only the original 600. Round 2 reviews the
 whole file and counts everything in it.

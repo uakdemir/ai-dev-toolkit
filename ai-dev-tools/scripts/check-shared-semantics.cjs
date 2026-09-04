@@ -59,7 +59,7 @@ const rel = (f) => path.relative(pluginRoot, f);
 // readdirSync below was unguarded, so an unreadable file threw and Node exited 1 -- which callers
 // and the mutation harness both read as "contract violated". A gate that reports a permissions
 // error as a violation is a gate that cries wolf; one that reports a crash as a PASS (17 of the
-// suite's 23 cases assert exit 1) is worse. Fail as 2.
+// suite's 39 cases assert exit 1) is worse. Fail as 2.
 process.on('uncaughtException', (e) => {
   process.stderr.write('cannot run: ' + e.message + '\n');
   process.exit(2);

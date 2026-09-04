@@ -7,11 +7,21 @@ detector: severity-from-confidence
 
 # Severity is consequence, not certainty
 
-**Severity is consequence, not certainty.** Rate `severity` by what actually happens to the
-software's user if the finding is real — data loss, auth bypass and silent corruption are critical
-however unsure you are; a cosmetic issue is low however certain you are. Rate `confidence`
-separately: it is the likelihood the finding is real. The two axes are independent, and a finding
-that is uncertain and catastrophic outranks one that is certain and cosmetic.
+**Severity is consequence, not certainty.** Rate `severity` by what actually happens downstream if
+the finding is real — irreversible loss, a guarantee the system cannot keep, and damage that hides
+itself are critical however unsure you are; something nothing is built on is low however certain you
+are. Rate `confidence` separately: it is the likelihood the finding is real. The two axes are
+independent, and a finding that is uncertain and catastrophic outranks one that is certain and
+cosmetic.
+
+**The examples are deliberately domain-neutral.** Each governed skill states this same sentence and
+then gives its own concrete cases — `review-code` in terms of the software's user (data loss, auth
+bypass, silent corruption), `review-doc` in terms of the reader and the implementer (a step that
+destroys data, a contract the system cannot keep, an instruction that silently builds the wrong
+thing). That split is the point: the shared rule is the axis, and the domain examples belong to the
+skill. Writing one skill's examples here would fork the elaboration while the canonical sentence
+still matched — a divergence check A2 cannot see, because it compares the sentence and not the
+paragraph around it.
 
 ## Why this is shared
 
@@ -23,8 +33,9 @@ different things and the gates compare incomparable quantities.
 That is not hypothetical. `review-code` gained this rule in `6f22c6a`; that commit touched two
 files, both under `review-code`. `review-doc` went on deriving severity from its confidence score,
 because nothing in the tree knew the two skills were supposed to agree. This file, its `applies-to`
-list, and `scripts/check-shared-semantics.cjs` are what make the next fork structurally impossible
-rather than merely unlikely.
+list, and `scripts/check-shared-semantics.cjs` are what make the next fork *detectable* rather
+than invisible. The gate is run by hand (see the root CLAUDE.md), so it makes divergence loud, not
+impossible — the impossibility would need it wired into CI or a hook.
 
 ## What it forbids
 

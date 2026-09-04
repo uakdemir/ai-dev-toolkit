@@ -6,8 +6,8 @@
 #     are reported, but never counted.
 #
 # This is the machine-checkable half of the churn fix. Four pipeline gates read `critical_count`
-# (stage-i early-exit, stage-iii early-exit, stage-i endless-loop, the success check --
-# skills/orchestrate/references/common/error-logs-format.md:74), and the endless-loop gate FAILS a
+# (stage-i and stage-iii early-exit, stage-i and stage-iii endless-loop --
+# skills/orchestrate/references/common/error-logs-format.md), and the endless-loop gate FAILS a
 # spec at ">1 criticals remaining". Without this invariant enforced at the artefact, the loop's own
 # churn can fail the auto-pipeline, and nothing catches it.
 #
