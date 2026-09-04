@@ -92,6 +92,11 @@ function findMatch(planted) {
   return { issue: scored[0].issue, matchCount: scored.length };
 }
 
+// F11: nothing stopped one finding from being claimed by two planted defects. A1 carries the bare
+// key "4.2" while A2 is itself ABOUT the numbering around § 4.2, so a finding for one can satisfy
+// the other's matcher and silently decide its verdict. Detected and reported rather than guessed at.
+const claimedBy = new Map();
+
 const rows = [];
 let discriminatorFails = 0;
 let controlFails = 0;
@@ -99,6 +104,11 @@ let notDetected = 0;
 
 for (const planted of expected.planted) {
   const m = findMatch(planted);
+  if (m) {
+    const key = m.issue.id || m.issue.location;
+    if (!claimedBy.has(key)) claimedBy.set(key, []);
+    claimedBy.get(key).push(planted.id);
+  }
   if (!m) {
     notDetected += 1;
     rows.push({
@@ -177,10 +187,30 @@ if (!probeApplies) {
 
 // ---- verdict ---------------------------------------------------------------
 
-const failed = discriminatorFails > 0 || controlFails > 0 || probeFails;
+// A discriminator the reviewer never found tested nothing. Excluding NOT_DETECTED from `failed`
+// was right in spirit -- a missed detection is not a severity error -- but it meant a run in which
+// NOTHING was detected printed EVAL PASSED and exited 0, and the exit code is what automation
+// reads. Fed one irrelevant finding, the old script reported "0 discriminator failure(s), 6 not
+// detected" and passed; the global probe does not apply below six scored findings, so the run made
+// zero assertions and called itself a pass. An empty `planted` array did the same.
+const blindDiscriminators = rows.filter((r) => r.verdict === 'NOT_DETECTED' && r.role === 'discriminator');
+const crossClaimed = [...claimedBy.entries()].filter(([, ids]) => ids.length > 1);
+const inconclusive = blindDiscriminators.length > 0 || expected.planted.length === 0 || crossClaimed.length > 0;
+const failed = discriminatorFails > 0 || controlFails > 0 || probeFails || inconclusive;
 process.stdout.write('\nsummary: ' + discriminatorFails + ' discriminator failure(s), ' +
   controlFails + ' control failure(s), ' + notDetected + ' not detected' +
-  (probeFails ? ', global probe FAILED' : '') + '\n');
+  (probeFails ? ', global probe FAILED' : '') +
+  (inconclusive ? ', INCONCLUSIVE' : '') + '\n');
+
+if (expected.planted.length === 0) {
+  process.stdout.write('\nerror: EXPECTATIONS.json plants no defects — this run asserted nothing.\n');
+}
+
+for (const [issueKey, ids] of crossClaimed) {
+  process.stdout.write('\nerror: finding ' + issueKey + ' is claimed by ' + ids.join(' and ') +
+    '. One finding cannot be the evidence for two planted defects — those cells are inconclusive ' +
+    'and the match_any lists need separating.\n');
+}
 
 if (notDetected > 0) {
   process.stdout.write(
@@ -188,12 +218,15 @@ if (notDetected > 0) {
     '      but a discriminator that is never detected also never tested anything -- if a discriminator\n' +
     '      is NOT_DETECTED, the run is inconclusive for that cell and the fixture needs strengthening.\n'
   );
-  const blindDiscriminators = rows.filter((r) => r.verdict === 'NOT_DETECTED' && r.role === 'discriminator');
   if (blindDiscriminators.length) {
     process.stdout.write('      inconclusive discriminators: ' +
       blindDiscriminators.map((r) => r.id).join(', ') + '\n');
   }
 }
 
-process.stdout.write(failed ? '\nEVAL FAILED\n' : '\nEVAL PASSED\n');
+process.stdout.write(failed
+  ? (inconclusive && !discriminatorFails && !controlFails && !probeFails
+      ? '\nEVAL INCONCLUSIVE — a discriminator was never detected, so it tested nothing\n'
+      : '\nEVAL FAILED\n')
+  : '\nEVAL PASSED\n');
 process.exit(failed ? 1 : 0);

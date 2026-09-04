@@ -48,4 +48,5 @@ consequence, never as a claim about how certain the finding is.
 - `skills/review-doc/prompts/verifier.md`
 - `skills/review-doc/agents/codebase-fact-checker.md`
 
-Enforced by `scripts/check-shared-semantics.cjs`, detector `severity-from-confidence`.
+Enforced by `scripts/check-shared-semantics.cjs`, detector `severity-from-confidence` — a manual
+gate, run per the root CLAUDE.md, not an automatic one.

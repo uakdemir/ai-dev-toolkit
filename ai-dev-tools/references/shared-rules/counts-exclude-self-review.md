@@ -1,6 +1,6 @@
 ---
 name: counts-exclude-self-review
-applies-to: [review-code, review-doc]
+applies-to: [review-code, review-doc, orchestrate]
 canonical: Counts measure the artefact under review, never the review loop's own edits.
 ---
 
@@ -54,6 +54,7 @@ independent facts, and `category` already carries the first.
 - `skills/review-doc/SKILL.md`
 - `skills/orchestrate/references/common/error-logs-format.md` (the gate read contract)
 
-Enforced by `scripts/count-exclusion-test.sh` against `scripts/validate-review-json.cjs`. This is a
+Enforced by `scripts/validate-review-json.cjs`, which both review skills invoke, and covered by
+`scripts/count-exclusion-test.sh` (a manual gate, run per the root CLAUDE.md). This is a
 data invariant, so its gate is the validator, not a prose detector; the registry entry binds both
 skills to the rule and makes it discoverable.

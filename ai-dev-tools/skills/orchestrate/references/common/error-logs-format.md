@@ -77,7 +77,7 @@ The auto-pipeline gates (stage-i / stage-iii early-exit, stage-i endless-loop, a
 jq '.critical_count' tmp/_reviews_errors/<run_id>-review-code-iter<N>.json
 ```
 
-**The recount excludes the review loop's own churn.** Every issue carries an `origin` — `"document"` or `"self-review"`. Findings raised by a round's own self-review pass, against text that same round's fixer had just written, carry `origin: "self-review"`, and the recount skips them:
+**Counts measure the artefact under review, never the review loop's own edits.** **The recount excludes the review loop's own churn.** Every issue carries an `origin` — `"document"` or `"self-review"`. Findings raised by a round's own self-review pass, against text that same round's fixer had just written, carry `origin: "self-review"`, and the recount skips them:
 
 ```
 critical_count = count(severity == "critical" AND origin != "self-review")

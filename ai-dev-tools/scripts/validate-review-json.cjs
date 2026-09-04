@@ -65,9 +65,10 @@ for (let i = 0; i < argv.length; i += 1) {
   }
 }
 
-if (!path || !SCHEMAS[schemaName]) {
+const knownSchema = Object.prototype.hasOwnProperty.call(SCHEMAS, schemaName);
+if (!path || !knownSchema) {
   process.stderr.write('usage: node validate-review-json.cjs [--schema code|doc] <path-to-review.json>\n');
-  if (path && !SCHEMAS[schemaName]) {
+  if (path && !knownSchema) {
     process.stderr.write('unknown schema "' + schemaName + '"; expected code or doc\n');
   }
   process.exit(2);
@@ -172,6 +173,19 @@ if (!isObj(doc)) {
     if (!Array.isArray(doc.issues)) {
       errors.push('issues: expected an array');
     } else {
+      // The reviewer's carry-forward branch matches prior issues by id, and response_analysis.md
+      // and the fix-report dispositions cite ids as stable handles. A duplicate silently misroutes
+      // all of that, so it is rejected here rather than discovered downstream.
+      const seenIds = new Set();
+      doc.issues.forEach((it, i) => {
+        if (isObj(it) && typeof it.id === 'string') {
+          if (seenIds.has(it.id)) {
+            errors.push('issues[' + i + '].id: ' + JSON.stringify(it.id) +
+              ' is a duplicate; ids must be unique across the issues array');
+          }
+          seenIds.add(it.id);
+        }
+      });
       doc.issues.forEach((it, i) => {
         const at = 'issues[' + i + ']';
         if (!isObj(it)) { errors.push(at + ': expected an object'); return; }

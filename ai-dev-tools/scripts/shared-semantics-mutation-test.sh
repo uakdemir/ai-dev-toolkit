@@ -21,9 +21,23 @@ REAL_PLUGIN="${1:-/home/umut/projects/interview/learning-cache/python/ai-dev-too
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/sevgate.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
+# 17 of the 23 cases below assert exit 1. `node <missing>.cjs` also exits 1, so without this
+# preflight a suite pointed at a nonexistent gate would report 17 PASS while testing nothing.
+# (`expect red` requires rc == 1 exactly, and the gate now exits 2 when it cannot run, so a
+# crashing gate no longer scores as caught either.)
+[ -f "$GATE" ] || { printf 'cannot run: gate not found at %s\n' "$GATE" >&2; exit 2; }
+[ -d "$REAL_PLUGIN/skills" ] || { printf 'cannot run: no skills/ under %s\n' "$REAL_PLUGIN" >&2; exit 2; }
+
 pass=0; fail=0
 ok()  { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass+1)); }
 bad() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); }
+
+expect_rc() {  # expect_rc <code> <root> <label>
+  local want="$1" root="$2" label="$3"
+  node "$GATE" "$root" >/dev/null 2>&1
+  local rc=$?
+  if [ "$rc" -eq "$want" ]; then ok "$label"; else bad "$label (wanted exit $want, gate exited $rc)"; fi
+}
 
 expect() {  # expect <red|green> <root> <label>
   local want="$1" root="$2" label="$3"
@@ -78,8 +92,8 @@ EOF
   cat > "$BASE/skills/review-fake/prompts/reviewer.md" <<'EOF'
 # Reviewer
 
-Rate every finding on both axes. Severity semantics are defined once, in
-`references/shared-rules/severity-is-consequence.md` — read it before rating.
+**Severity is consequence, not certainty.** Rate every finding on both axes. Severity semantics are
+defined once, in `references/shared-rules/severity-is-consequence.md` — read it before rating.
 
 ## Output Processing
 
@@ -258,6 +272,7 @@ canonical: Counts measure the artefact under review, never the review loop's own
 EOF
 cat >> "$BASE/$TARGET_REL" <<'EOF'
 
+**Counts measure the artefact under review, never the review loop's own edits.**
 Counting rules: `references/shared-rules/counts-exclude-self-review.md`.
 EOF
 expect green "$BASE" "R1  a second shared rule with no detector extends the registry cleanly"
@@ -309,6 +324,132 @@ Report findings with `confidence` >= 40. A high-severity finding below that thre
 investigated until it can be grounded or dropped, not silently discarded.
 EOF
 expect green "$BASE" "N3  a reporting floor stated without a severity mapping"
+
+echo
+echo "6. defects found by the Step 0 payload review — each must stay fixed"
+
+# F1: check B is the gate's only substantive check, and it missed the plainest English statements
+# of the rule. Every one of these left the gate GREEN before the fix.
+mutate "F1a plain prose: '>= 80 are critical'" <<'EOF'
+
+Findings with confidence >= 80 are critical.
+EOF
+
+mutate "F1b trailing qualifier: '80 or above'" <<'EOF'
+
+When the confidence score is 80 or above, mark the finding `"critical"`.
+EOF
+
+mutate "F1c trailing qualifier: '80 or more'" <<'EOF'
+
+A finding with a confidence score of 80 or more is `"critical"`.
+EOF
+
+mutate "F1d plus form: 'confidence 80+'" <<'EOF'
+
+- confidence 80+ → `"critical"`
+EOF
+
+mutate "F1e derivation stated with no number at all" <<'EOF'
+
+Derive `severity` from the `confidence` tier using the appendix table.
+EOF
+
+mutate "F1f 'assign both', without the literal bigram 'set both'" <<'EOF'
+
+Assign both `confidence` and `severity` from the verdict class.
+EOF
+
+# F12: check C tests only that the rule's PATH occurs. A skill could cite the rule and state its
+# exact inverse, with no number and no markup, and stay green.
+build_base
+sed -i 's|\*\*Severity is consequence, not certainty\.\*\* Rate every|Severity is certainty, not consequence. Rate every|' "$BASE/$TARGET_REL"
+expect red "$BASE" "F12 governed skill cites the rule but never states its canonical sentence"
+
+# F2: an EMPTY registry directory left every check vacuous and still printed the success sentence.
+build_base
+rm -f "$BASE/$RULE_REL"
+expect red "$BASE" "F2  an empty references/shared-rules/ is not a passing contract"
+
+# F3: isReferenceFile tested every ancestor of an absolute path, so a plugin rooted anywhere under
+# a directory named `references` silently turned check D off.
+build_base
+NESTED="$WORK/references/nested"
+rm -rf "$NESTED"; mkdir -p "$(dirname "$NESTED")"; cp -r "$BASE" "$NESTED"
+mkdir -p "$NESTED/skills/review-plan/prompts"
+cat > "$NESTED/skills/review-plan/prompts/reviewer.md" <<'EOF'
+# Reviewer for plans
+
+Emit issues with `severity: "critical"` for anything that blocks execution.
+EOF
+expect red "$NESTED" "F3  check D still fires when the tree sits under a dir named 'references'"
+
+# F4: two trees no check reached — the plugin-root references/ tree (where shared prose already
+# lives) and a non-governed skill's references/ tree — plus a governed skill's non-.md prompt.
+build_base
+mkdir -p "$BASE/references/common"
+cat > "$BASE/references/common/rating-guide.md" <<'EOF'
+# Rating guide
+
+   - confidence >= 80 → `"critical"`
+EOF
+expect red "$BASE" "F4a a mapping in the plugin-root references/ tree is caught"
+
+build_base
+mkdir -p "$BASE/skills/lint-tuner/references"
+cat > "$BASE/skills/lint-tuner/references/bands.md" <<'EOF'
+# Bands
+
+   - confidence >= 80 → `"critical"`
+EOF
+expect red "$BASE" "F4b a mapping in a non-governed skill's references/ tree is caught"
+
+build_base
+cat > "$BASE/skills/review-fake/prompts/reviewer.txt" <<'EOF'
+   - confidence >= 80 → `"critical"`
+EOF
+expect red "$BASE" "F4c a governed skill's non-Markdown prompt is scanned"
+
+# F5: A' anchored on the literal token "confidence" before the number, and ran only for
+# detector-bearing rules.
+build_base
+cat >> "$BASE/$RULE_REL" <<'EOF'
+
+Bands:
+   - `"critical"` when the score is at least 80
+EOF
+expect red "$BASE" "F5a a threshold in the rule file that never says 'confidence'"
+
+build_base
+cat > "$BASE/references/shared-rules/counts-exclude-self-review.md" <<'EOF'
+---
+name: counts-exclude-self-review
+applies-to: [review-fake]
+canonical: Counts measure the artefact under review, never the review loop's own edits.
+---
+
+**Counts measure the artefact under review, never the review loop's own edits.**
+
+   - confidence >= 80 → `"critical"`
+EOF
+cat >> "$BASE/$TARGET_REL" <<'EOF'
+
+**Counts measure the artefact under review, never the review loop's own edits.**
+Counting rules: `references/shared-rules/counts-exclude-self-review.md`.
+EOF
+expect red "$BASE" "F5b a threshold in a rule file that declares no detector"
+
+# F7: the fence toggle flipped on any ``` line, so one nested fence exempted the rest of the file.
+build_base
+printf '\n````markdown\n```\n````\n\n   - confidence >= 80 → `"critical"`\n' >> "$BASE/$TARGET_REL"
+expect red "$BASE" "F7  a nested code fence does not exempt the rest of the file"
+
+# F13: the gate promises exit 2 for "cannot run". Unguarded file IO made that a 1, which every
+# `expect red` in this suite would have scored as a caught violation.
+build_base
+chmod 000 "$BASE/$TARGET_REL"
+expect_rc 2 "$BASE" "F13 an unreadable file exits 2 (cannot run), not 1 (violated)"
+chmod 644 "$BASE/$TARGET_REL"
 
 echo
 echo "-------- $pass passed, $fail failed --------"
