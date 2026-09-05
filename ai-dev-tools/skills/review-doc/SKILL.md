@@ -1,6 +1,6 @@
 ---
 name: review-doc
-argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] [--fact-check <true|false>] [--max-iterations N] [--run-id <id>]"
+argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] [--fact-check <true|false>] --max-iterations N [--run-id <id>]"
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
@@ -17,7 +17,7 @@ Parse arguments after `/review-doc`:
 ```
 /review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
             [--fact-check <true|false>]
-            [--max-iterations N] [--run-id <id>] [--help]
+            --max-iterations N [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
 
@@ -26,9 +26,13 @@ Parse arguments after `/review-doc`:
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
 | `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, self-reviewer) |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
-| `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Early exit when the round's criticals reach 0 — `total_criticals` with `--fact-check true`, `pre_fix_criticals` otherwise (see Review Loop property 3) |
+| `--max-iterations` | **required** | 0-10 | How many rounds to run (0 = skip). No default: the caller states it. Early exit when the round's criticals reach 0 — `total_criticals` with `--fact-check true`, `pre_fix_criticals` otherwise (see Review Loop property 3) |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
+
+**`--max-iterations` is required.** If it is absent, print `Error: --max-iterations is required (0-10).` and exit. If the value is not an integer in 0-10, print `Error: --max-iterations must be an integer between 0 and 10.` and exit.
+
+It has no default because the number of rounds is the caller's budget decision, and a silent default hides it. It is also what makes the loop bounded by construction: with the cap always stated, a review cannot run away, which is why there is no loop-detection failure mode — see `../orchestrate/references/auto/failure-handling/unresolved-criticals.md`. A round that ends with criticals outstanding is a result to report, not a loop to diagnose.
 
 **Removed flags:** `--min-model`, `--max-model`, `--model` (clean break, no backward compat shim). The reviewer, fixer, fact-checker, and self-reviewer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
 
@@ -56,7 +60,7 @@ Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
   --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
   --fact-check <bool>     Run fact-checker each iteration    (default: false)
-  --max-iterations N      Safety cap, 0=skip                 (default: 3)
+  --max-iterations N      Rounds to run, 0=skip              (REQUIRED)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
 
@@ -147,9 +151,9 @@ for iter in 1..max_iterations:
 
    Gating the fix phase on criticals meant a round that found eleven highs and ten mediums and no criticals fixed **nothing** and handed all twenty-one to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run and the document to receive only what has more than one defensible answer. It also silently disabled the self-review pass, which runs only after a fix phase: on the zero-critical path the triage phase then applied edits with nothing reviewing them. A minor finding the agent can fix is still worth fixing; whether it justifies another *round* is a different question, and that one is still severity-gated.
 
-   Option Y is unchanged where it is defined: `pre_fix_criticals` is still measured at review output, before fact-check. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the endless-loop gate as ">1 criticals remaining" and the spec is skipped — for criticals the loop itself declined to fix.
+   Option Y is unchanged where it is defined: `pre_fix_criticals` is still measured at review output, before fact-check. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the unresolved-criticals gate as ">1 criticals remaining" and the spec is skipped — for criticals the loop itself declined to fix.
 
-   The endless-loop gate is a separate reader and takes a different number: `critical_count` off the artifact, which on a `--fact-check true` run carries the fact-checker's recount over the full issues array (`agents/codebase-fact-checker.md` step 6). Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
+   The unresolved-criticals gate is a separate reader and takes a different number: `critical_count` off the artifact, which on a `--fact-check true` run carries the fact-checker's recount over the full issues array (`agents/codebase-fact-checker.md` step 6). Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
 5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
 6. `validate(json)` runs right after `review()`:
@@ -174,7 +178,9 @@ All `agents/` and `prompts/` paths in this section are relative to this skill's 
 
 The orchestrator dispatches a single reviewer agent, inheriting the caller's session model and running at the `--effort` reasoning level.
 
-Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
+
+**From iteration 2 onward the reviewer receives the previous iteration's fix report.** It reads which ids the last fix phase resolved, so a fixed finding is never counted again. Without that input the reviewer cannot distinguish a resolved issue from an open one — it re-reads the document and simply does not re-discover either — and `critical_count` becomes monotonically non-decreasing. See the reviewer prompt's step 7.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive: `max` = exhaustive analysis; `xhigh`/`high` proportionally less. All severities stay in scope regardless.
@@ -259,7 +265,7 @@ The dispatch prompt must include:
 
 It appends every defect to the `issues` array with `origin: "self-review"` and either `category: "verify"` (a fidelity defect) or `category: "fact-check"` (a defect in the accuracy of the new text), minting ids from `max + 1` exactly as the fact-checker does.
 
-**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** The self-review pass does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i endless-loop gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 1 → Q2 failure"). Its findings carry `origin: "self-review"` and are excluded from this round's counts: the round that wrote those lines both authored and reviewed them, so counting them here would report the loop's own churn as evidence against the authored document — and via the endless-loop gate, that churn could fail the whole auto-pipeline. Self-review issues are folded into the counts by the NEXT iteration's reviewer, which re-reads the whole document, emits anything still wrong in those lines as `origin: "document"`, and recomputes both fields from the full issues array.
+**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** The self-review pass does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i unresolved-criticals gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 1 → Q2 failure"). Its findings carry `origin: "self-review"` and are excluded from this round's counts: the round that wrote those lines both authored and reviewed them, so counting them here would report the loop's own churn as evidence against the authored document — and via the unresolved-criticals gate, that churn could fail the whole auto-pipeline. Self-review issues are folded into the counts by the NEXT iteration's reviewer, which re-reads the whole document, emits anything still wrong in those lines as `origin: "document"`, and recomputes both fields from the full issues array.
 
 The exclusion is **round-local** and flips at the round boundary. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-code`.
 
@@ -497,6 +503,11 @@ The orchestrator maintains the following state across the loop:
 
 - `total_fixed = {critical: 0, high: 0, medium: 0, low: 0}` -- per-severity breakdown (populates "X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed")
 - `last_round_fixed = {critical: 0, high: 0, medium: 0, low: 0}` -- per-severity breakdown for the most recent iteration only (populates "Last round:" line)
+- `remaining = {critical: 0, high: 0, medium: 0, low: 0}` -- populates the `Remaining:` line. **Defined as `found_this_round` minus the final round's `fixed` dispositions, plus every self-review finding that pass reported and did NOT fix.** Computed once, after the final iteration's fix phase and its self-review pass.
+
+  Two readings were possible and the difference is not cosmetic. Taking the final review JSON's severity breakdown reports as *remaining* exactly what the last fixer just repaired, which is the opposite of what the word means. Taking `found_this_round` minus `fixed` alone trusts the fixer's own claim that a fix landed — and the self-review pass exists because that claim is sometimes false. Adding back the self-review pass's *verified* failures is what makes the number mean "still wrong in the document", which is what a reader assumes it means and what Status Logic rules 3 and 4 gate on.
+
+  A self-review finding the pass reported **and fixed** is not remaining. One it reported and could not fix is. This is the single place a self-review finding reaches a headline count, and it does so because by then it is no longer this round's churn — it is an unrepaired defect in the artefact. It changes no gate count: `critical_count` and `high_count` are untouched, per `references/shared-rules/counts-exclude-self-review.md`.
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
 - `total_pushed_back = 0` -- flat count (populates "Pushed back: P")
 - `found_this_round = {critical: 0, high: 0, medium: 0, low: 0}` -- severity breakdown of the `issues` array in the CURRENT iteration, measured after review and fact-check but before the fix phase. Overwritten each iteration; the final iteration's value populates the "Found this round:" line and rule 1 of the recommendation.

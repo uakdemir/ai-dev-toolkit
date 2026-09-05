@@ -42,9 +42,9 @@ Report findings with `confidence` >= 40. A high-severity finding below that thre
 Append to the `issues` array in the review JSON. Every issue you append carries all six required fields — `severity`, `category`, `location`, `confidence`, `problem`, `suggested_fix` — following the same shape the verification regressions use, plus:
 
 - `"phase": "self-review"` — on every issue you append. Never reset: a later iteration flips `origin` to `"document"`, and `phase` keeps the record of which pass found it.
-- `"origin": "self-review"` — **on every issue you append, without exception.** This is what keeps the iteration that wrote these lines from counting its own churn against the code it was reviewing. Omit it and the loop reports its own sloppiness as evidence the implementation is bad, which via the endless-loop gate can fail the whole pipeline. See `references/shared-rules/counts-exclude-self-review.md`.
+- `"origin": "self-review"` — **on every issue you append, without exception.** This is what keeps the iteration that wrote these lines from counting its own churn against the code it was reviewing. Omit it and the loop reports its own sloppiness as evidence the implementation is bad, which via the unresolved-criticals gate can fail the whole pipeline. See `references/shared-rules/counts-exclude-self-review.md`.
 
-**Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts that `/orchestrate`'s endless-loop gate reads. Your issues are folded into the counts by the next iteration's reviewer, which re-reads the full scope and emits anything still wrong in your lines as `origin: "document"`.
+**Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts that `/orchestrate`'s unresolved-criticals gate reads. Your issues are folded into the counts by the next iteration's reviewer, which re-reads the full scope and emits anything still wrong in your lines as `origin: "document"`.
 
 Never reorder or remove existing issues — dispositions are keyed on `issue_index`. You append only.
 
@@ -79,6 +79,7 @@ Report each finding's category, severity, location and whether you fixed it, plu
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Edit for correcting code — targeted edits only
 - Use Write (not echo/cat heredoc via Bash) for writing files
+- Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - Use Bash for `git diff`, `git log`, `git status`, and your one `git commit`
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)

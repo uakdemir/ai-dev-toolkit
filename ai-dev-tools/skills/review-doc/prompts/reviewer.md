@@ -14,6 +14,7 @@ Review each document for completeness gaps, internal contradictions, implementab
 - Document paths: newline-separated list provided in dispatch prompt (may be a single path)
 - Additional copies (read-only, do not fix): newline-separated list provided in dispatch prompt, or absent. These are same-basename copies found at other locations — review them, never propose editing them.
 - Reference document path: provided in dispatch prompt (or "none")
+- Fix report: `{{FIX_REPORT_PATH}}` — the previous iteration's dispositions, or absent on iteration 1. Read it when it exists: an id dispositioned `fixed` there was resolved by the last fix phase, and must not be counted again (step 7).
 - Read the project's CLAUDE.md for conventions and constraints
 
 **Location format:** When multiple documents are provided, prefix each finding's location with the filename: `strategy.md > Section 3.2`. For cross-file findings, use: `strategy.md + module-map.md > Module counts`. When only one document is provided, omit the filename prefix — unless read-only copies are also in scope, in which case always prefix with the full path, so a duplicate-divergence finding names exactly which copy it is about.
@@ -139,7 +140,15 @@ After collecting all findings:
 
    **Append-only invariant:** existing IDs are never renumbered, even if their underlying issues were fixed, deferred, or pushed back in a prior iteration. IDs stay attached to their finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. A change in an issue's severity bucket between iterations is normal and reflected in the current JSON; the id does not change.
 6. **Set `origin` and `phase`** — every issue you emit gets `"origin": "document"` and `"phase": "review"`. Your findings are against the document as it stands, which is what these counts are for. The only issues carrying `"self-review"` are those the self-review pass appends after a fix phase, and per step 5c you reset those to `"document"` when you carry them forward.
-7. **Compute counts** — `critical_count` and `high_count` from the FINAL `issues` array (current-iteration findings after step 4's cap, plus any prior issues carried forward by steps 5b and 5c, including fact-check entries). Carried-forward issues count toward these totals because the fixer still needs to address them, and the loop's exit gate depends on these counts being accurate.
+7. **Compute counts — this round only.** `critical_count` and `high_count` count **the findings this iteration actually made**: your own findings after step 4's cap, whether newly minted or matched to a prior id in step 5b. They do **not** count entries copied forward by step 5c.
+
+   **The count is a per-round signal, not a running total.** A count that accumulates answers no question anyone asks. What a reader and every automated gate want to know is *what does this round say about the document now* — and an issue you did not re-discover is, by definition, not something this round found.
+
+   This is also the only reading that terminates. Under the previous rule a `fixed` critical was carried forward at critical severity and counted again — the reviewer never reads which issues were fixed, so a resolved finding was indistinguishable from an open one. `critical_count` could therefore never decrease within a run: the early exit could only ever fire on iteration 1, Status Logic pinned to "Issues Found" (which skips the triage phase), and the fixer was re-dispatched every round holding issues it had already fixed. A dogfood round reproduced this exactly — iteration 2 reported four criticals of which three had been fixed and verified minutes earlier.
+
+   Carried-forward entries stay **in the array**: their ids must remain valid for `tmp/response_analysis.md`, the fix-report dispositions and the severity cache, and the fixer still reads them to see what is outstanding. They are excluded from the two count fields, nothing more.
+
+   Where `{{FIX_REPORT_PATH}}` exists, use it as the second guard: never count an id it disposes as `fixed`, even if step 5b re-matched it — if the defect is genuinely still there, you will have found it yourself this iteration and it counts as your own finding.
 8. **Set fact-check fields** — `fact_check_claims: []` and `fact_check_accuracy: 100` (the fact-checker handles these separately).
 
 ## JSON Output Format
@@ -200,6 +209,7 @@ is `severity`, rated separately.
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Write (not echo/cat heredoc via Bash) for writing files
+- Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - Do not use Bash for file operations — only for git log, git diff, git status commands, and the one exception below
 - **Exception, and the only one:** the validator command under **Validate before you finish**, run against your own output path. `${CLAUDE_PLUGIN_ROOT}` and `{{OUTPUT_PATH}}` in that command are substituted before this prompt reaches you — run the resulting literal path. If either still appears literally in your copy, the substitution did not happen: report `validator skipped: path not substituted` rather than guessing at the path. This permits that one command against that one path. It is not a general relaxation of the Bash rule.
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches

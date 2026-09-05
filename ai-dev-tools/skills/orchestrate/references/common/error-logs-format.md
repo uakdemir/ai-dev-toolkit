@@ -23,12 +23,12 @@ Append-only, one entry per incident:
 
 **Severity levels:**
 - `Error` — pipeline halted or spec skipped due to crash
-- `Warning` — spec skipped due to endless loop (recoverable)
+- `Warning` — spec skipped with unresolved criticals (recoverable)
 
 **Examples:**
 
 ```
-[2026-04-11 15:02:33] k3m9p2q7_a1b2c3d4 Warning  spec1.md: agent i phase 2 endless loop at iter 2, 3 criticals remaining, committed wip, skipped spec
+[2026-04-11 15:02:33] k3m9p2q7_a1b2c3d4 Warning  spec1.md: agent i phase 2 unresolved criticals at iter 2, 3 criticals remaining, committed wip, skipped spec
 [2026-04-11 15:10:17] k3m9p2q7_e5f6g7h8 Error    spec1.md: agent ii implement crashed twice, halting pipeline, wip committed at hash7f2a
 ```
 
@@ -80,7 +80,7 @@ is the iteration log (`-review-code-iteration-N.md`), not a JSON. Any contract t
 
 ## Gate Read Contract — critical count
 
-The auto-pipeline gates (stage-i and stage-iii early-exit, stage-i and stage-iii endless-loop) read the critical count from each review JSON (`tmp/_reviews_errors/<run_id>-phase<N>-review-doc.json` for stage i, `tmp/_reviews_errors/<run_id>-review-code.json` for stage iii). The field is **`critical_count`**, recounted from the `issues[]` array by the review skill (a stale emitted value is never trusted). Read recipe:
+The auto-pipeline gates (stage-i and stage-iii early-exit, stage-i and stage-iii unresolved-criticals) read the critical count from each review JSON (`tmp/_reviews_errors/<run_id>-phase<N>-review-doc.json` for stage i, `tmp/_reviews_errors/<run_id>-review-code.json` for stage iii). The field is **`critical_count`**, recounted from the `issues[]` array by the review skill (a stale emitted value is never trusted). Read recipe:
 
 ```bash
 jq '.critical_count' tmp/_reviews_errors/<run_id>-review-code.json
@@ -103,7 +103,7 @@ high_count     = count(severity == "high"     AND origin != "self-review")
 
 An issue with no `origin` counts as `"document"`.
 
-**The exclusion is round-local, and it flips at the round boundary.** It holds only within the round that wrote those lines — that round both authored and reviewed them, so counting them there reports the loop's own sloppiness as evidence against the authored artefact, and the endless-loop gate (`>1 criticals remaining`, `../auto/failure-handling/endless-loop.md`) can skip a spec over it. From the next round onward those lines are ordinary artefact text: the next reviewer re-reads the whole artefact and emits anything it finds in them as `origin: "document"`, counted normally. An implementation that suppresses self-review findings permanently is a different — and wrong — rule.
+**The exclusion is round-local, and it flips at the round boundary.** It holds only within the round that wrote those lines — that round both authored and reviewed them, so counting them there reports the loop's own sloppiness as evidence against the authored artefact, and the unresolved-criticals gate (`>1 criticals remaining`, `../auto/failure-handling/unresolved-criticals.md`) can skip a spec over it. From the next round onward those lines are ordinary artefact text: the next reviewer re-reads the whole artefact and emits anything it finds in them as `origin: "document"`, counted normally. An implementation that suppresses self-review findings permanently is a different — and wrong — rule.
 
 Excluded from the counts is never excluded from the output. Self-review findings print on their own line in the terminal output and appear in the summary; without that, the loop would have a sanctioned channel for silent degradation.
 

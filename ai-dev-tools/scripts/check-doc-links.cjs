@@ -7,12 +7,12 @@
 // checker flags 87 files of that noise and gets switched off the same day.
 //
 // The discriminator: a reference is plugin-internal when its BASENAME exists somewhere under the
-// plugin. `failure-handling/endless-loop.md` names a file this plugin really has, so if it does not
+// plugin. `failure-handling/unresolved-criticals.md` names a file this plugin really has, so if it does not
 // resolve from the citing document it is a broken path, not an example. `package.json` names no
 // file here, so it is an example and is skipped.
 //
 // This catches exactly one bug class, and it is a real one: a path stated relative to the wrong
-// root. An agent told to read `failure-handling/endless-loop.md` from `stages/` does not find it.
+// root. An agent told to read `failure-handling/unresolved-criticals.md` from `stages/` does not find it.
 //
 // Node built-ins only. Exit 0 = every internal reference resolves, 1 = broken, 2 = cannot run.
 //

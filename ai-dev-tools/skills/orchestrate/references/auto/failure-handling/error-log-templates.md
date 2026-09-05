@@ -4,10 +4,10 @@ Templates for `tmp/_reviews_errors/error-logs.md` entries.
 
 ---
 
-## Q2 (Endless Loop) — Warning
+## Q2 (Unresolved Criticals) — Warning
 
 ```
-[YYYY-MM-DD HH:MM:SS] <run_id> Warning  <spec>.md: <agent-name> endless loop at iter <N>, <M> criticals remaining, committed wip, skipped spec
+[YYYY-MM-DD HH:MM:SS] <run_id> Warning  <spec>.md: <agent-name> unresolved criticals at iter <N>, <M> criticals remaining, committed wip, skipped spec
 ```
 
 ## Q3 Agent i Crash — Error

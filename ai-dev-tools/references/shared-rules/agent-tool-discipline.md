@@ -15,13 +15,14 @@ looks like before anyone notices it is one.
 
 ## The invariant core
 
-Every dispatched prompt states all six, verbatim:
+Every dispatched prompt states all seven, verbatim:
 
 ```
 - Use Grep (not grep/rg via Bash) for searching file contents
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Write (not echo/cat heredoc via Bash) for writing files
+- Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)
 ```
@@ -42,16 +43,23 @@ differs by design:
 | A validator-command exception | `skills/review-code/prompts/reviewer.md`, `skills/review-doc/prompts/reviewer.md` | One named command against one named path, so the agent can check its own artifact. Both reviewers are required to validate their own output before finishing. |
 | A Grep/Glob unavailability fallback | `skills/review-code/prompts/reviewer.md` | Its Verification Gap section requires search evidence; a search it cannot run is a finding it must drop. |
 
-An addition is legitimate when it **widens** one agent's surface for a stated reason. A silent
-**narrowing** of the core is drift, and that is what this rule exists to catch.
+**The test is whether the difference is stated, not which direction it goes.** A per-agent
+difference is legitimate when it is written down with its reason — whether it *widens* one agent's
+surface (the fixer may commit) or *narrows* it (a reviewer may not use Edit). A difference nobody
+wrote down is drift, and that is what this rule exists to catch.
 
-**One open inconsistency, recorded rather than silently resolved.** The Bash-hygiene bullet — *"Do
-not use Bash with newline-separated commands, $() substitution, or shell expansion in paths"* — is
-carried by five of the seven prompts. `skills/review-doc/prompts/reviewer.md` and
-`skills/review-code/prompts/self-review.md` omit it. Nothing about either agent explains the omission, so
-it reads as drift rather than design; but adding it changes what two live agents are permitted to
-do, which is a behaviour change and not a documentation repair. Promote it to the core or delete it
-from the other five — either is defensible, and this file is where that gets decided.
+The earlier form of this test said only that a legitimate addition widens and a narrowing is drift —
+and then listed the Bash-scope line, which narrows, in the additions table below. That was not an
+oversight in the table: narrowing one agent is a normal and correct thing to do, and a test that
+forbids it makes the rule disagree with every prompt it governs. What is never acceptable is a
+difference that exists only because someone edited one copy.
+
+**The Bash-hygiene bullet is now part of the core, and the test above is what settled it.** *"Do not
+use Bash with newline-separated commands, $() substitution, or shell expansion in paths"* was carried
+by five of the seven prompts. `skills/review-doc/prompts/reviewer.md` and `skills/review-code/prompts/self-review.md`
+omitted it, and nothing about either agent explained why. Under the previous test that was an
+unresolved question; under this one it is simply drift — an unstated difference — so the two prompts
+now carry it and all seven agree.
 
 The same goes for the Bash-scope line, which takes four shapes across the seven prompts. The bare
 form — "only for git log, git diff, git status commands" — is carried by
@@ -87,4 +95,4 @@ No prose detector: the block is prose an agent obeys at runtime, not a mechanica
 could tell apart from a legitimate mention of it. The reason is not that a detector would fire on
 this rule file — `scripts/check-shared-semantics.cjs` already exempts `references/shared-rules/`
 from every detector sweep, precisely so a rule file is free to quote what it governs. Checks A2 and
-C bind both skills; the six-bullet core above is what a reviewer diffs against.
+C bind both skills; the seven-bullet core above is what a reviewer diffs against.

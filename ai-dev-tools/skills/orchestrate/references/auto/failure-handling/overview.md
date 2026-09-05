@@ -8,8 +8,8 @@ Load this file when any failure occurs. Then load the specific failure-type refe
 
 | Failure Type | Stage | Response | Reference |
 |---|---|---|---|
-| Q2: Endless loop | Agent i (phase 2 final iter) | Commit wip, skip spec, continue | `endless-loop.md` |
-| Q2: Endless loop | Agent iii (iter 4) | Commit wip, skip spec, continue | `endless-loop.md` |
+| Q2: Unresolved criticals | Agent i (phase 2 final iter) | Commit wip, skip spec, continue | `unresolved-criticals.md` |
+| Q2: Unresolved criticals | Agent iii (final iter) | Commit wip, skip spec, continue | `unresolved-criticals.md` |
 | Q3: Crash (retry failed) | Agent i | Skip spec, no commit, continue | `crash-text-stage.md` |
 | Q3: Crash (retry failed) | Agent ii | Commit wip, **HALT pipeline** | `crash-implement.md` |
 | Q3: Crash (retry failed) | Agent iii iter 1 | Soft reset to implement_head, stash, skip, continue | `crash-code-review.md` |

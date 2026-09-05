@@ -52,13 +52,13 @@ After each phase dispatch (phase 1 and phase 2) returns, append one JSONL entry 
 
 ---
 
-## Endless-Loop Check
+## Unresolved-Criticals Check
 
 Applies ONLY to phase 2's final iteration (not phase 1):
-- Phase 2 final iter pre-fix criticals ≤ 1 → success, continue pipeline
-- Phase 2 final iter pre-fix criticals > 1 → Q2 failure (see `../failure-handling/endless-loop.md`)
+- Phase 2 final iter pre-fix criticals == 0 → success, continue pipeline
+- Phase 2 final iter pre-fix criticals > 0 → Q2 failure (see `../failure-handling/unresolved-criticals.md`)
 
-Phase 1's exit state is irrelevant for the endless-loop check.
+Phase 1's exit state is irrelevant for this check.
 
 **Bounded worst case:** 2 + 2 = 4 review dispatches per spec.
 

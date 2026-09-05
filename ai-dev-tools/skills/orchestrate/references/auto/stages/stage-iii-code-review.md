@@ -12,7 +12,7 @@ Single phase. Up to 4 iterations with early exit.
 ## Per-Iteration Dispatch
 
 ```bash
-/review-code <spec_baseline> --against <spec_path> --run-id <run_id>
+/review-code <spec_baseline> --against <spec_path> --run-id <run_id> --max-iterations 4
 ```
 
 Every iteration reviews the **full scope** from `spec_baseline` through current HEAD:
@@ -51,11 +51,11 @@ An artifact that exists but does not validate is a crash (`references/auto/failu
 
 ---
 
-## Endless-Loop Check (Iter 4)
+## Unresolved-Criticals Check (final iteration)
 
-At iter 4's REVIEW output, pre-fix:
-- Pre-fix criticals ≤ 1 → acceptable, treat as success
-- Pre-fix criticals > 1 → Q2 endless-loop failure
+At the final iteration's REVIEW output, pre-fix:
+- Pre-fix criticals == 0 → success
+- Pre-fix criticals > 0 → Q2 unresolved-criticals failure (see `../failure-handling/unresolved-criticals.md`)
 
 ---
 

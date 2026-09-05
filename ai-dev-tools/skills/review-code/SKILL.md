@@ -1,6 +1,6 @@
 ---
 name: review-code
-argument-hint: '<commit-count|git-ref> [--against <spec>] [--effort high|xhigh|max] [--max-iterations N] [--verify "<cmd>"] [--run-id <id>]'
+argument-hint: '<commit-count|git-ref> [--against <spec>] [--effort high|xhigh|max] --max-iterations N [--verify "<cmd>"] [--run-id <id>]'
 description: "Use when reviewing recent commits for bugs, architecture violations, spec drift, security issues, and verification gaps. Supports single-pass review and iterative review-fix-verify cycles. Invoke with /review-code <commit-count|git-ref>."
 ---
 
@@ -18,10 +18,14 @@ Iterative code review with automatic fix cycles. Reviews the last N commits, fin
 |---|---|---|---|
 | `--against <spec-path>` | none | any file path | Spec as implementation contract |
 | `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, self-reviewer) |
-| `--max-iterations` | 1 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
+| `--max-iterations` | **required** | 0-10 | How many rounds to run (0 = skip, 1 = single-pass). No default: the caller states it |
 | `--verify "<cmd>"` | none | any shell command | Repeatable — verification commands run after each fix |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional |
 | `--help` | — | — | Print usage and exit |
+
+**`--max-iterations` is required.** If it is absent, print `Error: --max-iterations is required (0-10).` and exit. If the value is not an integer in 0-10, print `Error: --max-iterations must be an integer between 0 and 10.` and exit.
+
+It has no default because the number of rounds is the caller's budget decision, and a silent default hides it. It is also what makes the loop bounded by construction: with the cap always stated, a review cannot run away, which is why there is no loop-detection failure mode — see `../orchestrate/references/auto/failure-handling/unresolved-criticals.md`. A round that ends with criticals outstanding is a result to report, not a loop to diagnose.
 
 **Removed flags:** If a removed flag is still passed, print `Warning: <flag> is no longer supported; all agents inherit the caller's session model. Ignoring.` — substituting the flag actually passed — and continue. Do not exit: the flag is inert, not invalid. Accepting it silently was the previous behaviour and gave the caller no signal that it had done nothing. Worded as in `review-doc`, which specified this while this skill did not.
 
@@ -59,7 +63,7 @@ zero criticals or cap.
 Flags:
   --against <spec-path>   Spec as implementation contract    (default: none)
   --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
-  --max-iterations N      Safety cap, 0=skip, 1=single-pass  (default: 1)
+  --max-iterations N      Rounds to run, 0=skip, 1=single    (REQUIRED)
   --verify "<cmd>"        Verification command (repeatable)  (default: none)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
@@ -217,7 +221,7 @@ Read `prompts/self-review.md` and dispatch: `Agent(prompt: <self-review-prompt>)
 
 It appends every defect to the `issues` array with `origin: "self-review"`, following the same synthetic-issue shape the verification regressions use (all six schema-required fields), and commits with `fix(review-code): self-review of iteration M's fixes`.
 
-**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** Self-review findings are NOT counted in `critical_count` or `high_count` for the iteration that produced them. That iteration both wrote and reviewed those lines, so counting them there reports the loop's own churn as evidence against the code under review — and the endless-loop gate fails a spec at `>1 criticals remaining`. From the next iteration those lines are ordinary code: the reviewer re-reads the full scope and emits anything still wrong in them as `origin: "document"`, counted normally.
+**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** Self-review findings are NOT counted in `critical_count` or `high_count` for the iteration that produced them. That iteration both wrote and reviewed those lines, so counting them there reports the loop's own churn as evidence against the code under review — and the unresolved-criticals gate fails a spec at `>1 criticals remaining`. From the next iteration those lines are ordinary code: the reviewer re-reads the full scope and emits anything still wrong in them as `origin: "document"`, counted normally.
 
 The exclusion is **round-local** and flips at the iteration boundary. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-doc`.
 
@@ -225,7 +229,7 @@ The exclusion is **round-local** and flips at the iteration boundary. It is defi
 
 **Disclose the depth-1 tail.** The code the self-review pass itself writes is not reviewed within the iteration, and on the FINAL iteration no later one reads it either. Track `self_review_tail_lines` — lines written by the final iteration's self-review pass — and print `Unreviewed tail: N lines committed by the final self-review pass`, omitting the line when the count is 0. `prompts/self-review.md` returns that count. This matters more here than in `review-doc`: `--max-iterations` defaults to **1**, so on a default invocation the final iteration is the only iteration and every line the pass writes is committed unreviewed. Required by `references/shared-rules/counts-exclude-self-review.md`.
 
-**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, the `critical_count` iteration N+1's reviewer computes measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. This skill's Status Logic and `orchestrate`'s stage-i endless-loop gate therefore gate on the right signal without either being rewritten. Do not "fix" them to compensate. (`found_this_round` and a Next-Round Recommendation are `review-doc`'s; this skill has neither, and naming them here was a copy from that skill.)
+**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, the `critical_count` iteration N+1's reviewer computes measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. This skill's Status Logic and `orchestrate`'s stage-i unresolved-criticals gate therefore gate on the right signal without either being rewritten. Do not "fix" them to compensate. (`found_this_round` and a Next-Round Recommendation are `review-doc`'s; this skill has neither, and naming them here was a copy from that skill.)
 
 ## Verification Commands
 
@@ -475,6 +479,9 @@ Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cann
 Orchestrator maintains running counters across iterations:
 - `total_fixed` (per-severity: critical, high, medium, low). The fix report cannot supply the severity — `prompts/coder.md` emits `{issue_index, action, detail}` and no more — so resolve each disposition's severity by `issue_index` into the CURRENT `tmp/_reviews_errors/review-code.json` *before* the next iteration's reviewer overwrites it, and cache the resolved `(issue_index → severity)` map in orchestrator state, first-write-wins.
 - `last_round_fixed` (per-severity: critical, high, medium, low) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
+- `remaining` (per-severity: critical, high, medium, low) -- populates the `Remaining:` line. **Defined as the final round's findings minus that round's `fixed` dispositions, plus every self-review finding that pass reported and did NOT fix.** Computed once, after the final iteration's fix phase and its self-review pass.
+
+  Taking the final review JSON's severity breakdown instead would report as *remaining* exactly what the last fixer just repaired. Subtracting `fixed` alone trusts the fixer's own claim that a fix landed — and the self-review pass exists because that claim is sometimes false. Adding back that pass's verified failures is what makes the number mean "still wrong in the code", which is what Status Logic gates on. A self-review finding the pass reported and fixed is not remaining; one it could not fix is. This changes no gate count — `critical_count` and `high_count` are untouched, per `references/shared-rules/counts-exclude-self-review.md`.
 - `total_pushed_back` (flat count)
 - `self_review_found = {found: 0, fixed: 0}` — running total across every self-review pass in this run, sourced from the agent's returned summary (`prompts/self-review.md` requires it). Populates the `Self-review:` terminal line and the summary's `## Self-Review` section. **Never** added to `total_fixed`, `critical_count` or `high_count` for the iteration that produced it: `references/shared-rules/counts-exclude-self-review.md`.
 - `self_review_tail_lines` — lines written by the FINAL iteration's self-review pass, for the `Unreviewed tail:` line. Earlier iterations need no tracking; the next iteration reviews them.

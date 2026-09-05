@@ -22,7 +22,7 @@
 |---|---|---|---|
 | i | Spec-review two-phase | Phase 1: `/review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1` (no fact-check). Phase 2: `/review-doc <spec> --fact-check true --max-iterations 2 --run-id <run_id>-phase2` (fact-checker on) | Yes — two serial sub-agent dispatches |
 | ii | Implement | `/implement <spec> --auto --run-id <id>` | Yes — single dispatch (may spawn 1 helper internally) |
-| iii | Code-review loop | `/review-code <spec_baseline> --against <spec_path> --run-id <id>` up to 4 iters, commit after each | Yes — one dispatch per iter |
+| iii | Code-review loop | `/review-code <spec_baseline> --against <spec_path> --run-id <id> --max-iterations 4` up to 4 iters, commit after each | Yes — one dispatch per iter |
 | iv | Verification gate | No-op in this release (no test suite). Final commits, print completion log | No — orchestrate runs directly |
 
 ---

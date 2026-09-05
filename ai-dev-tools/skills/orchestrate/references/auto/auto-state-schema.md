@@ -34,7 +34,7 @@ last_iteration_head: hash2b    # updates after each successful code-review iter
 - `implementation-complete`
 - `code-review-iter-{N}-complete`
 - `finalized`
-- `skipped-endless-loop` (Q2)
+- `skipped-unresolved-criticals` (Q2)
 - `skipped-crash-{stage}` (Q3)
 - `halted-crash-implement` (Q3)
 

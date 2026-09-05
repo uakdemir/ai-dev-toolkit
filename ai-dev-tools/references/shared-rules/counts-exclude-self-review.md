@@ -21,7 +21,7 @@ high_count     = count(severity == "high"     AND origin != "self-review")
 
 It holds only within the round that wrote those lines. That round both authored and reviewed them,
 so counting them there reports the loop's own sloppiness as evidence against the authored artefact
-— and the endless-loop gate skips a spec at `>1 criticals remaining`.
+— and the unresolved-criticals gate skips a spec that still has any critical remaining.
 
 **At the round boundary the origin flips to `"document"`.** From the next round onward those lines
 are ordinary artefact text: the next reviewer re-reads the whole artefact and counts everything it
