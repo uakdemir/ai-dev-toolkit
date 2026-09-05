@@ -60,6 +60,13 @@ expect reject churn-undercounted.json "critical_count 1 drops a real document cr
 # forever, which is a different -- and wrong -- rule.
 expect accept churn-next-round.json    "next round: origin flips to document, all five count -> accepted"
 
+# `phase` is immutable provenance and must never drive the counts. These two pin the one invariant
+# that ties it to `origin`: only the self-review pass may mark a finding as this round's own churn.
+# The reverse pairing -- phase "self-review" with origin "document" -- is the normal carried-forward
+# shape and is exercised by churn-next-round.json above.
+expect accept churn-phase-tagged.json  "phase tagged consistently with origin -> accepted"
+expect reject churn-phase-mismatch.json "origin self-review with phase review -> rejected"
+
 echo
 echo "-------- $pass passed, $fail failed --------"
 [ "$fail" -eq 0 ] || exit 1

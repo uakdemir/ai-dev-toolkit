@@ -39,6 +39,24 @@ Worked example. A 600-line document. Round 1's fixer writes 100 lines; round 1's
 checks those and writes more; round 1's counts reflect only the original 600. Round 2 reviews the
 whole file and counts everything in it.
 
+## `phase` records where a finding came from — and must not be counted on
+
+Every issue also carries `phase` — `"review"`, `"fact-check"` or `"self-review"` — recording which
+pass found it. Unlike `origin`, it is **never reset**: a later round flips `origin` to `"document"`
+while `phase` keeps the provenance. It exists because `origin` alone loses that information after one
+round, and `category` cannot supply it — the fact-checker and the self-review pass both emit
+`"fact-check"`.
+
+**Do not compute the counts from `phase`.** A carried-forward self-review finding keeps
+`phase: "self-review"` forever, so a phase-based count would suppress it permanently — which is the
+wrong rule this whole section exists to distinguish from the round-local one, and the one
+`tests/fixtures/counts/churn-next-round.json` is built to reject. `phase` is for diagnostics: which
+pass is producing the criticals, and therefore which prompt needs work.
+
+The validator enforces the one direction that must hold: `origin: "self-review"` requires
+`phase: "self-review"`, because only that pass may mark a finding as the round's own churn. The
+reverse — `phase: "self-review"` with `origin: "document"` — is the normal carried-forward shape.
+
 ## Not counted is not not-shown
 
 A fixer edit can genuinely damage an artefact. Self-review findings print on their own line in the

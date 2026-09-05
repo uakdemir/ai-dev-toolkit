@@ -387,11 +387,12 @@ Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-code-bra
 
 `Self-review:` reports what the self-review pass found against this run's own fixes. Those findings are excluded from every other count on the screen — `Aggregate`, `Remaining`, `Last round` — because the iteration that wrote those lines both authored and reviewed them. **They are excluded from the counts, never from the output.** Print the line whenever the self-review pass ran, including when it found nothing (`0 found`).
 
-`origin` is the only optional per-issue key and the only one permitted beyond the six required; `additionalProperties: false` still rejects everything else. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
+`origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the six required; `additionalProperties: false` still rejects everything else. `phase` records where a finding was found (`"review"` or `"self-review"` here) and never changes, where `origin` is round-relative and flips at the iteration boundary — it is for diagnostics, and the counts stay on `origin`. The validator enforces that `origin: "self-review"` implies `phase: "self-review"`. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
 
 ## Final Report
 
 When the loop completes (criticals zero + verification pass, or max iterations exhausted):
+0. **Validate the finished artifact**, once, before anything reads it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs <output-path>`. This is the only point at which the self-review pass's appends are checked — earlier iterations are covered by the next reviewer's recompute, and the final one has no next reviewer. With `--max-iterations` defaulting to 1, that is every default run. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`; exit 2 → proceed and record `schema validation not run: node unavailable` under Checks SKIPPED.
 1. Generate `tmp/_reviews_errors/review-code-summary.md` from the last iteration's `tmp/_reviews_errors/review-code.json` (top 10 issues by severity, then descending confidence).
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (below).
@@ -551,7 +552,8 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },
           "problem": { "type": "string" },
           "suggested_fix": { "type": "string" },
-          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" }
+          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" },
+          "phase": { "type": "string", "enum": ["review", "fact-check", "self-review"] }
         }
       }
     }

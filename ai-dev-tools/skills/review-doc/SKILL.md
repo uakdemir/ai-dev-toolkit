@@ -143,7 +143,9 @@ for iter in 1..max_iterations:
    node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>
    ```
 
-   Exit 0 → use the printed recount as the authoritative severity counts. Exit 1 or 2 → retry the reviewer once, and abort the iteration on a second failure (mirrors review-code's Validation step + Error Handling). If node is unavailable, fall back to reading the file and record `schema validation not run: node unavailable` in the iteration log. The validator enforces the count-exclusion invariant, so a `critical_count` that includes this round's self-review findings fails closed here.
+   Exit 0 → use the printed recount as the authoritative severity counts. Exit 1 or 2 → retry the reviewer once, and abort the iteration on a second failure — status **Error**, per `references/shared-rules/run-failure-disclosure.md`. If node is unavailable, fall back to reading the file and record `schema validation not run: node unavailable` in the iteration log.
+
+   **This call checks the reviewer's own output and nothing else.** Two later phases rewrite the same file — the fact-checker recomputes `critical_count`, and the self-review pass appends without recomputing — and neither is covered here. On any iteration that has a successor that does not matter: the next reviewer recomputes both counts from the full issues array (step 7 of its prompt), so a wrong count is corrected before anything acts on it. The **final** iteration has no successor, which is where the gap is real and where the closing validation below covers it.
 7. `self_review()` runs after `fix()`, in every iteration where the fixer ran. It is **always on** — there is no flag. It reads the fix report, re-reads only the regions that report names, and both **reports and fixes** what it finds, exactly once (depth 1). It never rewrites `critical_count` or `high_count`, and everything it appends carries `origin: "self-review"` (see the Self-Review dispatch section).
 8. **Depth 1, and the tail is disclosed rather than carried.** The text the self-review pass itself writes is not re-reviewed within the same round — unbounded self-review is the same loop with more steps. If another round runs, its reviewer covers those lines as ordinary document text, because every round re-reads the whole document. The tail is only a real gap on the **final** round, and the summary states how many lines the final self-review pass wrote unreviewed. There is no cross-round carry mechanism: the next round's full re-read already is one.
 
@@ -349,6 +351,21 @@ The `Reviewed:` line supports three formats:
 ## Final Report
 
 When the loop completes (final gate passes or max iterations exhausted):
+
+0. **Validate the finished artifact**, once, before anything reads it:
+
+   ```bash
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>
+   ```
+
+   This is the only point at which the fact-checker's recount and the self-review pass's appends are
+   checked. Every earlier iteration is covered by the next reviewer's recompute; the final one has no
+   next reviewer, so without this the last thing written to the artifact is the one thing nothing
+   verifies — and it is what the summary reports and what a human reads. One invocation per run.
+
+   Exit 0 → proceed. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`,
+   naming the phase whose write broke the invariant. Exit 2 (node unavailable) → proceed, and record
+   `schema validation not run: node unavailable` in the summary's Validation section.
 
 1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
@@ -593,7 +610,8 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },
           "problem": { "type": "string" },
           "suggested_fix": { "type": "string" },
-          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" }
+          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" },
+          "phase": { "type": "string", "enum": ["review", "fact-check", "self-review"] }
         }
       }
     }
@@ -603,4 +621,6 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
 
 Note: `fact_check_claims` is only populated when `--fact-check true` is passed. When `--fact-check false` (default), set `fact_check_claims: []` and `fact_check_accuracy: 100`.
 
-Note: `origin` is the only optional per-issue key and the only one permitted beyond the seven required — `additionalProperties: false` still rejects everything else. It defaults to `"document"`; an issue without it counts as document-origin. The reviewer and the fact-checker emit `"document"`; the self-review pass emits `"self-review"` for the findings it raises against the fixer's own edits, and those are excluded from that round's `critical_count` and `high_count`. See `references/shared-rules/counts-exclude-self-review.md`.
+Note: `origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the seven required — `additionalProperties: false` still rejects everything else. It defaults to `"document"`; an issue without it counts as document-origin. The reviewer and the fact-checker emit `"document"`; the self-review pass emits `"self-review"` for the findings it raises against the fixer's own edits, and those are excluded from that round's `critical_count` and `high_count`. See `references/shared-rules/counts-exclude-self-review.md`.
+
+Note: `phase` records WHERE a finding was found — `"review"`, `"fact-check"` or `"self-review"` — and unlike `origin` it never changes. The reviewer flips `origin` to `"document"` on every carried-forward entry, so without `phase` nothing records which pass produced a finding after the first round; `category` cannot stand in, because the fact-checker and the self-review pass both emit `"fact-check"`. It is for diagnostics — which pass is producing the criticals, and therefore which prompt needs work. **The gate counts stay on `origin`.** Counting on `phase` would exclude a carried-forward self-review finding forever, which is exactly the permanently-suppress rule the round boundary exists to reject. The validator enforces one direction: `origin: "self-review"` requires `phase: "self-review"`; the reverse is the normal carried-forward shape.

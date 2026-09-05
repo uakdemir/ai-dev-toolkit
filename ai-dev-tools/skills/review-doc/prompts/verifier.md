@@ -47,6 +47,7 @@ Four things, and only these four:
 4. For each defect, append an issue object to the `issues` array:
    - `"id"`: `ISSUE-NNN` where NNN is `next_id_seed` zero-padded to **at least** 3 digits (more when `next_id_seed >= 1000`); then increment. **Never reuse or renumber existing IDs.**
    - `"category"`: `"verify"` for a fidelity defect (checks 1-3), `"fact-check"` for a defect in the accuracy of the new text (check 4)
+   - `"phase": "self-review"` — on every issue you append. Unlike `origin` this is never reset: a later round flips `origin` to `"document"` but `phase` keeps the record of which pass found it.
    - `"origin": "self-review"` — **on every issue you append, without exception.** This is what keeps the round that wrote these lines from counting its own churn against the document it was reviewing. Omit it and the loop reports its own sloppiness as evidence the authored document is bad, which via the endless-loop gate can fail the whole pipeline. See `references/shared-rules/counts-exclude-self-review.md`.
    - `"location"`: where the defect is
    - `"problem"`: what is wrong, naming the disposition id whose fix caused or falsely claimed it
