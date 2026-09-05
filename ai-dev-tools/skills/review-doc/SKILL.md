@@ -261,7 +261,7 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 
 | File | Purpose | Consumer |
 |---|---|---|
-| `tmp/_reviews_errors/[<run_id>-]review-doc.json` | Structured JSON from last iteration | `/respond-to-review`, machines |
+| `tmp/_reviews_errors/[<run_id>-]review-doc.json` | Structured JSON from last iteration | `/orchestrate`, this skill's own Respond to Remaining Issues phase, machines |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
