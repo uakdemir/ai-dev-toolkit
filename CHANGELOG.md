@@ -1,5 +1,74 @@
 # Changelog
 
+## 3.0.0 (2026-09-05)
+
+The release that made a review round mean one round. Counts, ids and artifacts are now
+per-round by construction rather than by bookkeeping, `orchestrate --auto` runs one spec
+instead of a queue, and a registry stops a rule that governs two skills from forking in one
+of them.
+
+### Breaking Changes
+
+- **orchestrate:** `--auto` takes exactly one spec. `/orchestrate --auto s1.md s2.md`, documented in `help.md` through 2.9.1 as "run pipeline on multiple specs serially", no longer does — pass one spec per invocation (ba55973)
+- **review-code, review-doc:** `--max-iterations` is now **required**. It previously defaulted to `1`; a call that omits it now prints `Error: --max-iterations is required (0-10).` and exits (18887db)
+- **orchestrate:** stage iii's review artifact moves from `tmp/_reviews_errors/<run_id>-review-code.json` to `tmp/_reviews_errors/<run_id>-iter<N>-review-code.json`, one file per iteration. Anything reading the old path finds nothing (15da5db)
+- **orchestrate:** five failure-handling references are replaced by two. `crash-code-review.md`, `crash-implement.md`, `crash-text-stage.md` and `rollback-mechanism.md` become `crash.md`; `endless-loop.md` becomes `unresolved-criticals.md`. Any document citing a deleted path no longer resolves (ba55973, 18887db)
+
+> As in 2.9.1, none of these commits carried a `BREAKING CHANGE:` footer, so a strict
+> conventional-commit reader would not surface them. They are listed here because the
+> behaviour changed incompatibly.
+
+### Deprecated
+
+Accepted with a warning and otherwise ignored, rather than rejected — the flag is inert, not invalid:
+
+- `--verify-fixes` — the self-review pass it used to gate now always runs (cb88938)
+- `--model`, `--min-model`, `--max-model` — every agent inherits the caller's session model; `--effort` pins reasoning depth
+
+### Features
+
+- **review:** add a shared-rules registry so a rule governing two skills cannot fork (fe97b8c)
+- **review:** self-review the fixer's own edits, and stop counting the loop's churn (cb88938)
+- **review:** hand back what the run could not decide, as the last line printed (c4f309c)
+- **review:** a failed run says so, says why, and asks only when someone is there (d9317e4)
+- **review:** counts are per-round, and there is no endless loop to detect (18887db)
+- **review:** fix at every severity, and register agent tool discipline (946d2d0)
+- **review:** validator gains a doc schema and excludes self-review churn from the counts (526824c)
+- **review:** validate the finished artifact once, before the Final Report reads it (7662227). The `phase` provenance field added by the same commit was removed again in 62a4df6 and never shipped — `origin` replaced it
+- **orchestrate:** stage iii dispatches one iteration per call, and can direct coverage via `--must-inspect` (15da5db)
+- **orchestrate:** count review failures at completion, so the rate is visible (722ec0d)
+
+### Fixes
+
+- **review-code:** count mode must re-review the original scope every iteration (0c056e4)
+- **review-doc:** rate severity by consequence, not by confidence (84d7101)
+- **review:** triage is not gated on status, and the stop condition reads positively (7d71b60)
+- **review:** stop injecting synthetic criticals, snapshot each round (3fd48ae)
+- **review:** close the gate defects the Step 0 payload review found (3ec1a1b)
+- **review:** close two gaps the end-to-end self-review run exposed (fc3aaf5)
+- **orchestrate:** name the review artifacts the pipeline actually writes (91351c5)
+- **orchestrate:** drop the `/respond-to-review` dependency from step 3 (e7137c7)
+- **scripts:** escape the NUL separator in score-severity-eval so the file is text (fae38f3)
+- **scripts:** resolve eval matches by specificity, not by severity alone (eefce4a)
+- Applied review findings, by round: 19 (bc70e51), 23 (2dd3180), 27 (ee4f7ba), 35 (bfdb11d), 37 (5e59cb0), 20 (fd524bd), and the focused round's decisions (aafaf3c)
+
+### Refactors
+
+- **review:** rounds start fresh — remove carry-forward and the `phase` field (62a4df6)
+- **orchestrate:** auto mode takes one spec, not a queue (ba55973)
+- **skills:** share the stack-validation procedure instead of copying it (eaafade)
+
+### Tests
+
+- **review:** add gates and fixtures for severity, churn counts, and shared semantics (5cba874)
+- **review:** add four gates and a duplication reporter (6a2cd63)
+- **review:** give agent-abort-contract and brainstorm-handoff real detectors (e68da26)
+
+### Other Changes
+
+- **docs:** resolve seven citations an agent had to guess at (87327c1)
+- **docs:** apply the dogfood review-doc round's findings (b50bbd5)
+
 ## 2.9.1 (2026-08-05)
 
 ### Breaking Changes
