@@ -491,5 +491,99 @@ expect green "$BASE" "P3  an unreadable dot-directory under skills/ is not a ski
 chmod 644 "$BASE/skills/.claude/loop.md"
 
 echo
+echo "7. the two detectors added for agent-abort-contract and brainstorm-handoff"
+#
+# These rules had NO detector until now, which meant checks B and D never ran for them: the gate
+# proved only that each governed skill had the canonical sentence pasted in. A skill could define a
+# different abort sentinel, or claim a different last line, with the gate green. Every case below
+# is a thing that used to pass.
+
+ABORT_CANON='An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".'
+HANDOFF_CANON='Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.'
+
+build_abort() {  # minimal tree: one abort rule, one compliant governed skill
+  rm -rf "$BASE"
+  mkdir -p "$BASE/references/shared-rules" "$BASE/skills/review-fake"
+  { printf -- '---\n'
+    printf 'name: agent-abort-contract\napplies-to: [review-fake]\ndetector: abort-sentinel\n'
+    printf 'canonical: %s\n' "$ABORT_CANON"
+    printf -- '---\n\n# How a dispatched agent gives up\n\n**%s**\n' "$ABORT_CANON"
+  } > "$BASE/references/shared-rules/agent-abort-contract.md"
+  { printf '# Review Fake\n\n**%s**\n\n' "$ABORT_CANON"
+    printf 'Defined once, in `references/shared-rules/agent-abort-contract.md`.\n'
+  } > "$BASE/skills/review-fake/SKILL.md"
+}
+
+build_handoff() {  # minimal tree: one handoff rule, one compliant governed skill
+  rm -rf "$BASE"
+  mkdir -p "$BASE/references/shared-rules" "$BASE/skills/review-fake"
+  { printf -- '---\n'
+    printf 'name: brainstorm-handoff\napplies-to: [review-fake]\ndetector: handoff-last-line\n'
+    printf 'canonical: %s\n' "$HANDOFF_CANON"
+    printf -- '---\n\n# Hand back what the run could not decide\n\n**%s**\n' "$HANDOFF_CANON"
+  } > "$BASE/references/shared-rules/brainstorm-handoff.md"
+  { printf '# Review Fake\n\n**%s**\n\n' "$HANDOFF_CANON"
+    printf 'Defined once, in `references/shared-rules/brainstorm-handoff.md`.\n'
+  } > "$BASE/skills/review-fake/SKILL.md"
+}
+
+build_abort
+expect green "$BASE" "S1  a compliant abort contract is GREEN"
+
+build_abort
+printf '\nOn failure the pass returns a first line beginning with the literal prefix `FAILED: `.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "S2  a governed skill defining the sentinel as FAILED: is caught (check B)"
+
+build_abort
+printf '\nIf it cannot proceed it gives up, returning `HALT: <reason>` as the first line.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "S3  a different sentinel phrased another way is still caught"
+
+# Check D: a skill that DOES the governed thing correctly, but never joined the contract. This is
+# the shape the rule actually fears -- a new skill inventing its own abort handling next to one
+# that already has a contract.
+build_abort
+mkdir -p "$BASE/skills/implement-fake"
+printf '# Implement Fake\n\nThe step agent returns a first line beginning with the prefix `ABORT: ` when it cannot continue.\n' \
+  > "$BASE/skills/implement-fake/SKILL.md"
+expect red "$BASE" "S4  an unregistered skill doing the abort contract is caught (check D)"
+
+# The false positive this detector produced on its first run against the real tree: skills/scaffold
+# says "abort" a dozen times about its OWN exit, and uses "sentinel" for a NUL placeholder escape
+# 300 lines away. Two true signals, no relationship. governs must require them on ONE line.
+build_abort
+mkdir -p "$BASE/skills/scaffold-fake"
+{ printf '# Scaffold Fake\n\n'
+  printf -- '- Under `--yes`: abort with a message naming the unresolved placeholder.\n'
+  printf -- '- On any wiring failure, warn; do NOT abort.\n'
+  printf -- '- Migration aborts when the schema does not match.\n\n'
+  printf 'Replace every `{{{{` with a unique sentinel (NUL-delimited) before substitution.\n'
+} > "$BASE/skills/scaffold-fake/SKILL.md"
+expect green "$BASE" "N5  a skill that merely stops, with an unrelated 'sentinel', does NOT join the contract"
+
+build_handoff
+expect green "$BASE" "S6  a compliant handoff contract is GREEN"
+
+build_handoff
+printf '\nThe `Found this round:` count is always the last line printed.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "S7  a governed skill claiming a different last line is caught (check B)"
+
+build_handoff
+printf '\nThe summary path is printed as the run last line.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "S8  'as the run last line' phrasing is caught too"
+
+# orchestrate/SKILL.md genuinely requires its breadcrumb to be the literal last line. That is a
+# different output, correctly its own, and must not be dragged into this rule -- which is why
+# governs requires a decisions-document alongside the last-line claim.
+build_handoff
+mkdir -p "$BASE/skills/orchestrate-fake"
+printf '# Orchestrate Fake\n\nEvery exit point MUST end with the breadcrumb as the literal last line(s). Commands-only, one per line.\n' \
+  > "$BASE/skills/orchestrate-fake/SKILL.md"
+expect green "$BASE" "N9  a last-line rule about a different output does NOT join the handoff contract"
+
+echo
 echo "-------- $pass passed, $fail failed --------"
 [ "$fail" -eq 0 ] || exit 1

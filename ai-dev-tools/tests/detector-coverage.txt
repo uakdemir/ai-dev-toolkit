@@ -4,3 +4,12 @@ detector severity-from-confidence:
   skills/review-doc/SKILL.md
   skills/review-doc/agents/codebase-fact-checker.md
   skills/review-doc/prompts/reviewer.md
+detector abort-sentinel:
+  skills/review-code/SKILL.md
+  skills/review-code/prompts/self-review.md
+  skills/review-doc/SKILL.md
+  skills/review-doc/agents/codebase-fact-checker.md
+  skills/review-doc/prompts/verifier.md
+detector handoff-last-line:
+  skills/review-code/SKILL.md
+  skills/review-doc/SKILL.md

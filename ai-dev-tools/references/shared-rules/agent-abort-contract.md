@@ -1,6 +1,7 @@
 ---
 name: agent-abort-contract
 applies-to: [review-code, review-doc]
+detector: abort-sentinel
 canonical: An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".
 ---
 

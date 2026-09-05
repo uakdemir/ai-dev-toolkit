@@ -65,8 +65,9 @@ mechanical signature, because check D only runs for detector-bearing rules.
 
 `check-shared-semantics.cjs` enforces that each shared rule is single-sourced, stated (not merely cited) by every skill it governs, and unviolated. Check D — no skill
 outside a rule's `applies-to` quietly does the governed thing — runs only for a rule that declares a
-`detector`. Exactly one of the six registry rules does; for the other five, checks A2 and C are the
-whole binding.
+`detector`. Three of the seven registry rules do (`severity-is-consequence`, `agent-abort-contract`,
+`brainstorm-handoff`); for the other four, checks A2 and C are the whole binding — they prove the
+canonical sentence is *stated*, never that it is obeyed or even satisfiable.
 
 **These are manual gates — nothing invokes them automatically.** Severity-is-consequence forked
 because `6f22c6a` fixed it in `review-code` and verification was scoped to the files that fix
@@ -75,8 +76,10 @@ touched; the gate exists so the next such divergence fails loudly, but only if i
 If you change a gate, re-run its mutation suite and add a case for what you changed:
 
 ```bash
-./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 42 passed
+./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 51 passed
 ```
 
 A gate tested only against the bug it was written from proves the author can grep. That suite now
-pins eight defects in the gate itself, each of which survived a careful read of the gate's source.
+pins nine defects in the gate itself, each of which survived a careful read of the gate's source —
+most recently a last-line pattern that matched `as the run's last line` but not `as the run last
+line`, so one missing apostrophe made the claim invisible.

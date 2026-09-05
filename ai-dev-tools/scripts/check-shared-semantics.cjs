@@ -147,6 +147,24 @@ const DERIVE_LINK = new RegExp(
 const SET_BOTH = /set\s+both[^\n]{0,30}confidence[^\n]{0,30}severity|set\s+both[^\n]{0,30}severity[^\n]{0,30}confidence/i;
 const WINDOW = 4;
 
+// ---- abort-sentinel / handoff-last-line vocabulary ----------------------------
+// An ALL-CAPS token followed by ": ", quoted or backticked -- the shape of a returned sentinel.
+const SENTINEL_TOKEN = /[`'"]([A-Z][A-Z_]{2,15}):\s/;
+// A line is DEFINING a give-up convention, not merely containing a token that looks like one.
+const ABORT_CONTEXT =
+  /\b(?:abort\w*|sentinel|literal prefix|first line|gives? up|cannot (?:do|proceed|continue|complete))\b/i;
+const LAST_LINE = /\b(?:last|final)\s+line\b/i;
+// A document collecting what a run could not settle. Requiring this alongside LAST_LINE is what
+// keeps orchestrate's breadcrumb rule -- also a last-line rule, about a different output -- out.
+const DECISION_DOC =
+  /needs your decisions|could not decide|needing a human decision|hands? back|handed back/i;
+// The claim itself, as an assertion rather than a mention.
+// The optional \w+ absorbs whatever noun sits between "the" and "last line" — "as the run's last
+// line", "as the run last line", "as the output's final line". Pinning it to "run's " exactly is
+// what let case S8 through: one missing apostrophe and the claim was invisible.
+const CLAIMS_LAST_LINE =
+  /\bis (?:always |deliberately )?the (?:last|final) line\b|\bas the (?:\w+'?s? )?(?:last|final) line\b/i;
+
 // Fenced blocks are where issue RECORDS live (schemas, worked examples). They are exempt from the
 // proximity detector only -- the linkage detectors still scan them, so a rule hidden in a fence is
 // still caught. What a fence buys is exemption from adjacency, never from linkage.
@@ -222,6 +240,65 @@ const DETECTORS = {
             'a confidence value, a threshold and a severity literal (line ' + (sevLine + 1) +
             ') occur together: ' + lines[sevLine].trim().slice(0, 90));
         }
+      }
+    },
+  },
+
+  // ---- abort-sentinel (agent-abort-contract) ----------------------------------
+  //
+  // The contract is worth exactly as much as its literalness: the orchestrator matches a prefix,
+  // so a pass that gives up with `FAILED: ` is indistinguishable from a pass that ran and found
+  // nothing. That is the failure mode the rule exists to prevent, and until this detector existed
+  // nothing checked it -- checks A2 and C only proved the sentence was pasted into both skills.
+  //
+  // A sentinel is an ALL-CAPS token followed by ": ", quoted or backticked. `TODO: verify` in
+  // test-audit and `FEATURE_NAME: ` in scaffold match that shape, which is why a hit only counts
+  // on a line that is also TALKING about giving up.
+  'abort-sentinel': {
+    describe: 'a dispatched agent signalling that it cannot proceed',
+    // The two signals must co-occur ON ONE LINE. Testing them against the whole file matched
+    // skills/scaffold, which says "abort" a dozen times about its OWN exit and uses "sentinel" for
+    // a NUL placeholder-escape 300 lines away — two true signals, no relationship. The governed
+    // thing is narrower than the word "abort": it is a dispatched agent RETURNING a response whose
+    // FIRST LINE carries a prefix. A skill that merely stops is not doing it.
+    governs: (text) =>
+      text.split('\n').some((l) =>
+        (/\bfirst line\b/i.test(l) && /\b(?:begins?|starts?|prefix)\b/i.test(l)) ||
+        (ABORT_CONTEXT.test(l) && SENTINEL_TOKEN.test(l))),
+    scan(file, report) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      for (let i = 0; i < lines.length; i += 1) {
+        if (!ABORT_CONTEXT.test(lines[i])) continue;
+        for (const m of lines[i].matchAll(new RegExp(SENTINEL_TOKEN.source, 'g'))) {
+          if (m[1] === 'ABORT') continue;
+          report(i + 1, 'wrong-sentinel',
+            'defines a give-up signal with the prefix "' + m[1] + ': ", not the contract\'s ' +
+            '"ABORT: ". The orchestrator matches the literal prefix, so this abort reads as a ' +
+            'pass that ran and found nothing.',
+            lines[i].trim().slice(0, 130));
+        }
+      }
+    },
+  },
+
+  // ---- handoff-last-line (brainstorm-handoff) ---------------------------------
+  //
+  // Only the LAST line survives a scrollback; two skills each claiming a different one means the
+  // reader learns to look in the wrong place. `governs` deliberately requires BOTH a last-line
+  // claim and a decisions-document, so orchestrate/SKILL.md's "breadcrumb as the literal last
+  // line" -- a different output, correctly its own -- is not dragged into this contract.
+  'handoff-last-line': {
+    describe: 'what a run prints as its final line when it has items to hand back',
+    governs: (text) => LAST_LINE.test(text) && DECISION_DOC.test(text),
+    scan(file, report) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      for (let i = 0; i < lines.length; i += 1) {
+        if (!CLAIMS_LAST_LINE.test(lines[i])) continue;
+        if (/brainstorm|absolute path/i.test(lines[i])) continue;
+        report(i + 1, 'displaced-last-line',
+          'claims something other than the brainstorm document\'s absolute path is the last ' +
+          'line printed. One line survives the scrollback; it is that path.',
+          lines[i].trim().slice(0, 130));
       }
     },
   },

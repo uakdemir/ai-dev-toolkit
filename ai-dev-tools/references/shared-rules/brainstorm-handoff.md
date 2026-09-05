@@ -1,6 +1,7 @@
 ---
 name: brainstorm-handoff
 applies-to: [review-code, review-doc]
+detector: handoff-last-line
 canonical: Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.
 ---
 
