@@ -56,7 +56,12 @@ pass is producing the criticals, and therefore which prompt needs work.
 The validator enforces the one direction that must hold, and only where `phase` is present: it
 rejects `origin: "self-review"` paired with a phase other than `"self-review"`, because only that
 pass may mark a finding as the round's own churn. **A missing `phase` is not caught** — the check is
-guarded on the key existing. The reverse — `phase: "self-review"` with `origin: "document"` — is the
+guarded on the key existing, and that is deliberate. `phase` is optional on every issue: the
+self-review pass has exactly one phase, so `origin: "self-review"` already carries the information
+`phase: "self-review"` would repeat. Requiring it would tighten the artifact contract that four
+auto-pipeline gates and both skills write against, in exchange for a field that is redundant
+wherever the constraint would apply. What the validator rejects is a *contradiction* — `origin`
+claiming the round's own churn while `phase` names a different pass — not an omission. The reverse — `phase: "self-review"` with `origin: "document"` — is the
 normal carried-forward shape.
 
 ## Not counted is not not-shown

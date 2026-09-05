@@ -131,6 +131,8 @@ Set `"origin": "document"` and `"phase": "review"` on every issue you emit — y
 If `node` is not installed, skip this step and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
 
 ## Tool Usage Rules
+
+**A dispatched agent uses Read, Grep, Glob and Write for file work rather than their Bash equivalents, and never runs a git command that pushes, switches branches, or discards work.** The core below is defined once, in `references/shared-rules/agent-tool-discipline.md`, and shared with `review-doc`. It stays stated here in full, not cited: you receive this prompt and nothing else, and a prompt that outsources its own limits to a file you never open has no limits.
 - Use Grep (not grep/rg via Bash) for searching file contents
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - **If Grep or Glob is unavailable in your session**, fall back to read-only `git grep` and `git ls-files` via Bash, and say so in your report. The Verification Gap section requires searching by symbol and by import reference before claiming no test exists; that evidence is not optional. A search you could not run is a finding you cannot ground — drop the finding rather than assert it unsearched.

@@ -13,8 +13,8 @@ Check the fixer's own edits, report every defect, and **fix each one, exactly on
 
 ## Inputs
 
-- Fix report: `tmp/_reviews_errors/review-doc-fix-report.json` (or `tmp/_reviews_errors/<run_id>-review-doc-fix-report.json` when `--run-id` is active)
-- Review JSON: `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) — issue locations and current id state
+- Fix report: `{{FIX_REPORT_PATH}}`
+- Review JSON: `{{OUTPUT_PATH}}` — issue locations and current id state
 - Document paths: {{DOC_PATHS}}
 
 ## What to Check
@@ -89,6 +89,8 @@ Four things, and only these four:
 - A disposition of `deferred` or `pushed-back` was never edited — it cannot have caused collateral damage, and its location is not yours to check.
 
 ## Tool Usage Rules
+
+**A dispatched agent uses Read, Grep, Glob and Write for file work rather than their Bash equivalents, and never runs a git command that pushes, switches branches, or discards work.** The core below is defined once, in `references/shared-rules/agent-tool-discipline.md`, and shared with `review-code`. It stays stated here in full, not cited: you receive this prompt and nothing else, and a prompt that outsources its own limits to a file you never open has no limits.
 - Use Grep (not grep/rg via Bash) for searching file contents
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents
@@ -98,3 +100,8 @@ Four things, and only these four:
 - Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)
+
+`{{OUTPUT_PATH}}` is substituted by the skill before this prompt reaches you, to the run-id-aware
+`tmp/_reviews_errors/[<run_id>-]review-doc.json`. If it still appears literally in your copy, the
+substitution did not happen: report `output path not substituted` and stop rather than guessing at
+the path — writing to the unprefixed default would silently clobber another run's artifact.

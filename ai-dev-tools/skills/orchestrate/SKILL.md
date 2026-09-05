@@ -74,6 +74,8 @@ Every exit point MUST end with the breadcrumb as the literal last line(s). No pr
 
 **Commit breadcrumbs:** When a step produced changes (inner skill modified files), include `/commit` as the first breadcrumb line before the next-step command(s).
 
+`/commit` is a **prerequisite, not a plugin command.** This plugin ships no `commands/` directory and `plugin.json` declares none, so `/commit` resolves only where the user already has it. It leads every breadcrumb in steps 1-7 because the breadcrumb format is commands-only — one per line, no labels, no annotations — which leaves nowhere to explain a fallback inline. If it is unavailable, the equivalent is an ordinary `git add -A && git commit`. Stated here once rather than in eight step files.
+
 **Phase boundaries:** Steps advancing across phases prepend `/clear → ` to recommend clearing context. Phase boundaries: Step 3→4, Step 5→6, Step 6→7.
 
 **When NOT to emit:** Mid-conversation clarifying questions, tool-output displays, internal retries.

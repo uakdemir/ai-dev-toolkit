@@ -117,22 +117,23 @@ for iter in 1..max_iterations:
     if fact_check:
         fact_check()                    # appends fact-check issues to json
     total_criticals = count(json)       # re-count after fact-check (includes fact-check-added criticals)
-    is_final_iter = (iter == max_iterations)
-    exit_gate = total_criticals if fact_check else pre_fix_criticals
-    if exit_gate == 0 and not is_final_iter:
-        break                           # early-exit: nothing to fix, skip fix phase and remaining iters
-    if total_criticals == 0:            # final iter, 0 criticals: skip fixer, clean exit
-        break
-    fix()                               # fixer runs when total_criticals > 0
-    self_review()                       # always: checks the fixer's own edits, fixes what it
+    total_issues = count_issues(json, exclude_origin="self-review")
+    if total_issues > 0:
+        fix()                           # EVERY severity, every iteration — not only criticals
+        self_review()                   # always: checks the fixer's own edits, fixes what it
                                         # finds ONCE, appends its findings with
                                         # origin: "self-review" (never counted this round)
+    exit_gate = total_criticals if fact_check else pre_fix_criticals
+    if exit_gate == 0:
+        break                           # no criticals left -> this was the last round
 ```
 
 **Key behavioral properties:**
 1. No phase logic, no tier promotion, no hidden final gate.
 2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
-3. Early exit is gated on `total_criticals == 0` when `--fact-check true`, and on `pre_fix_criticals == 0` otherwise.
+3. **Fixing and iterating are separate decisions.** The fixer runs whenever the round found anything at all — critical, high, medium or low. Only the decision to run *another* round is gated on criticals: `total_criticals == 0` when `--fact-check true`, and `pre_fix_criticals == 0` otherwise.
+
+   Gating the fix phase on criticals meant a round that found eleven highs and ten mediums and no criticals fixed **nothing** and handed all twenty-one to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run and the document to receive only what has more than one defensible answer. It also silently disabled the self-review pass, which runs only after a fix phase: on the zero-critical path the triage phase then applied edits with nothing reviewing them. A minor finding the agent can fix is still worth fixing; whether it justifies another *round* is a different question, and that one is still severity-gated.
 
    Option Y is unchanged: `pre_fix_criticals` is still measured at review output, before fact-check, and is still what the endless-loop gate reads. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the endless-loop gate as ">1 criticals remaining" and the spec is skipped — for criticals the loop itself declined to fix.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
@@ -153,11 +154,13 @@ for iter in 1..max_iterations:
 
 All `agents/` and `prompts/` paths in this section are relative to this skill's root directory (e.g., `${CLAUDE_SKILL_DIR}/`).
 
+**Every dispatched prompt receives its output path by substitution, never by description.** `{{OUTPUT_PATH}}` and `{{FIX_REPORT_PATH}}` are resolved by the skill — which is the only party that knows whether `--run-id` is active — before the prompt reaches the agent. Each prompt states what to do if the placeholder arrives unsubstituted: report and stop, never fall back to the unprefixed default, which would clobber another run's artifact.
+
 ### Reviewer
 
 The orchestrator dispatches a single reviewer agent, inheriting the caller's session model and running at the `--effort` reasoning level.
 
-Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`.
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive: `max` = exhaustive analysis; `xhigh`/`high` proportionally less. All severities stay in scope regardless.
@@ -185,7 +188,7 @@ Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json`
 
 **Abort detection contract:** the fact-checker signals a controlled abort (e.g., on malformed reviewer JSON) by leaving the JSON file unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, and proceeds to the fixer using the original reviewer output. Any other failure mode (agent crash, exception, no response) is treated identically: restore backup, print a generic warning, continue.
 
-Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>)`. Include the effort level (`--effort` value) in the dispatch prompt.
+Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>)`. Include the effort level (`--effort` value) in the dispatch prompt. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
 
 The fact-checker:
 1. Reads `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`)
@@ -197,7 +200,7 @@ The fact-checker:
 
 ### Fixer
 
-Dispatched when `total_criticals > 0` after review (and optional fact-check).
+Dispatched whenever the round found **any** issue after review (and optional fact-check) — critical, high, medium or low. Not gated on severity: see Review Loop property 3.
 
 Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list and `{{AGAINST_PATH}}` → the `--against` value or `none`.
 
@@ -232,7 +235,7 @@ Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json`
 
 **Abort detection contract:** **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-code`. Identical to the fact-checker's — the self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
 
-Read `prompts/verifier.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list.
+Read `prompts/verifier.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive
@@ -346,6 +349,8 @@ When `--fact-check false` (default), the self-review pass still runs; only the a
 The `Recommended next:` block and its command line are described in Next-Round Recommendation below. Under rule 3 the command line is omitted and only the `Recommended next:` line prints.
 
 When `--fact-check false` (default), replace the `Fact-check:` line — in both this terminal output and the summary's `## Fact-Check Accuracy` section — with `Fact-check: not run`.
+
+When `--fact-check true` was passed but the pass aborted, print `Fact-check: aborted — <reason>` in both places. Never print `100%` for a pass that did not run: that number is the reviewer's default, restored from the backup, and printing it as a result reports the absence of checking as the absence of error.
 
 The `Reviewed:` line supports three formats:
 - Single file: `Reviewed: <doc-path>` (unchanged)
@@ -490,9 +495,11 @@ If a carried-forward `id` has been displaced from a later iteration's JSON (e.g.
 First match wins:
 
 1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
-2. **Issues Found**: `critical_count > 0` OR `fact_check_accuracy < 75`
-3. **Approved with suggestions**: `fact_check_accuracy < 90` OR any high, medium, or low issue with `origin: "document"` remains
+2. **Issues Found**: `critical_count > 0` OR (the fact-check **completed** AND `fact_check_accuracy < 75`)
+3. **Approved with suggestions**: (the fact-check **completed** AND `fact_check_accuracy < 90`) OR any high, medium, or low issue with `origin: "document"` remains
 4. **Approved**: all other cases
+
+**An aborted fact-check is not a perfect one.** `fact_check_accuracy` is `100` by default — the reviewer writes it, and an abort restores exactly that artifact. Read naively, a fact-check that never ran clears both thresholds and contributes an implicit "100% accurate" to the status. Rules 2 and 3 therefore read the number only when the pass completed. An aborted fact-check leaves the status to be decided by the remaining issues alone, which is the same position a run with `--fact-check false` is in.
 
 Error is rule 1 so that nothing which aborted can reach a rule that would call it clean. Before this rule existed, review-doc's Status Logic ended at "all other cases" and a run whose reviewer failed validation twice reported **Approved**.
 

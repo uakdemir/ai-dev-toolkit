@@ -52,6 +52,8 @@ The `action` field must be either `"fixed"` or `"pushed-back"`. `"deferred"` is 
 - Use `git add -u` (tracked files only) to avoid committing verification artifacts.
 
 ## Tool Usage Rules
+
+**A dispatched agent uses Read, Grep, Glob and Write for file work rather than their Bash equivalents, and never runs a git command that pushes, switches branches, or discards work.** The core below is defined once, in `references/shared-rules/agent-tool-discipline.md`, and shared with `review-doc`. It stays stated here in full, not cited: you receive this prompt and nothing else, and a prompt that outsources its own limits to a file you never open has no limits.
 - Use Grep (not grep/rg via Bash) for searching file contents
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents

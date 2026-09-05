@@ -79,6 +79,11 @@ Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-doc-b
 Absolute, not relative: the line is meant to be copied into a new session or another terminal, where
 the working directory is not this one.
 
+Deleting a stale copy at that path is each skill's **Setup**, not this rule's business: both skills
+list the document as a per-run artifact and delete it there. This rule governs what the document
+says and where its path is printed; when the file is removed is a lifecycle concern the registry
+does not settle, and duplicating it here would give one requirement two owners.
+
 **When there is nothing to decide, say so on the same line** rather than omitting it — a missing
 line is indistinguishable from a skill that forgot:
 

@@ -43,7 +43,7 @@ writing, and printing them under an error heading still reads as a clean review 
 
 ```
 Review <Doc|Code> FAILED
-  Phase: <reviewer | fact-check | fixer | self-review>
+  Phase: <the phase that failed>
   Reason: <one line — the validator's stderr, the ABORT reason, or the exception>
   Artifact: <path> — <not written | restored from backup | partial, left as-is>
   Reviewed: <paths>

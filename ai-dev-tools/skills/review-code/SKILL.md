@@ -108,7 +108,7 @@ Review Code Skipped
 
 Single-pass mode. The loop runs one iteration: review, stop-check, conditionally fix.
 
-- If the reviewer finds zero criticals, the stop-check runs verification. If verification finds regressions, synthetic criticals are injected and the fix phase runs within the same iteration (followed by one final verification to determine terminal status).
+- If the reviewer finds zero criticals, the stop-check runs verification. If verification finds regressions, synthetic criticals are injected and the fix phase runs within the same iteration (followed by one final verification to determine terminal status). With or without regressions, the fix phase still runs on whatever the round found — zero criticals is not zero findings.
 - If the reviewer finds criticals, the normal fix phase runs.
 - In either case, the loop ends after iteration 1.
 
@@ -132,16 +132,15 @@ For iteration 1 to max_iterations:
 
   STOP CHECK (only when critical_count == 0):
     Run verification commands, compare to baseline
-    If no regressions:
-      BACKLOG WRITING (all issues as status: found) → tmp/past-issues-backlog.md
-      ITERATION LOG → tmp/_reviews_errors/review-code-iteration-N.md
-      Jump to Final Report
     If regressions:
       Inject synthetic criticals into tmp/_reviews_errors/review-code.json (append to issues array,
         update critical_count), re-write the file
-      Fall through to Fix Phase
+      Fall through to Fix Phase — the loop continues
+    If no regressions:
+      This is the last iteration. Still fall through to the Fix Phase if the round found
+        anything at all, then go to Final Report. Zero criticals is not zero findings.
 
-  FIX PHASE (when critical_count > 0):
+  FIX PHASE (whenever the round found ANY issue — critical, high, medium or low):
     Dispatch fixer agent (inherits session model; runs at --effort level)
     Fixer commits: "fix(review-code): resolve N issues from iteration M"
 
@@ -162,6 +161,8 @@ For iteration 1 to max_iterations:
 ```
 
 No final-gate pattern for review-code. Since all rounds use the same single agent, a redundant review-only round on unchanged code adds no value. Verification commands serve as the quality gate instead.
+
+**Fixing and iterating are separate decisions.** The fix phase runs whenever the round found anything, at any severity. Only whether to run *another* iteration is gated on criticals. Gating the fixer on criticals meant a round that found only highs and mediums fixed nothing and handed the whole list to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run. It also disabled the self-review pass, which runs only after a fix phase. A minor finding the agent can fix is still worth fixing; whether it justifies another round is a different question, and that one is still severity-gated.
 
 ## Reviewer Agent
 
@@ -226,7 +227,7 @@ The exclusion is **round-local** and flips at the iteration boundary. It is defi
 - Run after each fix phase.
 - Compare to baseline: new non-zero exit = regression.
 - Regressions injected as synthetic critical issues with all six schema-required fields: `severity: "critical"`, `category: "bug"`, `location: "<verify-cmd>"`, `confidence: 85`, `problem: "verification regression: <cmd> exit <n>"`, `suggested_fix: "restore <cmd> to passing"`.
-- Regression details persist between iterations, passed to both reviewer and fixer.
+- Regression details persist between iterations, passed to the **fixer** via `{{VERIFICATION_REGRESSIONS}}` in `prompts/coder.md`. The reviewer prompt has no regression slot: it re-reads the diff each iteration, where a regression is visible as code. Narrowed from "both reviewer and fixer", which named a channel that does not exist.
 - Verification command failures are NOT errors — they are data for regression comparison.
 
 ## ADR Discovery

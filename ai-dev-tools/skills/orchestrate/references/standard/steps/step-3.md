@@ -19,6 +19,10 @@ spec, then run another review round.
 
 Loop steps 2-3 until zero criticals.
 
+**No Confirmation Prompt block here, deliberately.** Steps 2 and 6 carry one because each is about
+to invoke a command and the reader confirms it first. Step 3 invokes nothing — the decisions are the
+reader's and the next action is theirs — so there is nothing to confirm.
+
 This step previously invoked `/respond-to-review`. That skill is **not shipped by this plugin** —
 it resolved only on machines carrying a user-global copy, so standard-mode step 3 failed anywhere
 else. It was also the odd one out: step 2 already records "`/respond-to-review` is intentionally NOT
