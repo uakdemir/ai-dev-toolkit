@@ -289,6 +289,8 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 | `tmp/_reviews_errors/[<run_id>-]review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.json` | That round's findings, snapshotted before the next round overwrites them | Final Report aggregates, audit |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report-iteration-N.json` | That round's dispositions, same reason | Final Report aggregates, audit |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` | Items needing a human decision; its absolute path is the run's last line | Humans |
 
 **Run-id prefixing (applies throughout):** every `tmp/_reviews_errors/review-doc*` path referenced anywhere in this document (Review Loop, Agent Dispatch, Hash Verification, Terminal, Final Report, Respond, Cross-Iteration, Iteration Log, Brainstorm, Schema) is prefixed to `tmp/_reviews_errors/<run_id>-review-doc*` when `--run-id` is active — matching the run-id-aware paths the reviewer, fact-checker and self-review prompts write to. The `[<run_id>-]` prefix is elided inline for brevity and shown explicitly only in the Output Artifacts table above.
@@ -517,6 +519,17 @@ The orchestrator maintains the following state across the loop:
 - `collateral_count = 0` -- running total of `collateral` entries across every fix phase in this invocation, with their `location` values retained for rendering. **Not reset between iterations.** Rule 2 names the regions a focused review has to cover, and a region an *earlier* fix phase disturbed needs that cover as much as one the last fix phase disturbed. Scoping the counter to the final iteration would drop exactly the multi-iteration case: an earlier round fixes criticals and records collateral, the final round's review comes back clean, and the recommendation reports no collateral at all.
 
 After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. For each disposition with `action: "fixed"`, increment `total_fixed[severity]` immediately; for `deferred` and `pushed-back`, increment the flat counter. Nothing is cached across rounds: ids are per-round, so round 2's `ISSUE-001` is a different finding from round 1's, and a map that outlived a round would resolve it to the earlier round's severity. Every lookup is answered by the artifact of the round that wrote the disposition, and then discarded. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
+
+**Snapshot the round before the next one overwrites it.** After each iteration's self-review pass returns, copy the round's two artifacts to iteration-scoped names:
+
+```bash
+cp tmp/_reviews_errors/[<run_id>-]review-doc.json            tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.json
+cp tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json tmp/_reviews_errors/[<run_id>-]review-doc-fix-report-iteration-N.json
+```
+
+Rounds start fresh, so round N+1's reviewer **overwrites** both files rather than appending to them. Every cross-round number the Final Report prints — `Aggregate`, `Deferred`, `Pushed back`, `collateral_count` — is summed across iterations, and without these snapshots the only copy of round N's data is orchestrator state in a context window. That is not a durable source, and a run that reports an aggregate it cannot reconstruct from disk is reporting a number nobody can check.
+
+This is the cost of removing carry-forward, paid deliberately: the accumulating array used to be the record. Two `cp` calls per iteration replace it, and they make each round independently auditable — which the accumulating array never was.
 
 **IDs are per-round.** Every round's reviewer numbers from `ISSUE-001`; the fact-checker and the self-review pass continue from `max + 1` within that same round. Ids identify a finding while a round is in flight — the fix report and `tmp/response_analysis.md` both reference them — and nothing needs one to outlive its round.
 

@@ -62,3 +62,11 @@ The `action` field must be either `"fixed"` or `"pushed-back"`. `"deferred"` is 
 - Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)
+
+`{{EFFORT}}`, `{{ALL_ISSUES}}`, `{{VERIFICATION_REGRESSIONS}}`, `{{SPEC_CONTENT}}` and
+`{{FIX_REPORT_PATH}}` are substituted by the skill before this prompt reaches you. If any of them
+still appears literally in your copy, the substitution did not happen: report
+`<name> not substituted` and stop rather than guessing. Do not proceed on a literal `{{ALL_ISSUES}}`
+— that is the entire list of findings you were dispatched to fix, and acting without it means
+committing edits nobody asked for. Do not fall back to the unprefixed
+`tmp/_reviews_errors/review-code-fix-report.json`, which would clobber another run's artifact.
