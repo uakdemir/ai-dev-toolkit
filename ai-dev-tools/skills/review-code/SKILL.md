@@ -11,7 +11,7 @@ Iterative code review with automatic fix cycles. Reviews the last N commits, fin
 ## Argument Parsing
 
 ```
-/review-code <commit-count|git-ref> [--against <spec-path>] [--effort <level>] [--max-iterations N] [--verify "<cmd>"] [--run-id <id>] [--help]
+/review-code <commit-count|git-ref> [--against <spec-path>] [--effort <level>] [--max-iterations N] [--verify "<cmd>"] [--must-inspect <paths>] [--run-id <id>] [--help]
 ```
 
 | Flag | Default | Values | Purpose |
@@ -20,6 +20,7 @@ Iterative code review with automatic fix cycles. Reviews the last N commits, fin
 | `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, self-reviewer) |
 | `--max-iterations` | **required** | 0-10 | How many rounds to run (0 = skip, 1 = single-pass). No default: the caller states it |
 | `--verify "<cmd>"` | none | any shell command | Repeatable — verification commands run after each fix |
+| `--must-inspect <paths>` | none | comma-separated paths | Files the reviewer must open this round, whatever the diff budget |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional |
 | `--help` | — | — | Print usage and exit |
 
@@ -32,6 +33,12 @@ It has no default because the number of rounds is the caller's budget decision, 
 **Removed flags:** `--max-model` (clean break, no backward-compat shim). The reviewer, fixer and self-reviewer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
 
 If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
+
+**`--must-inspect` is scope direction from the caller, and it is the only cross-round channel this skill has.** A round reports the files it did not open in `coverage.not_inspected`; it has no way to act on its *own* report, because the next round is a fresh read that knows nothing of this one. A looping caller does know — `orchestrate`'s stage iii reads that list after each dispatch and passes it into the next one — and this flag is where it says so.
+
+It carries **paths, never findings**. Nothing that could move `critical_count` or `high_count` crosses a round boundary through it, so it is not the carry-forward removed alongside the `phase` field: `references/shared-rules/counts-exclude-self-review.md` keeps counts per-round, and a list of files to open is not a count. Handing the reviewer prior findings would be the other thing, and this flag cannot express it.
+
+Validation: each path must exist and must be inside the reviewed diff. Print `Warning: --must-inspect path not in diff, ignoring: <path>` for one that is not, and continue — a file can legitimately leave the diff between rounds, and a caller cannot know that before dispatching. If every path is dropped this way, proceed as though the flag were absent.
 
 **Positional argument detection:**
 
@@ -65,6 +72,7 @@ Flags:
   --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
   --max-iterations N      Rounds to run, 0=skip, 1=single    (REQUIRED)
   --verify "<cmd>"        Verification command (repeatable)  (default: none)
+  --must-inspect <paths>  Files the reviewer must open       (default: none)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
 
@@ -181,7 +189,9 @@ For iteration 1 to max_iterations:
 
 **The stop check is coverage-aware, and that is where the safeguard belongs.** It used to stop on `critical_count == 0` alone, while `orchestrate`'s stage iii separately refused to advance whenever `coverage.not_inspected` was non-empty — two contracts for one decision, and only the outer one protected anything. A standalone `/review-code` run would stop with iterations left unused and report **Incomplete** without trying to open the files it had skipped, and stage iii's re-dispatch started a *fresh* run that made the same call at the same point.
 
-This skill is the party that knows its own coverage and owns its own loop, so the condition lives here. Every caller now benefits, `--max-iterations` still bounds it, and a run that cannot close coverage within its cap ends **Incomplete** and says so — a result, not a loop. Stage iii's rule is now a restatement of this one rather than a competing contract.
+This skill is the party that knows its own coverage, so the condition lives here. Every caller now benefits, `--max-iterations` still bounds it, and a run that cannot close coverage within its cap ends **Incomplete** and says so — a result, not a loop. Stage iii's rule is now a restatement of this one rather than a competing contract.
+
+**Owning the condition is not owning the loop, and the difference decides who can close a hole.** On a run with `--max-iterations > 1` this skill runs the rounds and can reach the condition itself. At `--max-iterations 1` — every stage-iii dispatch — it evaluates the condition once and reports; the caller runs the loop. That caller is also the only party able to *act* on a coverage hole, because a fresh-read round cannot be told by its successor what it missed. `--must-inspect` is the channel: stage iii reads `coverage.not_inspected` off one dispatch's artifact and hands it to the next. Without a looping caller, a standalone single-iteration run reports the hole and stops, which is the right outcome for a run with no round left to spend on it.
 
 No final-gate pattern for review-code. Since all rounds use the same single agent, a redundant review-only round on unchanged code adds no value. Verification commands serve as the quality gate instead.
 
@@ -189,13 +199,16 @@ No final-gate pattern for review-code. Since all rounds use the same single agen
 
 ## Reviewer Agent
 
-Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, `{{ITERATION_NUM}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{GIT_DIFF}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, `{{ITERATION_NUM}}`, `{{MUST_INSPECT}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{GIT_DIFF}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
 - Git diff (up to 3000 lines, strategically trimmed)
+- Must-inspect paths (the `--must-inspect` value, or `none`)
 - Spec content (if `--against` provided)
 - CLAUDE.md (if exists)
 - ADRs (scope-based filtering, up to 200 lines)
 
 **Each iteration's reviewer starts fresh — it reads no prior artifact and is handed no prior iteration's findings.** Every iteration re-reads the full scope since the resolved base, where a defect an earlier iteration fixed is simply absent. There was a `{{PREVIOUS_FINDINGS}}` slot here; no phase computed it, so the placeholder reached the agent unsubstituted.
+
+`{{MUST_INSPECT}}` is not a reopening of that slot. It carries **paths, not findings** — a list of files the caller wants opened first, which tells the reviewer nothing about what a previous round concluded and cannot move a count. `{{MUST_INSPECT}}` is substituted to the literal `none` when `--must-inspect` is absent, on the same terms as the fixer's two conditional inputs below: an unsubstituted placeholder reaching the agent is a defect, and `none` is a value rather than a defect.
 
 Read `prompts/reviewer.md` from this skill's directory for dispatch instructions. The reviewer writes to the resolved `{{OUTPUT_PATH}}` (`tmp/_reviews_errors/[<run_id>-]review-code.json`) directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
 

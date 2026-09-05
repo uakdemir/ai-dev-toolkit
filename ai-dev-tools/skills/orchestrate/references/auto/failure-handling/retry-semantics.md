@@ -15,7 +15,7 @@ Item 4 matters because without it, malformed-but-present output falls through th
 **Expected output artifacts:**
 - Agent i → `tmp/_reviews_errors/<run_id>-phase{N}-review-doc.json` (the phase is in the run-id)
 - Agent ii → at least one new commit since `pre_implement_head`
-- Agent iii → `tmp/_reviews_errors/<run_id>-review-code.json` (one file, overwritten each iteration)
+- Agent iii → `tmp/_reviews_errors/<run_id>-iter<N>-review-code.json` (one file per iteration; the run-id carries `N`, so no dispatch overwrites another's)
 
 ---
 

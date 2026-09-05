@@ -63,7 +63,7 @@ JSON Lines (JSONL). One JSON object per line.
 |---|---|---|
 | i — spec review | 2 (phase 1 + phase 2) | 2 per successful attempt; +1 per retried phase |
 | ii — implement | 1 | 2 if Q3 retry-once fires on a validator-rejected clean return; 1 if Q3 retry-once fires after a crash (only the successful retry logs) |
-| iii — code review | 1 to 4 (one per iter; early-exit when criticals are 0 and `coverage.not_inspected` is empty) | same entry count as no-retry under normal completion; a crash-retry of any iter adds +1 entry for that iter's successful retry |
+| iii — code review | 1 to 4 (one dispatch per iter; early exit per `stages/stage-iii-code-review.md` > Early Exit, which owns the three clauses) | same entry count as no-retry under normal completion; a crash-retry of any iter adds +1 entry for that iter's successful retry |
 | iv — verification gate | 0 (no-op in current release) | 0 |
 
 **Total (no retries): 4–7 entries per spec run.** With one stage-ii validator-rejected retry: 5–8. With one stage-ii crash retry: 4–7 (only the successful retry logs).

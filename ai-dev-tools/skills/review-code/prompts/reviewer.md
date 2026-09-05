@@ -15,6 +15,7 @@ Effort sets analysis DEPTH — it never gates which severities you report (criti
 ## Context
 
 **Iteration:** {{ITERATION_NUM}}
+**Must inspect:** {{MUST_INSPECT}} (or `none`)
 **Spec:** {{SPEC_CONTENT}}
 **CLAUDE.md:** {{CLAUDE_MD}}
 **ADRs:** {{ADRS}}
@@ -30,6 +31,10 @@ For files shown as stat-only summaries (no full diff included), use the Read too
 ## Coverage Accounting
 
 Record every changed file you actually inspected — via the diff or via `Read`. Any changed file you did not open goes in `not_inspected`, with no exceptions. An empty `not_inspected` is a claim someone can challenge; an omitted one is not.
+
+**`{{MUST_INSPECT}}` names files a previous round did not open. `Read` every one of them before you review anything else**, and only then work through the rest of the diff. They are already in the diff you were given — the flag directs your order of attack, it does not widen your scope. If the value is `none`, there is no such list; treat it as a substituted value, not a failed substitution.
+
+Front-loading them is the whole point. A coverage hole persists when each round spends its budget on the same early files and runs out before reaching the ones the last round also missed, and the diff grows every round, so the hole survives on its own unless something changes the order. Nothing about these files is otherwise special: review them exactly as you review anything else, and if you still cannot open one, it goes in `not_inspected` like any other.
 
 `files_in_diff` is the count of files in the diff, including stat-only ones. `files_inspected` is how many of them you opened. They are equal only when `not_inspected` is empty.
 
