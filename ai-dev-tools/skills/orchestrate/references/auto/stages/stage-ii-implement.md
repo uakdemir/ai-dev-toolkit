@@ -62,7 +62,7 @@ On success: set `implement_head = HEAD` in `auto-state.md`, transition to `imple
 
 | Failure | Handling |
 |---|---|
-| Main agent crash | Retry once → halt (Q3 crash-implement) |
+| Main agent crash | Retry once → stop (Q3, see `../failure-handling/crash.md`) |
 | Helper hang/crash | Main agent absorbs helper's tasks (existing executing-plans behavior) |
 
 ---

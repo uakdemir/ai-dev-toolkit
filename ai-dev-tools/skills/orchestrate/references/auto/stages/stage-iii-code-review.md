@@ -63,7 +63,7 @@ At the final iteration's REVIEW output, pre-fix:
 
 Agent iii's output is validated like any other artifact — by `scripts/validate-review-json.cjs`, per `review-code`'s VALIDATION step. There is no optimistic-trust exemption and no fail-open at the final iteration.
 
-Malformed or missing output is a crash (`references/auto/failure-handling/retry-semantics.md`), which means retry-once and then `references/auto/failure-handling/crash-code-review.md`: soft-reset to `last_iteration_head`, stash, state `skipped-crash-code-review`, continue to the next spec. One spec is skipped loudly and the reason is recorded; the batch is not halted and no work is destroyed.
+Malformed or missing output is a crash (`references/auto/failure-handling/retry-semantics.md`), which means retry-once and then `references/auto/failure-handling/crash.md`: wip-commit whatever is on disk, leave the tree untouched, and stop. One spec is reviewed loudly or not at all; nothing is destroyed and nothing is silently carried forward.
 
 Advancing unvalidated output as clean was a silent false green — a review that never ran, reported as a review that passed.
 

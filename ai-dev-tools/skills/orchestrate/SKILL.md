@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-argument-hint: "[--auto <spec...>] [--handoff] [--use-roadmap]"
+argument-hint: "[--auto <spec>] [--handoff] [--use-roadmap]"
 description: "Use when the user wants to start a development cycle, continue where they left off, check what's next, or run an automated brainstorm-review-implement-review-commit pipeline — even if they don't use the exact skill name."
 ---
 
@@ -11,19 +11,20 @@ When `--help` is present: read `references/common/help.md`, print its content ve
 # Argument Parsing
 
 ```
-/orchestrate [--auto <spec...>] [--handoff] [--use-roadmap] [--help]
+/orchestrate [--auto <spec>] [--handoff] [--use-roadmap] [--help]
 ```
 
 Parse in order:
 1. `--help` → load and print `references/common/help.md`, exit.
-2. `--auto <spec...>` → collect all positional args as spec paths, set auto mode.
+2. `--auto <spec>` → take the single positional arg as the spec path, set auto mode.
 3. `--handoff` → set handoff flag.
 4. `--use-roadmap` → set roadmap flag.
 
 **Hard errors at argparse time:**
 - `--handoff` + `--auto` → `Error: --handoff and --auto are incompatible. --auto is a targeted post-brainstorm pipeline run; --handoff is for resuming standard-mode sessions. Use one or the other.`
 - `--use-roadmap` + `--auto` → `Error: --use-roadmap is not supported in --auto mode. Refactor-unit execution requires the interactive standard-mode flow.`
-- `--auto` with no positional args → `Error: --auto requires at least one spec path. Usage: /orchestrate --auto <spec1> [<spec2> ...]`
+- `--auto` with no positional args → `Error: --auto requires a spec path. Usage: /orchestrate --auto <spec>`
+- `--auto` with more than one positional arg → `Error: --auto takes exactly one spec. Run it once per spec.` and exit. Auto mode used to queue several and process them serially; that is gone. It was never parallel — the only thing the queue bought was a skip-and-continue failure path, and its rewind machinery destroyed the evidence of the failure it was recovering from.
 
 ---
 
@@ -111,13 +112,13 @@ User modifications to inner command before pasting → dispatch verbatim. Receiv
 
 1. **Spec validation:** verify all positional spec args exist, are readable, end in `.md`/`.markdown`. Any failure → hard error, exit.
 2. **Stale-state check:** if `tmp/auto-state.md` exists and `state != finalized`, warn and overwrite.
-3. **Initialize state:** write `tmp/auto-state.md` with spec list.
+3. **Initialize state:** write `tmp/auto-state.md` with the spec path.
 
 ## Per-Spec Pipeline
 
 Load `references/auto/pipeline-overview.md` for the 4-stage pipeline overview.
 
-For each spec:
+Auto mode takes **one** spec:
 1. Generate `spec_hash` (8-char base36) for run-id prefix.
 2. Set `spec_baseline = HEAD`.
 3. Load and execute `references/auto/stages/stage-i-spec-review.md`. Each stage file directs you to the next stage upon completion — do NOT skip ahead or look up stage file paths yourself.

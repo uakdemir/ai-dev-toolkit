@@ -8,18 +8,13 @@
 
 ```yaml
 ---
-specs: [spec1.md, spec2.md, spec3.md]
-current_spec: spec1.md
+spec: spec1.md
 state: code-review-iter-2-complete
 datetime: 2026-04-11T15:02:33Z
 
-# Three hashes, three purposes:
+# One hash, one purpose:
 spec_baseline: hash0           # review anchor — "start of scope"
                                # set when agent i begins, never updated
-implement_head: hash2          # set when agent ii completes
-                               # rollback target if code-review iter 1 crashes
-last_iteration_head: hash2b    # updates after each successful code-review iter
-                               # rollback target if code-review iter N>1 crashes
 ---
 ```
 
@@ -34,9 +29,16 @@ last_iteration_head: hash2b    # updates after each successful code-review iter
 - `implementation-complete`
 - `code-review-iter-{N}-complete`
 - `finalized`
-- `skipped-unresolved-criticals` (Q2)
-- `skipped-crash-{stage}` (Q3)
-- `halted-crash-implement` (Q3)
+- `stopped-unresolved-criticals` (Q2)
+- `stopped-crash-{stage}` (Q3)
+
+Both are terminal and both exit non-zero. `skipped-*` and `halted-*` used to be different things —
+skip meant "this spec is abandoned, run the next one", halt meant "abandon the batch". With one spec
+they describe the same event, so there is one shape.
+
+`implement_head` and `last_iteration_head` are gone with them. Their only reader was the rollback
+that rewound a crashed iteration so the next spec could start on a clean tree; nothing reads them
+now, and state nothing reads is state that goes wrong silently.
 
 ---
 
@@ -56,7 +58,7 @@ last_iteration_head: hash2b    # updates after each successful code-review iter
   → finalized
 ```
 
-Q2/Q3 failures transition to `skipped-*` or `halted-*` terminal states.
+Q2/Q3 failures transition to a `stopped-*` terminal state.
 
 ---
 

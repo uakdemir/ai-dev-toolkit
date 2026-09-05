@@ -33,12 +33,12 @@ and it counts only what **this** round found — an issue a previous round fixed
 ## Response
 
 1. Commit wip: `wip(auto): <spec>: <spec-review|code-review> unresolved criticals at iter <N> — see tmp/_reviews_errors/error-logs.md`
-2. Append unresolved criticals (asymmetric by stage):
-   - **Agent i (spec-review):** append criticals to the spec file itself
-   - **Agent iii (code-review):** append to `tmp/_reviews_errors/<run_id>-unresolved-criticals.md`
+2. Append the unresolved criticals where the reader will find them:
+   - **Agent i (spec-review):** to the spec file itself
+   - **Agent iii (code-review):** to `tmp/_reviews_errors/<run_id>-unresolved-criticals.md`
 3. Log a Warning to `tmp/_reviews_errors/error-logs.md`
-4. Mark spec `skipped-unresolved-criticals` in `auto-state.md`
-5. Continue to next spec
+4. State → `stopped-unresolved-criticals` in `auto-state.md`
+5. **Stop.** Exit non-zero.
 
-The spec is still skipped rather than carried forward. A spec whose criticals are unresolved is not
-one to build from, and that protection is independent of what the failure was called.
+At stage i this still means the spec is never implemented, which is the whole point: a spec whose
+criticals are unresolved is not one to build from.

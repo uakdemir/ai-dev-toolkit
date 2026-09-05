@@ -6,9 +6,9 @@
 
 ## Invariants
 
-- **No user prompt, no hint file protocol, no breadcrumbs.** Auto mode is a post-brainstorm batch run.
+- **No user prompt, no hint file protocol, no breadcrumbs.** Auto mode is a post-brainstorm run.
 - **No interaction.** Auto mode never asks for user input. If a decision point arises, the algorithm makes the choice.
-- **Serial spec processing.** Each spec completes the full pipeline before the next begins.
+- **One spec per run.** Auto mode takes exactly one spec and runs it end to end. Queueing several was removed: it was never parallel, and the only thing it bought was a skip-and-continue failure path whose rewind machinery destroyed the evidence of the failure it was recovering from. Run `--auto` again for the next spec.
 - **Progress logging:** concise status lines, one per stage transition:
   `[auto] <spec-filename> > stage <i|ii|iii|iv> — <started|complete|failed>`
 - **Auto mode never reads or writes `tmp/orchestrate-state.md`.** It uses `tmp/auto-state.md` exclusively.
@@ -65,10 +65,10 @@ A `mkdir -p` failure prints a single stderr breadcrumb and does NOT abort the ru
 | After agent i phase 1 | if spec changed | `chore(auto): <spec-slug>: spec review phase 1 fixes` | — |
 | After agent i phase 2 | if spec changed | `chore(auto): <spec-slug>: spec review phase 2 fixes` | — |
 | During agent ii | yes, via executing-plans | (implement's own commits) | — |
-| After agent ii validators | — | — | `implement_head = HEAD` |
-| After each agent iii iter | **required** | `fix(auto): <spec-slug>: code-review iter <N> — address findings` | `last_iteration_head = HEAD` |
+| After agent ii validators | — | — | — |
+| After each agent iii iter | **required** | `fix(auto): <spec-slug>: code-review iter <N> — address findings` | — |
 | Stage iv verification | if anything changed | `chore(auto): <spec-slug>: verification fixes` | — |
 
 Phase commits are conditional — skip if fixer made zero changes. Detect via `git diff --quiet <spec_path>`.
 
-The per-iteration commit after agent iii is **non-optional** — it's load-bearing for the `last_iteration_head` rollback anchor.
+The per-iteration commit after agent iii is **non-optional**. It used to be load-bearing for the `last_iteration_head` rollback anchor; that anchor is gone, but the commit stays — it is what makes each iteration's fixes separately reviewable, and what `spec_baseline..HEAD` counts at the end.
