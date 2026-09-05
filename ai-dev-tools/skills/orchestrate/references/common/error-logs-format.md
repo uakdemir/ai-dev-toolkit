@@ -22,14 +22,14 @@ Append-only, one entry per incident:
 ```
 
 **Severity levels:**
-- `Error` — pipeline halted or spec skipped due to crash
-- `Warning` — spec skipped with unresolved criticals (recoverable)
+- `Error` — the run stopped on a crash after retry (`../auto/failure-handling/crash.md`)
+- `Warning` — everything else worth recording: the run stopped with unresolved criticals and the wip commit holds the work (`../auto/failure-handling/unresolved-criticals.md`), or the run continued past something the reader needs to know — a stage-iii coverage hole, a waived schema check
 
 **Examples:**
 
 ```
-[2026-04-11 15:02:33] k3m9p2q7_a1b2c3d4 Warning  spec1.md: agent i phase 2 unresolved criticals at iter 2, 3 criticals remaining, committed wip, skipped spec
-[2026-04-11 15:10:17] k3m9p2q7_e5f6g7h8 Error    spec1.md: agent ii implement crashed twice, halting pipeline, wip committed at hash7f2a
+[2026-04-11 15:02:33] k3m9p2q7_a1b2c3d4 Warning  spec1.md: agent i phase 2 unresolved criticals at iter 2, 3 criticals remaining, committed wip, stopped
+[2026-04-11 15:10:17] k3m9p2q7_e5f6g7h8 Error    spec1.md: agent ii implement crashed twice, wip committed at hash7f2a, stopped
 ```
 
 ---
@@ -46,11 +46,7 @@ Append-only, one entry per incident:
 - `spec_hash`: generated once when auto mode begins the pipeline for a spec. Shared across all stages and iterations.
 - `dispatch_hash`: generated fresh for every individual agent dispatch. Retries get a new dispatch_hash.
 
-**Propagation:** every agent dispatch includes the run-id in two places:
-1. The `--run-id` CLI flag (canonical — parsed by argparse, always wins)
-2. The override preamble (reinforcement for agent awareness)
-
-If flag and preamble conflict, the flag value takes precedence.
+**Propagation:** every agent dispatch passes the run-id via the `--run-id` CLI flag, which the receiving skill's argparse reads. Orchestrate's stage dispatches carry it nowhere else.
 
 **File layout example:**
 
@@ -80,7 +76,7 @@ is the iteration log (`-review-code-iteration-N.md`), not a JSON. Any contract t
 
 ## Gate Read Contract — critical count
 
-The auto-pipeline gates (stage-i and stage-iii early-exit, stage-i and stage-iii unresolved-criticals) read the critical count from each review JSON (`tmp/_reviews_errors/<run_id>-phase<N>-review-doc.json` for stage i, `tmp/_reviews_errors/<run_id>-review-code.json` for stage iii). The field is **`critical_count`**, recounted from the `issues[]` array by the review skill (a stale emitted value is never trusted). Read recipe:
+The auto-pipeline gates (stage-iii early-exit, stage-i and stage-iii unresolved-criticals) read the critical count from each review JSON (`tmp/_reviews_errors/<run_id>-phase<N>-review-doc.json` for stage i, `tmp/_reviews_errors/<run_id>-review-code.json` for stage iii). The field is **`critical_count`**, recounted from the `issues[]` array by the review skill (a stale emitted value is never trusted). Read recipe:
 
 ```bash
 jq '.critical_count' tmp/_reviews_errors/<run_id>-review-code.json
@@ -103,7 +99,7 @@ high_count     = count(severity == "high"     AND origin != "self-review")
 
 An issue with no `origin` counts as `"document"`.
 
-**The exclusion is round-local, and it flips at the round boundary.** It holds only within the round that wrote those lines — that round both authored and reviewed them, so counting them there reports the loop's own sloppiness as evidence against the authored artefact, and the unresolved-criticals gate (`>1 criticals remaining`, `../auto/failure-handling/unresolved-criticals.md`) can skip a spec over it. From the next round onward those lines are ordinary artefact text: the next reviewer re-reads the whole artefact and emits anything it finds in them as `origin: "document"`, counted normally. An implementation that suppresses self-review findings permanently is a different — and wrong — rule.
+**The exclusion is round-local, and it flips at the round boundary.** It holds only within the round that wrote those lines — that round both authored and reviewed them, so counting them there reports the loop's own sloppiness as evidence against the authored artefact, and the unresolved-criticals gate (`any critical remaining`, `../auto/failure-handling/unresolved-criticals.md`) can stop the run over it. From the next round onward those lines are ordinary artefact text: the next reviewer re-reads the whole artefact and emits anything it finds in them as `origin: "document"`, counted normally. An implementation that suppresses self-review findings permanently is a different — and wrong — rule.
 
 Excluded from the counts is never excluded from the output. Self-review findings print on their own line in the terminal output and appear in the summary; without that, the loop would have a sanctioned channel for silent degradation.
 

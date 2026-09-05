@@ -25,4 +25,4 @@ On any agent crash:
 1. Dispatch the same agent once more with identical inputs
 2. Generate a fresh `dispatch_hash` for the retry
 3. If retry succeeds → continue normally
-4. If retry also fails → stage-differentiated response (see failure matrix)
+4. If retry also fails → Q3 crash response (`crash.md`): wip-commit, do not rewind, stop. The response does not depend on which stage crashed.

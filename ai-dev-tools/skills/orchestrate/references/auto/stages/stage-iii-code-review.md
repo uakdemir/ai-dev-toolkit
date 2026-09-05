@@ -28,7 +28,7 @@ This guarantees every iteration sees both original quality AND fix-introduced re
 
 If pre-fix criticals == 0 **AND `coverage.not_inspected` is empty** at any iteration → skip remaining iterations, advance to stage iv.
 
-If criticals are 0 but `not_inspected` is non-empty, do NOT early-exit. The review did not see every changed file, and a later iteration may open what this one skipped — the standard-mode counterpart is step-6's Case C. Continue to the next iteration. If the final iteration still reports a non-empty `not_inspected`, record the uninspected files in the stage's error log and advance: auto mode has no user to ask, and a coverage hole that is written down is not the silent green this pipeline exists to avoid.
+If criticals are 0 but `not_inspected` is non-empty, do NOT early-exit. The review did not see every changed file, and a later iteration may open what this one skipped — the standard-mode counterpart is step-6's Case C. Continue to the next iteration. If the final iteration still reports a non-empty `not_inspected`, log a Warning to `tmp/_reviews_errors/error-logs.md` naming the uninspected files (template: `../failure-handling/error-log-templates.md` > Stage iii coverage hole) and advance: auto mode has no user to ask, and a coverage hole that is written down is not the silent green this pipeline exists to avoid.
 
 ---
 
@@ -36,18 +36,17 @@ If criticals are 0 but `not_inspected` is non-empty, do NOT early-exit. The revi
 
 After every successful agent iii iteration, orchestrate:
 1. Stages: `git add -u && git add -- . ':!tmp/'`
-2. Checks: `git diff --cached --quiet` — if exit code 0 (nothing staged), skip the commit but still update `last_iteration_head = HEAD`. This handles the 0-criticals early-exit case where the review found no issues and no fix phase ran.
+2. Checks: `git diff --cached --quiet` — if exit code 0 (nothing staged), skip the commit. This handles the 0-criticals early-exit case where the review found no issues and no fix phase ran.
 3. Commits (if staged changes exist): `fix(auto): <spec-slug>: code-review iter <N> — address findings`
-4. Updates `last_iteration_head = HEAD` in `auto-state.md`
-5. Updates `state = code-review-iter-<N>-complete` in `auto-state.md` (required — `stage-iv-verification-gate.md`'s GATE CHECK reads this)
+4. Updates `state = code-review-iter-<N>-complete` in `auto-state.md` (required — `stage-iv-verification-gate.md`'s GATE CHECK reads this)
 
-This commit is load-bearing for rollback anchors. The hash update in step 4 always runs regardless of whether a commit was created.
+This commit is what makes each iteration's fixes separately reviewable, and what `spec_baseline..HEAD` counts at the end. Step 4 runs regardless of whether a commit was created.
 
 **Successful iteration definition:** agent returned without exception AND the review artifact exists (`tmp/_reviews_errors/<run_id>-review-code.json`) AND that artifact passes `scripts/validate-review-json.cjs`. There is one such file per run, overwritten each iteration — stage iii passes a bare `--run-id <run_id>`, so no per-iteration JSON is produced. The per-iteration record is `-review-code-iteration-{N}.md`.
 
-**If `node` is unavailable**, the validator cannot run and the third clause is waived — the artifact's existence and a clean agent return are sufficient. Record `schema validation not run: node unavailable` in the stage's error log, matching the same carve-out in `review-code`'s VALIDATION step and reviewer prompt. Without this waiver a machine without Node could never produce a successful iteration, so every spec in every auto run would be skipped.
+**If `node` is unavailable**, the validator cannot run and the third clause is waived — the artifact's existence and a clean agent return are sufficient. Log a Warning to `tmp/_reviews_errors/error-logs.md` recording `schema validation not run: node unavailable` (template: `../failure-handling/error-log-templates.md` > Stage iii schema check waived), matching the same carve-out in `review-code`'s VALIDATION step and reviewer prompt. Without this waiver a machine without Node could never produce a successful iteration, so no auto run on such a machine could ever reach stage iv.
 
-An artifact that exists but does not validate is a crash (`references/auto/failure-handling/retry-semantics.md` crash item 4), not a successful iteration. Without the third clause `last_iteration_head` advances past a review that never validated, and the crash path's soft-reset to that anchor becomes a no-op — the same advance-as-clean behaviour the Output Validation section below removes, arriving by a different route.
+An artifact that exists but does not validate is a crash (`references/auto/failure-handling/retry-semantics.md` crash item 4), not a successful iteration. Without the third clause the iteration commits, advances the state and moves on behind a review that never validated — the same advance-as-clean false green the Output Validation section below removes, arriving by a different route.
 
 ---
 
@@ -75,6 +74,19 @@ After each code-review iteration dispatch returns, append one JSONL entry to the
 
 ---
 
+## Failed Review Runs
+
+After each iteration's dispatch returns, determine whether the run reported **Error** under
+`references/shared-rules/run-failure-disclosure.md` — a review that could not complete, as distinct
+from one that completed and found problems. If it did:
+
+1. Record it in `tmp/_reviews_errors/error-logs.md` (`SKILL.md` > Auto Mode > Completion).
+2. Increment `R`, the review-failure counter initialised at `SKILL.md` > Auto Mode > Initialization
+   and printed by `stage-iv-verification-gate.md` step 4.
+3. Treat the iteration as a crash and apply `references/auto/failure-handling/retry-semantics.md`.
+
+---
+
 ## Next Stage
 
-When stage iii is complete (all iterations done or early-exited on 0 criticals), load and execute `references/auto/stages/stage-iv-verification-gate.md`.
+When stage iii is complete (all iterations done, or early-exited on 0 criticals with an empty `coverage.not_inspected` — see Early Exit above), load and execute `references/auto/stages/stage-iv-verification-gate.md`.

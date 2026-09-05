@@ -7,7 +7,7 @@
 //
 // The two artifacts share their count semantics and their severity enum, and diverge in their
 // top-level keys, their per-issue keys, and their category enums. One script with a schema table
-// keeps the count-consistency logic — the part four pipeline gates depend on — written once.
+// keeps the count-consistency logic — the part three pipeline gates depend on — written once.
 //
 // Node built-ins only. Exit 0 = valid, 1 = invalid, 2 = unreadable.
 const fs = require('node:fs');

@@ -5,10 +5,10 @@
 #     Findings the review loop introduced in its own fix pass (origin: "self-review")
 #     are reported, but never counted.
 #
-# This is the machine-checkable half of the churn fix. Four pipeline gates read `critical_count`
-# (stage-i and stage-iii early-exit, stage-i and stage-iii unresolved-criticals --
+# This is the machine-checkable half of the churn fix. Three pipeline gates read `critical_count`
+# (stage-iii early-exit, stage-i and stage-iii unresolved-criticals --
 # skills/orchestrate/references/common/error-logs-format.md), and the unresolved-criticals gate FAILS a
-# spec at ">1 criticals remaining". Without this invariant enforced at the artefact, the loop's own
+# spec at "any critical remaining". Without this invariant enforced at the artefact, the loop's own
 # churn can fail the auto-pipeline, and nothing catches it.
 #
 # RED TODAY, on purpose, for both reasons the fix must address:

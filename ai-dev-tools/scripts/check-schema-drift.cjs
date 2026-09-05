@@ -3,7 +3,7 @@
 // Checks that the JSON Schema each review skill PUBLISHES matches the schema its validator
 // ENFORCES.
 //
-// Two copies of one truth, governing the artifact four auto-pipeline gates read. The SKILL.md block
+// Two copies of one truth, governing the artifact three auto-pipeline gates read. The SKILL.md block
 // is what the reviewer agent is shown and writes against; the validator's table is what accepts or
 // rejects the result. When they drift, a reviewer writes a conforming artifact that fails
 // validation, or a non-conforming one that passes — and the orchestrator discards a whole review

@@ -48,13 +48,7 @@ Run after implement returns, before advancing to agent iii:
    - Modified tracked files outside `tmp/` — **validator failure**
    - `.gitignored` files — allowed (not in `git status --porcelain`)
 
-**On validator failure:** retry once (Q3 crash path). If retry fails, halt per Q3 crash-implement.
-
----
-
-## State Update
-
-On success: set `implement_head = HEAD` in `auto-state.md`, transition to `implementation-complete`.
+**On validator failure:** retry once (`../failure-handling/retry-semantics.md`). If the retry also fails, follow `../failure-handling/crash.md`: wip-commit, do not rewind, stop.
 
 ---
 
@@ -69,7 +63,7 @@ On success: set `implement_head = HEAD` in `auto-state.md`, transition to `imple
 
 ## Profiling
 
-After `/implement` returns (BEFORE the validator suite runs), append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=implement`, `round=1`, `model=opus`.
+After `/implement` returns (BEFORE the validator suite runs), append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=implement`, `round=1`, `model=inherited`.
 
 If the Q3 retry-once fires, the retry dispatch emits its own entry on clean return (see profiling-log.md retry rule). Write failures are silently swallowed.
 
@@ -77,6 +71,6 @@ If the Q3 retry-once fires, the retry dispatch emits its own entry on clean retu
 
 ## Next Stage
 
-When stage ii is complete (validators passed, `implement_head` set), update `tmp/auto-state.md` state to `implementation-complete`, then load and execute `references/auto/stages/stage-iii-code-review.md`.
+When stage ii is complete (validators passed), update `tmp/auto-state.md` state to `implementation-complete`, then load and execute `references/auto/stages/stage-iii-code-review.md`.
 
 **Do NOT skip this step. The code review stage is mandatory.**

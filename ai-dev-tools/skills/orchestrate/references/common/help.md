@@ -8,6 +8,7 @@ USAGE
 
 FLAGS
   --auto <spec>      Run the agent pipeline on one spec.
+                     Exactly one — a second positional arg is a hard error.
                      Post-brainstorm run — no user interaction.
   --handoff          Load tmp/session-handoff.md and resume (standard only)
   --use-roadmap      Enable refactor-unit routing via roadmap match (standard only)
@@ -26,5 +27,4 @@ EXAMPLES
   /orchestrate --handoff               Resume from session handoff
   /orchestrate --use-roadmap           Enable refactor-unit routing
   /orchestrate --auto spec.md          Run full pipeline on one spec
-  /orchestrate --auto s1.md            Run the pipeline on one spec
 ```

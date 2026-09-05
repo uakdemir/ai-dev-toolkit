@@ -106,23 +106,23 @@ User modifications to inner command before pasting → dispatch verbatim. Receiv
 
 # Auto Mode
 
-**Invariants:** No user prompts, no hint file, no breadcrumbs. Progress via status lines only. Serial spec processing. Non-destructive failure handling.
+**Invariants:** No user prompts, no hint file, no breadcrumbs. Progress via status lines only. One spec per run. Non-destructive failure handling.
 
 ## Initialization
 
-1. **Spec validation:** verify all positional spec args exist, are readable, end in `.md`/`.markdown`. Any failure → hard error, exit.
+1. **Spec validation:** verify the positional spec arg exists, is readable, and ends in `.md`/`.markdown`. Any failure → hard error, exit.
 2. **Stale-state check:** if `tmp/auto-state.md` exists and `state != finalized`, warn and overwrite.
-3. **Initialize state:** write `tmp/auto-state.md` with the spec path.
+3. **Initialize state:** set `spec_baseline = HEAD`, then write `tmp/auto-state.md` with all four fields the schema requires — `spec`, `state: started`, `datetime`, `spec_baseline`. Schema: `references/auto/auto-state-schema.md`.
+4. **Initialize the review-failure counter:** set `R = 0`. It lives in orchestrate's own run state and is never written to `tmp/auto-state.md`. Stage i and stage iii increment it; stage iv prints it (see Completion below).
 
-## Per-Spec Pipeline
+## Pipeline
 
 Load `references/auto/pipeline-overview.md` for the 4-stage pipeline overview.
 
 Auto mode takes **one** spec:
 1. Generate `spec_hash` (8-char base36) for run-id prefix.
-2. Set `spec_baseline = HEAD`.
-3. Load and execute `references/auto/stages/stage-i-spec-review.md`. Each stage file directs you to the next stage upon completion — do NOT skip ahead or look up stage file paths yourself.
-4. On any failure → load `references/auto/failure-handling/overview.md` + specific handler.
+2. Load and execute `references/auto/stages/stage-i-spec-review.md`. Each stage file directs you to the next stage upon completion — do NOT skip ahead or look up stage file paths yourself.
+3. On any failure → load `references/auto/failure-handling/overview.md` + specific handler.
 
 ## Error Logs
 
@@ -134,9 +134,10 @@ Schema in `references/auto/auto-state-schema.md`. Auto mode never reads or write
 
 ## Completion
 
-After all specs processed (or pipeline halted):
-- Print summary: `[auto] complete: N succeeded, M skipped, K halted, R review runs failed`
-- When `R > 0`, add one line naming the log: `[auto] R review failures recorded in tmp/_reviews_errors/error-logs.md`
-- Exit.
+Stage iv prints the completion line and exits — `references/auto/stages/stage-iv-verification-gate.md` owns that output. Auto mode adds one line of its own, immediately before it, and only when `R > 0`:
 
-`R` counts review runs that reported **Error** under `references/shared-rules/run-failure-disclosure.md` — a review that could not complete, as distinct from one that completed and found problems. Auto mode never prompts on those; it records and continues. The count is here because the useful signal is the *rate*: an occasional failure is noise, a frequent one means a reviewer prompt needs work, and that comparison is only possible if every failure lands in one place and is counted.
+`[auto] R review failures recorded in tmp/_reviews_errors/error-logs.md`
+
+No succeeded/skipped/halted tally: one spec runs, and a run that fails never gets here — Q2 and Q3 both stop the run and exit non-zero (`references/auto/failure-handling/overview.md`).
+
+`R` counts review runs that reported **Error** under `references/shared-rules/run-failure-disclosure.md` — a review that could not complete, as distinct from one that completed and found problems. Such a run leaves its artifact unwritten or unvalidatable, which is a crash under `references/auto/failure-handling/retry-semantics.md`: retry once, and if the retry also fails, `references/auto/failure-handling/crash.md` stops the run. Auto mode never prompts on those; it records each one in `tmp/_reviews_errors/error-logs.md` and increments `R`, which orchestrate holds in its own run state and never persists — so reaching this section with `R > 0` means a review failed and its retry succeeded. The count is here because the useful signal is the *rate*: an occasional failure is noise, a frequent one means a reviewer prompt needs work, and that comparison is only possible if every failure lands in one place and is counted.

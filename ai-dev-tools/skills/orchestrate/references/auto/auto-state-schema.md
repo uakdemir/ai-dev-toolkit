@@ -22,15 +22,18 @@ spec_baseline: hash0           # review anchor — "start of scope"
 
 ## State Enum
 
+- `started` — written when the file is created, before stage i
 - `spec-review-phase-1-iter-{N}-complete` (N = 1..2)
 - `spec-review-phase-1-complete`
 - `spec-review-phase-2-iter-{N}-complete` (N = 1..2)
 - `spec-review-phase-2-complete`
 - `implementation-complete`
-- `code-review-iter-{N}-complete`
+- `code-review-iter-{N}-complete` (N = 1..4)
 - `finalized`
 - `stopped-unresolved-criticals` (Q2)
-- `stopped-crash-{stage}` (Q3)
+- `stopped-crash-{stage}` (Q3) — `{stage}` is the crash-site token defined in
+  `failure-handling/crash.md` > Response: `agent i phase 1`, `agent i phase 2`,
+  `agent ii implement`, `agent iii code-review iter {N}` (N = 1..4)
 
 Both are terminal and both exit non-zero. `skipped-*` and `halted-*` used to be different things —
 skip meant "this spec is abandoned, run the next one", halt meant "abandon the batch". With one spec
@@ -45,7 +48,7 @@ now, and state nothing reads is state that goes wrong silently.
 ## Happy-Path Transitions
 
 ```
-(start)
+started
   → spec-review-phase-1-iter-1-complete
   → ... (up to iter 2)
   → spec-review-phase-1-complete

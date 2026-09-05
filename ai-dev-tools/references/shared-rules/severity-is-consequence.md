@@ -26,7 +26,7 @@ paragraph around it.
 ## Why this is shared
 
 `review-code` and `review-doc` emit different artifacts that share a `severity` enum and a
-`critical_count` field, and four auto-pipeline gates read that field without knowing which skill
+`critical_count` field, and three auto-pipeline gates read that field without knowing which skill
 produced it. If one skill rates by consequence and the other by certainty, the same number means two
 different things and the gates compare incomparable quantities.
 

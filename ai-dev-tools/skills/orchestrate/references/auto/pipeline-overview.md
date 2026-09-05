@@ -1,6 +1,6 @@
 # Auto Mode Pipeline Overview
 
-`/orchestrate --auto <spec1> [<spec2> ...]` — run a 4-stage pipeline on one or more specs, serially.
+`/orchestrate --auto <spec>` — run a 4-stage pipeline on exactly one spec.
 
 ---
 
@@ -16,14 +16,14 @@
 
 ---
 
-## Pipeline (per spec)
+## Pipeline
 
 | # | Stage | Composition | Agent? |
 |---|---|---|---|
 | i | Spec-review two-phase | Phase 1: `/review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1` (no fact-check). Phase 2: `/review-doc <spec> --fact-check true --max-iterations 2 --run-id <run_id>-phase2` (fact-checker on) | Yes — two serial sub-agent dispatches |
 | ii | Implement | `/implement <spec> --auto --run-id <id>` | Yes — single dispatch (may spawn 1 helper internally) |
 | iii | Code-review loop | `/review-code <spec_baseline> --against <spec_path> --run-id <id> --max-iterations 4` up to 4 iters, commit after each | Yes — one dispatch per iter |
-| iv | Verification gate | No-op in this release (no test suite). Final commits, print completion log | No — orchestrate runs directly |
+| iv | Verification gate | No-op in this release — no test runner is wired in, and the project's static gates are run by hand. Final commits, print completion log | No — orchestrate runs directly |
 
 ---
 
@@ -37,15 +37,15 @@ The safety net is downstream: if the spec has gaps, the implement agent produces
 
 ## Pre-pipeline Validation
 
-Before processing the first spec:
-1. Verify every positional spec arg is: (a) an existing regular file, (b) readable, (c) ends in `.md` or `.markdown`.
-2. Any failure → print the full list of invalid paths with per-path reasons and exit. No spec processed, no state written.
+Before the pipeline starts:
+1. Verify the positional spec arg is: (a) an existing regular file, (b) readable, (c) ends in `.md` or `.markdown`.
+2. Any failure → print the path and the reason and exit. Nothing is processed, no state written.
 
 ---
 
 ## Profiling Log — One-Time Setup
 
-After pre-pipeline validation passes and before stage i starts (runs once per auto invocation, not per spec):
+After pre-pipeline validation passes and before stage i starts (runs once per auto invocation):
 
 ```bash
 LOG_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ai-dev-tools"
@@ -72,3 +72,20 @@ A `mkdir -p` failure prints a single stderr breadcrumb and does NOT abort the ru
 Phase commits are conditional — skip if fixer made zero changes. Detect via `git diff --quiet <spec_path>`.
 
 The per-iteration commit after agent iii is **non-optional**. It used to be load-bearing for the `last_iteration_head` rollback anchor; that anchor is gone, but the commit stays — it is what makes each iteration's fixes separately reviewable, and what `spec_baseline..HEAD` counts at the end.
+
+---
+
+## Spec Name Tokens
+
+Two tokens name the spec in the strings the pipeline emits. Both derive from the spec path's
+basename, never the full path:
+
+- `<spec-slug>` — the basename with its `.md`/`.markdown` extension removed. Used in every commit
+  subject (the Commit Cadence table above, and the wip commits in `failure-handling/crash.md` and
+  `failure-handling/unresolved-criticals.md`) and in stage iv's completion line.
+- `<spec-filename>` — the basename with its extension, the same value `profiling-log.md` records in
+  its `spec` field. Used in the progress line under Invariants above and in every
+  `tmp/_reviews_errors/error-logs.md` entry (`failure-handling/error-log-templates.md`).
+
+`.markdown` is a legal spec extension (Pre-pipeline Validation, step 1), so neither token can be
+spelled `<spec>.md`.
