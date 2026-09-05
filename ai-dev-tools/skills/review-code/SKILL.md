@@ -1,6 +1,6 @@
 ---
 name: review-code
-argument-hint: '<commit-count|git-ref> [--against <spec>] [--effort high|xhigh|max] --max-iterations N [--verify "<cmd>"] [--run-id <id>]'
+argument-hint: '<commit-count|git-ref> [--against <spec>] [--effort high|xhigh|max] --max-iterations N [--verify "<cmd>"] [--must-inspect <paths>] [--run-id <id>]'
 description: "Use when reviewing recent commits for bugs, architecture violations, spec drift, security issues, and verification gaps. Supports single-pass review and iterative review-fix-verify cycles. Invoke with /review-code <commit-count|git-ref>."
 ---
 
@@ -34,11 +34,16 @@ It has no default because the number of rounds is the caller's budget decision, 
 
 If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
 
-**`--must-inspect` is scope direction from the caller, and it is the only cross-round channel this skill has.** A round reports the files it did not open in `coverage.not_inspected`; it has no way to act on its *own* report, because the next round is a fresh read that knows nothing of this one. A looping caller does know — `orchestrate`'s stage iii reads that list after each dispatch and passes it into the next one — and this flag is where it says so.
+**`--must-inspect` is scope direction from the caller, and it is the only cross-round channel into the *reviewer*.** A round reports the files it did not open in `coverage.not_inspected`; it has no way to act on its *own* report, because the next round is a fresh read that knows nothing of this one. A looping caller does know — `orchestrate`'s stage iii reads that list after each dispatch and passes it into the next one — and this flag is where it says so.
 
 It carries **paths, never findings**. Nothing that could move `critical_count` or `high_count` crosses a round boundary through it, so it is not the carry-forward removed alongside the `phase` field: `references/shared-rules/counts-exclude-self-review.md` keeps counts per-round, and a list of files to open is not a count. Handing the reviewer prior findings would be the other thing, and this flag cannot express it.
 
-Validation: each path must exist and must be inside the reviewed diff. Print `Warning: --must-inspect path not in diff, ignoring: <path>` for one that is not, and continue — a file can legitimately leave the diff between rounds, and a caller cannot know that before dispatching. If every path is dropped this way, proceed as though the flag were absent.
+Validation: a path is used only if it is inside the reviewed diff **and** exists on disk. The two fail differently and a deleted file fails only the second, so they get separate messages rather than one that would state a false reason:
+
+- not in the reviewed diff → `Warning: --must-inspect path not in diff, ignoring: <path>`
+- in the diff but absent on disk, i.e. the diff deletes it → `Warning: --must-inspect path was deleted by the diff, ignoring: <path>`
+
+Continue in both cases; if every path is dropped, proceed as though the flag were absent. The deletion case is not an edge case at stage iii: `prompts/reviewer.md` puts *any* changed file the round did not open into `coverage.not_inspected` "with no exceptions", deletions included, and stage iii passes that list on verbatim. Telling the reviewer to `Read` a file the diff removed would abort the pass over a list the caller assembled correctly.
 
 **Positional argument detection:**
 
@@ -468,7 +473,7 @@ After printing the terminal output, auto-triage each remaining issue from `tmp/_
 
 **Auto-triage rules (per issue)** — every issue resolves to exactly one of these two outcomes. There is no "defer" option; the agent must either fix or justify rejecting the finding:
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly — same approach as the fixer agent (edit the file, run `--verify` commands if configured). Default to this option whenever the fix is within reach.
-- **Push back:** The finding is incorrect, irrelevant, misunderstands the code/spec, OR the fix genuinely requires information/context the agent cannot obtain. Record the reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected. "I don't have enough context" is a valid push-back reason — but it must be written as explicit reasoning, not silently skipped.
+- **Push back:** The finding is incorrect, irrelevant, misunderstands the code/spec, OR the fix genuinely requires information/context the agent cannot obtain. Record the reasoning to `tmp/[<run_id>-]response_analysis.md` so the next review cycle can see why the finding was rejected. "I don't have enough context" is a valid push-back reason — but it must be written as explicit reasoning, not silently skipped.
 
 The agent never asks the user. Every remaining issue resolves to apply or push back — including critical-severity items the agent cannot confidently fix (push back with explicit reasoning).
 
@@ -490,7 +495,9 @@ If any fixes were applied, commit with: `fix(review-code): apply N review sugges
 
 After all issues are processed, update `tmp/_reviews_errors/review-code-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
-**Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first):
+**Response analysis format:** Write to `tmp/[<run_id>-]response_analysis.md` (overwrite — no need to read first):
+
+This file is prefixed by `--run-id` even though it sits outside `tmp/_reviews_errors/` and so falls outside the blanket rule above. Without the prefix it is the one per-round output that a later dispatch destroys: the Respond phase runs at the end of *every* completed run, so under `orchestrate` stage iii — one dispatch per iteration — iteration 2 would overwrite iteration 1's push-back reasoning, which is the opposite of "so the next review cycle can see why the finding was rejected". At stage iii the resolved name is `tmp/<run_id>-iter<N>-response_analysis.md`.
 
 ```markdown
 ## Review-Code Response — <date>

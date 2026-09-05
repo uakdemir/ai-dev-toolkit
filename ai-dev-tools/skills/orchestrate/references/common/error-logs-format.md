@@ -44,7 +44,9 @@ Append-only, one entry per incident:
 
 **Generation rules:**
 - `spec_hash`: generated once when auto mode begins the pipeline for a spec. Shared across all stages and iterations.
-- `dispatch_hash`: generated fresh for every individual agent dispatch. Retries get a new dispatch_hash.
+- `dispatch_hash`: generated once when auto mode begins a pipeline run for a spec, and shared by every stage, phase and iteration of that run. Dispatches within the run are told apart by the loop variable in the prefix — `-phase<N>` at stage i, `-iter<N>` at stage iii — not by a fresh hash. A **crash retry** under `../auto/failure-handling/retry-semantics.md` does mint a new one, which is what "retries get a fresh dispatch_hash for diffing" above means: the retry's artifacts sit beside the failed attempt's instead of overwriting them.
+
+  Read as "fresh for every individual agent dispatch" this rule contradicts the layout above, where one `a1b2c3d4` spans stage i's two phases and stage iii's iterations, and it would make the loop-variable prefixes pointless — every dispatch would already be uniquely namespaced. It would also break the Gate Read Contract's recipe below, which forms a path from one `<run_id>` plus an iteration number.
 
 **Propagation:** every agent dispatch passes the run-id via the `--run-id` CLI flag, which the receiving skill's argparse reads. Orchestrate's stage dispatches carry it nowhere else.
 
@@ -73,9 +75,9 @@ another's. A contract expecting a `-phase<N>.json` or `-iter<N>.json` *suffix* i
 skill produces — the loop variable is always a prefix.
 
 **What each stage's file therefore covers differs, and the Gate Read Contract below turns on it.** A
-stage-iii file spans exactly one iteration. A stage-i phase file spans that phase's two inner
-iterations and is overwritten between them, because stage i dispatches per phase rather than per
-iteration.
+stage-iii file spans exactly one iteration. A stage-i phase file spans that phase's inner
+iterations — up to two, overwritten between them when the phase runs more than one — because stage i
+dispatches per phase rather than per iteration.
 
 **Per-round JSON does exist, and it is not what the gates read.** Both review skills snapshot each
 round before the next overwrites it: `<prefix>-review-code-iteration-N.json` every round, and
@@ -120,8 +122,9 @@ whichever iteration is named. Only a later *run* reusing the same `<run_id>` cle
 
 **At stage i it does not.** A phase file spans that phase's two inner iterations and is overwritten
 between them, so the recipe returns the phase's **last** iteration. That is the number stage i's
-unresolved-criticals gate wants — it is specified against the final iteration — but the phase's first
-iteration is recoverable only from `review-doc`'s own per-round snapshot,
+unresolved-criticals gate wants — it is specified against the final iteration. A phase that early-exits
+after one iteration never overwrites anything, so its file still holds that iteration directly; a phase
+that runs both leaves the first recoverable only from `review-doc`'s own per-round snapshot,
 `<run_id>-phase<N>-review-doc-iteration-1.json`, and only after the fact: the snapshot is written once
 the gate has already taken its number, so it audits that gate rather than feeding it. The iteration
 log (`-review-doc-iteration-N.md`) is the human-readable half of the same per-round record.

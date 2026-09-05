@@ -181,7 +181,7 @@ if (!isObj(doc)) {
     if (!Array.isArray(doc.issues)) {
       errors.push('issues: expected an array');
     } else {
-      // Ids are handles within a round — the fix report's dispositions and tmp/response_analysis.md
+      // Ids are handles within a round — the fix report's dispositions and tmp/[<run_id>-]response_analysis.md
       // both cite them — so a duplicate misroutes a disposition onto the wrong finding. Rejected
       // here rather than discovered downstream.
       const seenIds = new Set();

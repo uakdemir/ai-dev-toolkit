@@ -11,7 +11,7 @@ canonical: Everything the run could not decide goes in one brainstorm document, 
 
 A review run resolves most of what it finds. What it cannot resolve alone is the part a human has to
 answer, and that part is exactly what gets lost — spread across a fix report's `deferred` reasons, a
-`pushed-back` justification in `tmp/response_analysis.md`, and a "Remaining Issues" block that
+`pushed-back` justification in `tmp/[<run_id>-]response_analysis.md`, and a "Remaining Issues" block that
 scrolls off the screen. Collecting it into one file, and printing that file's path where it cannot
 be missed, is what turns a review into something the founder can act on.
 

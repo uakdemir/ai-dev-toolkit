@@ -433,7 +433,7 @@ After printing the terminal output, auto-triage each remaining issue from `tmp/_
 **Auto-triage rules (per issue):**
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly to the document — surgical edits only.
 - **Defer:** The fix requires information the agent doesn't have, depends on future work, or is explicitly a future concern.
-- **Push back:** The finding is incorrect, irrelevant, or based on a misunderstanding of the document/spec. Record the agent's reasoning to `tmp/response_analysis.md` so the next review cycle can see why the finding was rejected.
+- **Push back:** The finding is incorrect, irrelevant, or based on a misunderstanding of the document/spec. Record the agent's reasoning to `tmp/[<run_id>-]response_analysis.md` so the next review cycle can see why the finding was rejected.
 
 A `cross-reference` finding reporting the same document diverging across two locations is **always deferred**, never applied — the same rule the fixer follows (`prompts/coder.md`). Reason: "requires a human decision on which copy is authoritative." This phase commits what it applies, so reconciling the copies here would land the fixer's forbidden edit through a different door.
 
@@ -458,7 +458,9 @@ If any fixes were applied, commit with: `fix(review-doc): apply N review suggest
 
 After all issues are processed, update `tmp/_reviews_errors/review-doc-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
-**Response analysis format:** Write to `tmp/response_analysis.md` (overwrite — no need to read first). Use the issue's stable `id` from `review-doc.json` as the section header so future review iterations and human readers can cross-reference findings unambiguously:
+**Response analysis format:** Write to `tmp/[<run_id>-]response_analysis.md` (overwrite — no need to read first). Use the issue's stable `id` from `review-doc.json` as the section header so future review iterations and human readers can cross-reference findings unambiguously:
+
+The `--run-id` prefix applies here even though the file sits outside `tmp/_reviews_errors/`, and so outside the blanket rule above. The Respond phase runs at the end of every completed run, and `orchestrate` stage i dispatches this skill twice — `<run_id>-phase1` then `<run_id>-phase2` — so an unprefixed name would have phase 2 overwrite phase 1's push-back reasoning before anyone read it. `review-code` prefixes it for the same reason at stage iii; unprefixed, the two skills also share one path and the later stage would clobber the earlier one's.
 
 ```markdown
 ## Review-Doc Response — <date>
@@ -547,7 +549,7 @@ Rounds start fresh, so round N+1's reviewer **overwrites** both files rather tha
 
 This is the cost of removing carry-forward, paid deliberately: the accumulating array used to be the record. Two `cp` calls per iteration replace it, and they make each round independently auditable — which the accumulating array never was.
 
-**IDs are per-round.** Every round's reviewer numbers from `ISSUE-001`; the fact-checker and the self-review pass continue from `max + 1` within that same round. Ids identify a finding while a round is in flight — the fix report and `tmp/response_analysis.md` both reference them — and nothing needs one to outlive its round.
+**IDs are per-round.** Every round's reviewer numbers from `ISSUE-001`; the fact-checker and the self-review pass continue from `max + 1` within that same round. Ids identify a finding while a round is in flight — the fix report and `tmp/[<run_id>-]response_analysis.md` both reference them — and nothing needs one to outlive its round.
 
 They used to be append-only across iterations, matched on a `(location, category)` tuple and exempt from the reviewer's cap, so that round N+1 could re-use round N's numbering. That machinery is gone with carry-forward, and so is the counting contradiction it caused: carried entries sat in the new round's array, so the count could not tell a finding made now from one made earlier and already fixed.
 

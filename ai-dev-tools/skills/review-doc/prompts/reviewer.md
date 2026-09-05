@@ -124,7 +124,7 @@ After collecting all findings:
 
    **Every round starts at `ISSUE-001`.** Do not read a prior iteration's file, do not match against it, do not carry anything forward. Each round reviews the document as it now stands and reports what it finds; a defect an earlier round fixed is simply absent, not present-and-not-counted.
 
-   Ids are unique within a round, not across them. The fact-checker and the self-review pass continue your numbering from `max + 1` in the same round, which is what keeps the fix report and `tmp/response_analysis.md` unambiguous while a round is in flight. Nothing needs an id to outlive its round: the fix report is written and consumed within one.
+   Ids are unique within a round, not across them. The fact-checker and the self-review pass continue your numbering from `max + 1` in the same round, which is what keeps the fix report and `tmp/[<run_id>-]response_analysis.md` unambiguous while a round is in flight. Nothing needs an id to outlive its round: the fix report is written and consumed within one.
 
    This replaces a carry-forward algorithm — tuple matching on `(location, category)`, an append-only id invariant, a cap exemption, and an `origin` reset at the round boundary. All of it existed so that round N+1 could see round N's findings, and it cost more than it bought: carried-forward entries landed in the new round's array, so the count could not tell "found now" from "found earlier and already fixed", and `critical_count` could not decrease within a run.
 
