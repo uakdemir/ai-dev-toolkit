@@ -29,12 +29,20 @@ SKILL.md that drives it.
 ABORT: fix report not found at tmp/_reviews_errors/review-doc-fix-report.json
 ```
 
-**On detection**, the orchestrator restores the backup, prints a warning naming the phase and the
-reason, and **continues** — an abort is not a run failure:
+**On detection**, the orchestrator restores the backup, prints a warning naming the phase, the
+reason, and what the run proceeds with, and **continues** — an abort is not a run failure:
 
 ```
-Warning: <phase> aborted — <reason>. Fix results unverified.
+Warning: <phase> aborted — <reason>. <what the run proceeds with>
 ```
+
+The tail is phase-dependent, because what survives an abort depends on where in the round it
+happened. Both instances:
+
+- **After the fixer** — `Fix results unverified.` Used by both skills' self-review pass.
+- **Before the fixer** — `Falling back to reviewer output.` Used by `review-doc`'s fact-checker,
+  which runs between the reviewer and the fixer; "fix results" do not exist yet, so the other tail
+  would be a false statement.
 
 **Any other failure mode** — agent crash, exception, no response at all — is treated identically.
 The orchestrator cannot distinguish them from the outside, so it must not try.

@@ -12,8 +12,10 @@ make during the round; the criticals still standing are the ones it could not re
 Read the brainstorm document whose absolute path `review-doc` printed as the run's last line — see
 `references/shared-rules/brainstorm-handoff.md` (plugin-root-relative). It holds exactly what needs a
 decision: deferred items, pushed-back items, and remaining criticals the agent declined to fix,
-grouped by theme, each with the options and what the agent would do. Decide those, apply the
-decisions to the spec, then run another review round.
+grouped by theme, each with the options and what the agent would do. Present each grouped entry to
+the user and wait for their decision — by construction these are the items the agent already judged
+it could not settle, so do not resolve one yourself. Apply only the decisions the user gave to the
+spec, then run another review round.
 
 Loop steps 2-3 until zero criticals.
 

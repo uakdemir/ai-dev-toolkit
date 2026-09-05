@@ -55,7 +55,7 @@ Fact-check every verifiable claim in each document against the actual source cod
 ### Procedure
 
 1. Read `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant — already written by the reviewer in this round).
-   - **Validate ID integrity first:** every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If any issue is missing the `id` field or has a malformed value, abort the fact-check by:
+   - **Validate the artifact first:** the file must exist, be readable, and parse as JSON, and every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If the review JSON is missing, unreadable, or not valid JSON, or if any issue is missing the `id` field or has a malformed value, abort the fact-check by:
      1. Leaving `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) UNCHANGED — do not write or modify it.
      2. Returning a text response whose **first line begins with the literal sentinel `ABORT: `** followed by a one-line reason, e.g. `ABORT: Reviewer output is malformed — id field invalid or missing on issue at index N`.
      The orchestrator detects the `ABORT:` prefix, restores the backup it took before dispatching you, prints a warning, and proceeds to the fixer using the original reviewer output.
@@ -81,6 +81,9 @@ Fact-check every verifiable claim in each document against the actual source cod
 
    Severity semantics are shared with `review-code` and defined once, in
    `references/shared-rules/severity-is-consequence.md`.
+
+   Report findings with `confidence` >= 40. A high-severity finding below that threshold should be
+   investigated until it can be grounded or dropped — not silently discarded.
 4. Populate the `fact_check_claims` array with ALL claims checked (including ACCURATE):
    ```json
    {"claim": "description of claim", "verdict": "ACCURATE"}

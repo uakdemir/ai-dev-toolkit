@@ -73,8 +73,10 @@ Examples:
 
 1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
 2. Delete stale files from prior runs:
-   - Without `--run-id`: `./tmp/_reviews_errors/review-code.json`, `./tmp/_reviews_errors/review-code-summary.md`, `./tmp/_reviews_errors/review-code-fix-report.json`, `./tmp/_reviews_errors/review-code-iteration-*.md`
-   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-code*.json`, `./tmp/_reviews_errors/<run_id>-review-code*.md`
+   - Without `--run-id`: `./tmp/_reviews_errors/review-code.json`, `./tmp/_reviews_errors/review-code.json.bak`, `./tmp/_reviews_errors/review-code-summary.md`, `./tmp/_reviews_errors/review-code-fix-report.json`, `./tmp/_reviews_errors/review-code-brainstorm.md`, `./tmp/_reviews_errors/review-code-iteration-*.md`
+   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-code*.json`, `./tmp/_reviews_errors/<run_id>-review-code*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-code*.md`
+
+   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's self-review phase would otherwise survive into the next run.
 3. Do NOT delete `./tmp/past-issues-backlog.md` — it is intentionally append-only across runs.
 
 ## Pre-Flight Checks
@@ -163,7 +165,7 @@ No final-gate pattern for review-code. Since all rounds use the same single agen
 
 ## Reviewer Agent
 
-Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, `{{ITERATION_NUM}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{REGRESSIONS}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, `{{ITERATION_NUM}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{PREVIOUS_FINDINGS}}`, `{{GIT_DIFF}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
 - Git diff (up to 3000 lines, strategically trimmed)
 - Spec content (if `--against` provided)
 - CLAUDE.md (if exists)
@@ -238,7 +240,7 @@ Scope-based filtering:
 
 ## Brainstorm Document
 
-**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-doc`. The fix phase always runs — there is no report-only mode and no scope small enough to skip it. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` after the triage phase, and ends the run with:
+**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-doc`. The fix phase runs whenever there is something to fix — there is no report-only mode and no scope small enough to exempt one; what the loop skips is a fix phase with zero criticals to act on. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` after the triage phase, and ends the run with:
 
 ```
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-code-brainstorm.md
@@ -481,7 +483,7 @@ If no `--verify` commands are configured, skip verification comparison and treat
 ## Status Logic
 
 First match wins:
-1. **Error**: loop aborted — includes reviewer output that failed validation twice
+1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
 2. **Issues Found**: `critical_count > 0` OR verification regressions present
 3. **Incomplete**: `coverage.not_inspected` is non-empty
 4. **Approved with suggestions**: any high, medium, or low issue with `origin: "document"` remains
@@ -572,7 +574,7 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
 }
 ```
 
-`origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the six required; `additionalProperties: false` still rejects everything else. `phase` records where a finding was found (`"review"` or `"self-review"` here) and never changes, where `origin` is round-relative and flips at the iteration boundary — it is for diagnostics, and the counts stay on `origin`. The validator enforces that `origin: "self-review"` implies `phase: "self-review"`. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
+`origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the six required; `additionalProperties: false` still rejects everything else. `phase` records where a finding was found (`"review"` or `"self-review"` here) and never changes, where `origin` is round-relative and flips at the iteration boundary — it is for diagnostics, and the counts stay on `origin`. The validator rejects `origin: "self-review"` paired with a phase other than `"self-review"`; a missing `phase` is not caught, because the check is guarded on the key existing. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
 
 Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. A file that passes validation is internally consistent — its declared counts equal its own recount. That is not a freshness guarantee: `../orchestrate/references/common/error-logs-format.md` states that the gates read this value in flight, not off disk, because the file is rewritten mid-iteration and overwritten by the next one. Consistent is not current.
 
@@ -581,6 +583,7 @@ Note: `medium_count` and a low count are not in the schema — both are derived 
 | Failure mode | Behavior |
 |---|---|
 | Agent returns invalid JSON or schema validation fails | Retry review once. Second failure: abort with error. |
+| Fix phase fails | Abort the run, status **Error**. Code is left as the fixer left it; say so in the Artifact line. |
 | Fix introduces new criticals | Normal loop — next iteration catches them. |
 | Git operations fail | Abort with error. |
 | Verification command fails | Not an error — data for regression comparison. |

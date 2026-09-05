@@ -15,7 +15,7 @@ Review the fixer's own commits, report every defect, and **fix each one, exactly
 
 - Diff range: `{{DIFF_RANGE}}` — the fixer's own commits, and the whole of your scope
 - Fix report: `{{FIX_REPORT_PATH}}` — what the fixer claims it did, and why
-- Review JSON: `{{OUTPUT_PATH}}` — the issues it was responding to, and the current id state
+- Review JSON: `{{OUTPUT_PATH}}` — the issues it was responding to, and the current issue order
 - The effort level, as a reasoning-depth directive
 
 ## Scope
@@ -35,6 +35,8 @@ Read enough surrounding code to judge each change (call sites, guards, types), b
 
 **Severity is consequence, not certainty.** Rate `severity` by what actually happens to the software's user if the defect is real; rate `confidence` separately as the likelihood it is real. Defined once, in `references/shared-rules/severity-is-consequence.md`.
 
+Report findings with `confidence` >= 40. A high-severity finding below that threshold should be investigated until it can be grounded or dropped — not silently discarded.
+
 ## Output
 
 Append to the `issues` array in the review JSON. Every issue you append carries all six required fields — `severity`, `category`, `location`, `confidence`, `problem`, `suggested_fix` — following the same shape the verification regressions use, plus:
@@ -44,16 +46,16 @@ Append to the `issues` array in the review JSON. Every issue you append carries 
 
 **Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts that `/orchestrate`'s endless-loop gate reads. Your issues are folded into the counts by the next iteration's reviewer, which re-reads the full scope and emits anything still wrong in your lines as `origin: "document"`.
 
-Never renumber, reorder, or remove existing issues. You append only.
+Never reorder or remove existing issues — dispositions are keyed on `issue_index`. You append only.
 
-⚠ An issue object carries exactly the six required fields plus `origin`, and nothing else — the
-schema is `additionalProperties: false`, so an invented key such as `fixed_by_self_review` fails
-validation and the orchestrator discards the whole artifact. Whether you fixed a defect belongs in
-your returned summary and in the commit, never on the issue record.
+⚠ An issue object carries exactly the six required fields plus `origin` and `phase`, and nothing
+else — the schema is `additionalProperties: false`, so an invented key such as `fixed_by_self_review`
+fails validation and the orchestrator discards the whole artifact. Whether you fixed a defect belongs
+in your returned summary and in the commit, never on the issue record.
 
 ## Fixing
 
-Fix each defect you reported, exactly once. Surgical edits — the correction the defect calls for and nothing else. Then commit:
+Fix each defect you reported, exactly once. Surgical edits — the correction the defect calls for and nothing else. Keep a running total of the lines you wrote or changed. Then commit:
 
 ```
 fix(review-code): self-review of iteration M's fixes
@@ -67,7 +69,7 @@ If the fix report is missing or unparseable, or the diff range resolves to nothi
 
 ## Return
 
-Report each finding's category, severity, location and whether you fixed it, plus the commit SHA if you made one. The orchestrator prints these: they are excluded from the iteration's counts, never from its output.
+Report each finding's category, severity, location and whether you fixed it, plus the commit SHA if you made one and the total lines you wrote. The orchestrator prints these: they are excluded from the iteration's counts, never from its output.
 
 ## Tool Usage Rules
 - Use Grep (not grep/rg via Bash) for searching file contents

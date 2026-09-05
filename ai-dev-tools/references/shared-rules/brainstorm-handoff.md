@@ -22,8 +22,11 @@ makes the brainstorm document a dumping ground instead of a decision queue, and 
 thing an agent is reliably good at.
 
 There is no "report-only" mode and no scope small enough to skip fixing. A focused review, a
-single-file review, a `--max-iterations 1` review — all of them fix. The narrower the scope, the
-*more* certain the agent should be about the obvious repairs in it.
+single-file review, a `--max-iterations 1` review — none of them is exempt. What both loops do skip
+is a fix phase with nothing to act on: each gates the fixer on the critical count, never on scope, so
+a round that surfaces no criticals dispatches no fixer. What it surfaced instead goes to the triage
+phase, which is equally required. The narrower the scope, the *more* certain the agent should be
+about the obvious repairs in it.
 
 The test for handing something back is not difficulty and not size. It is: **can the agent name more
 than one defensible answer, or does the right answer depend on something the repository does not
@@ -55,7 +58,9 @@ do not need a decision.
 Group by theme rather than by disposition — a founder answers "what do we do about `source_ref`?"
 once, not three times under three headings. Per entry:
 
-- the stable issue id, severity and location, so it can be traced back to the review JSON
+- the finding's stable handle — the issue `id` in `review-doc`, and the issue's index in the review
+  JSON in `review-code`, whose schema has no `id` field — plus severity and location, so it can be
+  traced back to the review JSON
 - what the question actually is, in one sentence
 - the options, where the agent can see more than one defensible answer
 - what the agent would do, and why it did not just do it

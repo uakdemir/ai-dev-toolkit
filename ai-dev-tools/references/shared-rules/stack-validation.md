@@ -30,6 +30,11 @@ After the user selects a stack:
 4. If the user continues, proceed with the selected stack and record that validation was skipped
    wherever the skill reports what it did.
 
+**If the user selected "Other"** rather than a named stack, there is no stack to validate against:
+skip the procedure entirely and record the skip the same way step 4 does. All four skills already
+skip their own `tech-stacks.md` on that path; it is stated here so the branch is not re-derived four
+times.
+
 ## What varies per skill, legitimately
 
 - **The number of options.** `test-audit` offers 1-3; the other three offer 1-5. The count belongs

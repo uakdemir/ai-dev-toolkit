@@ -168,7 +168,7 @@ Write `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-re
 }
 ```
 
-Valid categories: completeness, consistency, scope, structure, vague-action, vague-step, dependency-gap, ordering-issue, agent-pitfall, missing-criteria, cross-reference.
+Categories you may assign: completeness, consistency, scope, structure, vague-action, vague-step, dependency-gap, ordering-issue, agent-pitfall, missing-criteria, cross-reference. The schema also permits `fact-check` and `verify`, which only the fact-checker and the self-review pass produce — carry those forward untouched per step 5c, never re-label them.
 
 **Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix) plus `origin` (always `"document"`) and `phase` (always `"review"`). That is the complete permitted set — no `title`, `description`, `metadata`, or `summary` fields.
 

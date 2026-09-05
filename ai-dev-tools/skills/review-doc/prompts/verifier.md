@@ -69,13 +69,16 @@ Four things, and only these four:
 
    Severity semantics are shared with `review-code` and defined once, in
    `references/shared-rules/severity-is-consequence.md`.
+
+   Report findings with `confidence` >= 40. A high-severity finding below that threshold should be
+   investigated until it can be grounded or dropped — not silently discarded.
 5. **Fix each defect you reported, exactly once.** Edit the documents with the Edit tool, surgically — the correction the defect calls for and nothing else. Do not re-read your own edits afterwards. Keep a running total of the lines you wrote or changed, and report it.
 6. **Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts that `/orchestrate`'s endless-loop gate reads; recounting would make post-fix findings look like reviewer findings and trip spurious pipeline failures. Your issues are folded into the counts by the next iteration's reviewer, which re-reads the whole document and emits anything still wrong in your lines as `origin: "document"`.
 7. **Do NOT touch `fact_check_claims` or `fact_check_accuracy`.**
 8. Rewrite the review JSON with the updated `issues` array using the Write tool. If you found nothing, leave the file untouched and return a one-line summary saying so.
 9. Return a summary naming, for each finding, its id, category, severity, location and whether you fixed it — plus the total lines you wrote. The orchestrator prints these; they are excluded from the round's counts, never from its output.
 
-⚠ **That disposition goes in your returned summary, never in the issue record.** An issue object carries exactly the seven required fields plus `origin` — the schema is `additionalProperties: false`, so an extra key like `fixed_by_self_review` fails validation and the orchestrator discards the whole artifact. Whether you fixed a defect is reported to the orchestrator, not stored on the issue.
+⚠ **That disposition goes in your returned summary, never in the issue record.** An issue object carries exactly the seven required fields plus `origin` and `phase` — the schema is `additionalProperties: false`, so an extra key like `fixed_by_self_review` fails validation and the orchestrator discards the whole artifact. Whether you fixed a defect is reported to the orchestrator, not stored on the issue.
 
 ## Rules
 

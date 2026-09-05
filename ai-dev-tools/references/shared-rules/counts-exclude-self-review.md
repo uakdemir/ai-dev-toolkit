@@ -53,9 +53,11 @@ wrong rule this whole section exists to distinguish from the round-local one, an
 `tests/fixtures/counts/churn-next-round.json` is built to reject. `phase` is for diagnostics: which
 pass is producing the criticals, and therefore which prompt needs work.
 
-The validator enforces the one direction that must hold: `origin: "self-review"` requires
-`phase: "self-review"`, because only that pass may mark a finding as the round's own churn. The
-reverse — `phase: "self-review"` with `origin: "document"` — is the normal carried-forward shape.
+The validator enforces the one direction that must hold, and only where `phase` is present: it
+rejects `origin: "self-review"` paired with a phase other than `"self-review"`, because only that
+pass may mark a finding as the round's own churn. **A missing `phase` is not caught** — the check is
+guarded on the key existing. The reverse — `phase: "self-review"` with `origin: "document"` — is the
+normal carried-forward shape.
 
 ## Not counted is not not-shown
 

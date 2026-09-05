@@ -25,7 +25,7 @@ paragraph around it.
 
 ## Why this is shared
 
-`review-code` and `review-doc` emit the same JSON shape, with the same `severity` enum and the same
+`review-code` and `review-doc` emit different artifacts that share a `severity` enum and a
 `critical_count` field, and four auto-pipeline gates read that field without knowing which skill
 produced it. If one skill rates by consequence and the other by certainty, the same number means two
 different things and the gates compare incomparable quantities.
@@ -54,10 +54,20 @@ consequence, never as a claim about how certain the finding is.
 
 ## Governed sites
 
+- `skills/review-code/SKILL.md`
 - `skills/review-code/prompts/reviewer.md`
+- `skills/review-code/prompts/self-review.md`
+- `skills/review-doc/SKILL.md`
 - `skills/review-doc/prompts/reviewer.md`
-- `skills/review-doc/prompts/verifier.md`
+- `skills/review-doc/prompts/verifier.md` — carries the rule by citation; it falls outside the
+  detector's `governs()` predicate, so it is not in the coverage snapshot
 - `skills/review-doc/agents/codebase-fact-checker.md`
+
+The list is the union of `tests/detector-coverage.txt` — the committed snapshot of the detector's
+`governs()` scope, which `scripts/check-detector-coverage.sh` holds the detector to — and the files
+that state the canonical sentence. Neither set alone is the rule's reach: `governs()` asks only
+whether a file rates severities at all, and a file can carry the rule by citation without doing
+either.
 
 Enforced by `scripts/check-shared-semantics.cjs`, detector `severity-from-confidence` — a manual
 gate, run per the root CLAUDE.md, not an automatic one.
