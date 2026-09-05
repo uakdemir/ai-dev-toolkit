@@ -6,12 +6,19 @@ edits go live after `/reload-plugins`. No `git push` is required for local use.
 
 ## Gate — manifest changes must pass strict validation
 
-Any change to `ai-dev-tools/.claude-plugin/plugin.json` or `ai-dev-tools/.claude-plugin/marketplace.json`
-MUST pass this before being committed:
+Any change to `ai-dev-tools/.claude-plugin/plugin.json`, `ai-dev-tools/.claude-plugin/marketplace.json`
+or the root `.claude-plugin/marketplace.json` MUST pass **both** of these before being committed:
 
 ```bash
-claude plugin validate ./ai-dev-tools --strict
+claude plugin validate ./ai-dev-tools --strict   # the local directory marketplace — how this tree is installed
+claude plugin validate . --strict                # the root marketplace — how colleagues install from GitHub
 ```
+
+There are two marketplace manifests and they are deliberately different: the root one is named
+`ai-dev-toolkit` and points at `./ai-dev-tools`, the nested one is named `ai-dev-tools` and points at
+`./`. Only the nested one was gated, which is backwards — the root manifest is the one a colleague's
+`claude plugin marketplace add uakdemir/ai-dev-toolkit` reads, so a break there fails for everyone
+except the person able to notice it.
 
 **A JSON parse check is not sufficient.** In the 2.6.0 refresh, `repository` was written in the
 object form `{"type":"git","url":"…"}` — perfectly valid JSON, and rejected by the plugin loader:
