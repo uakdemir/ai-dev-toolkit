@@ -50,13 +50,13 @@ Fact-check every verifiable claim in each document against the actual source cod
 
 ## Output Format
 
-**Do NOT write markdown findings.** Instead, write structured JSON directly to `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active).
+**Do NOT write markdown findings.** Instead, write structured JSON directly to `{{OUTPUT_PATH}}`.
 
 ### Procedure
 
-1. Read `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant — already written by the reviewer in this round).
-   - **Validate ID integrity first:** every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If any issue is missing the `id` field or has a malformed value, abort the fact-check by:
-     1. Leaving `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) UNCHANGED — do not write or modify it.
+1. Read `{{OUTPUT_PATH}}` (already written by the reviewer in this round).
+   - **Validate the artifact first:** the file must exist, be readable, and parse as JSON, and every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If the review JSON is missing, unreadable, or not valid JSON, or if any issue is missing the `id` field or has a malformed value, abort the fact-check by:
+     1. Leaving `{{OUTPUT_PATH}}` UNCHANGED — do not write or modify it.
      2. Returning a text response whose **first line begins with the literal sentinel `ABORT: `** followed by a one-line reason, e.g. `ABORT: Reviewer output is malformed — id field invalid or missing on issue at index N`.
      The orchestrator detects the `ABORT:` prefix, restores the backup it took before dispatching you, prints a warning, and proceeds to the fixer using the original reviewer output.
    - Compute `next_id_seed = max(numeric suffix of every well-formed id) + 1`. Filter out malformed entries from this calculation so a single bad entry cannot poison the max. If the issues array is empty, set `next_id_seed = 1`.
@@ -64,20 +64,32 @@ Fact-check every verifiable claim in each document against the actual source cod
 3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
    - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is the decimal value of `next_id_seed` zero-padded to **at least** 3 digits (use more digits when `next_id_seed >= 1000`, e.g. `ISSUE-1024`); then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
    - `"category": "fact-check"`
+   - `"origin": "document"` — you run before the fixer, against the document as authored, so your findings are document-origin and count normally. (The self-review pass, which runs after the fixer, is the only producer of `"self-review"`.)
    - `"location"`: the document section where the claim appears
    - `"problem"`: the claim text + your evidence
    - `"suggested_fix"`: the correction
-   - Set both `confidence` and `severity`:
-     - INACCURATE → confidence 85, severity "critical"
-     - STALE → confidence 70, severity "high"
-     - PARTIALLY ACCURATE → confidence 50, severity "medium"
+   - `"severity"`: rate it by consequence — **an inaccuracy's severity depends on what rests on
+     it.** A wrong count in a paragraph that gates a deletion pass is critical; a wrong attribution
+     in a background sentence is low. Read enough of the surrounding document to see what an
+     implementer does differently because the claim is wrong, and rate that. The verdict class does
+     not fix the severity: an INACCURATE claim nothing is built on is low, and a STALE claim a
+     migration step reads is critical.
+   - `"confidence"`: rate it separately — the likelihood your verdict is right. This is where the
+     verdict class does carry weight: INACCURATE against code you read directly is near-certain,
+     PARTIALLY ACCURATE is by nature less so.
+
+   Severity semantics are shared with `review-code` and defined once, in
+   `references/shared-rules/severity-is-consequence.md`.
+
+   Report findings with `confidence` >= 40. A high-severity finding below that threshold should be
+   investigated until it can be grounded or dropped — not silently discarded.
 4. Populate the `fact_check_claims` array with ALL claims checked (including ACCURATE):
    ```json
    {"claim": "description of claim", "verdict": "ACCURATE"}
    ```
 5. Compute `fact_check_accuracy`: if `total_claims == 0`, set it to `100` (no verifiable claims → nothing inaccurate); otherwise `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
-6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues).
-7. Rewrite `tmp/_reviews_errors/review-doc.json` (or its `<run_id>-` prefixed variant) with the updated content using the Write tool.
+6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues), **counting only issues whose `origin` is not `"self-review"`** — an issue with no `origin` counts as `"document"`. Only the self-review pass sets `"self-review"`, and it runs after you, so at your point in the round every issue is document-origin; the filter is stated anyway because the recount rule is the same wherever it is applied — `references/shared-rules/counts-exclude-self-review.md`.
+7. Rewrite `{{OUTPUT_PATH}}` with the updated content using the Write tool.
 
 ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.
 
@@ -89,6 +101,8 @@ ACCURATE verdicts are NOT converted to issues — they appear only in `fact_chec
 - For function signatures, parameter order and types must match. Optional vs required matters.
 
 ## Tool Usage Rules
+
+**A dispatched agent uses Read, Grep, Glob and Write for file work rather than their Bash equivalents, and never runs a git command that pushes, switches branches, or discards work.** The core below is defined once, in `references/shared-rules/agent-tool-discipline.md`, and shared with `review-code`. It stays stated here in full, not cited: you receive this prompt and nothing else, and a prompt that outsources its own limits to a file you never open has no limits.
 - Use Grep (not grep/rg via Bash) for searching file contents
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents
@@ -97,3 +111,8 @@ ACCURATE verdicts are NOT converted to issues — they appear only in `fact_chec
 - Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)
+
+`{{OUTPUT_PATH}}` is substituted by the skill before this prompt reaches you, to the run-id-aware
+`tmp/_reviews_errors/[<run_id>-]review-doc.json`. If it still appears literally in your copy, the
+substitution did not happen: report `output path not substituted` and stop rather than guessing at
+the path — writing to the unprefixed default would silently clobber another run's artifact.

@@ -83,7 +83,7 @@ The "Parallelism yield" line is shown only when the yield check ran (task_count 
 
 Any input other than 1, 2, 3, or 4 re-presents the options.
 
-**Auto mode (`--auto` flag):** When auto mode is active, the picker is not presented. The dispatch narrows to two options only: `{single-agent, single-agent + parallel helper}`. The threshold is the same (0.35). Options [2] and [3] are excluded. See `implement/SKILL.md` for the `--auto` algorithm.
+**Auto mode (`--auto` flag):** When auto mode is active, the picker is not presented. The dispatch narrows to two options only: `{single-agent, single-agent + parallel helper}`. The threshold is the same (0.35). Options [2] and [3] are excluded. See `../SKILL.md` for the `--auto` algorithm.
 
 **Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit.
 

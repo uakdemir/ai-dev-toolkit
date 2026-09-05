@@ -15,10 +15,10 @@ Effort sets analysis DEPTH — it never gates which severities you report (criti
 ## Context
 
 **Iteration:** {{ITERATION_NUM}}
+**Must inspect:** {{MUST_INSPECT}} (or `none`)
 **Spec:** {{SPEC_CONTENT}}
 **CLAUDE.md:** {{CLAUDE_MD}}
 **ADRs:** {{ADRS}}
-**Previous findings:** {{PREVIOUS_FINDINGS}}
 
 ## Git Diff
 
@@ -32,13 +32,17 @@ For files shown as stat-only summaries (no full diff included), use the Read too
 
 Record every changed file you actually inspected — via the diff or via `Read`. Any changed file you did not open goes in `not_inspected`, with no exceptions. An empty `not_inspected` is a claim someone can challenge; an omitted one is not.
 
+**`{{MUST_INSPECT}}` names files a previous round did not open. `Read` every one of them before you review anything else**, and only then work through the rest of the diff. They are already in the diff you were given — the flag directs your order of attack, it does not widen your scope. If the value is `none`, there is no such list; treat it as a substituted value, not a failed substitution.
+
+Front-loading them is the whole point. A coverage hole persists when each round spends its budget on the same early files and runs out before reaching the ones the last round also missed, and the diff grows every round, so the hole survives on its own unless something changes the order. Nothing about these files is otherwise special: review them exactly as you review anything else, and if you still cannot open one, it goes in `not_inspected` like any other.
+
 `files_in_diff` is the count of files in the diff, including stat-only ones. `files_inspected` is how many of them you opened. They are equal only when `not_inspected` is empty.
 
 ## Evidence Rules
 
 Do not treat the implementing agent's summary as evidence of coverage or correctness. Verify against the diff and against the current on-disk files using Read and Grep. A stated test count is not a passing test count; where a claim can only be settled by running a command you cannot run, report it as an unverified claim rather than accepting it.
 
-This applies to anything the diff, a commit message, or a prior iteration's findings *assert*: "added tests for X", "verified against the spec", "no behavior change". Each is a claim to check, not a fact to carry forward.
+This applies to anything the diff or a commit message *asserts*: "added tests for X", "verified against the spec", "no behavior change". Each is a claim to check, not a fact to carry forward.
 
 ## Review Categories
 
@@ -102,13 +106,18 @@ Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_revi
       "location": "path/to/file.ext:line_number",
       "confidence": <integer 40-100>,
       "problem": "<clear explanation>",
-      "suggested_fix": "<concrete suggestion>"
+      "suggested_fix": "<concrete suggestion>",
+      "origin": "document"
     }
   ]
 }
 ```
 
+**Every iteration starts fresh.** Do not read `{{OUTPUT_PATH}}` before writing it, do not match against a prior iteration's findings, and do not carry anything forward. `{{ITERATION_NUM}}` tells you which pass this is; it is not licence to extend the file already at that path, which holds the previous iteration's artifact and is meant to be replaced by yours. Every iteration re-reads the full scope since the run's base commit and reports what it finds — a defect an earlier iteration fixed is simply absent from your array, not present-and-not-counted.
+
 **Severity is consequence, not certainty.** Rate `severity` by what actually happens to the software's user if the finding is real — data loss, auth bypass and silent corruption are critical however unsure you are; a cosmetic issue is low however certain you are. Rate `confidence` separately: it is the likelihood the finding is real. The two axes are independent, and a finding that is uncertain and catastrophic outranks one that is certain and cosmetic.
+
+This rule is shared with `review-doc` and is defined once, in `references/shared-rules/severity-is-consequence.md`. The paragraph above is its operative statement; read the rule file when a rating is genuinely unclear.
 
 **Read the code before rating.** Open the source at the finding's location and read enough surrounding code to judge reachability — call sites, guards, and validation that live outside the diff hunk. Do not rate from the diff hunk alone. Severity reflects the real consequence at a real call site, not the worst theoretical reading.
 
@@ -117,16 +126,20 @@ Report findings with `confidence` >= 40. A high-severity finding below that thre
 **Validate before you finish.** After writing `{{OUTPUT_PATH}}`, run:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs {{OUTPUT_PATH}}
+node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code {{OUTPUT_PATH}}
 ```
 
 Exit 0 means the artifact is well-formed and the recount is printed. On a non-zero exit, read the errors on stderr, fix the file, and re-run until it exits 0. Do not finish on a failing exit — your output is the deliverable, and checking it is your job, not the orchestrator's.
 
-`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array. The validator rejects a mismatch rather than warning about it, because the auto-pipeline gates read those fields off disk and would act on a wrong number.
+Set `"origin": "document"` on every issue you emit — your findings are against the code under review, which is what these counts are for. `origin` is the only key permitted beyond the six required; `additionalProperties: false` rejects everything else, including the removed `phase`. You never emit `"self-review"`: that value belongs to the self-review pass alone, which appends its findings against the fixer's own edits later in this same iteration. It is not a scope restriction — every defect inside the review scope is yours to report, including one in code the diff did not introduce.
+
+`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the orchestrator lifts these counts from your output to drive the pipeline gates and would act on a wrong number.
 
 If `node` is not installed, skip this step and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
 
 ## Tool Usage Rules
+
+**A dispatched agent uses Read, Grep, Glob and Write for file work rather than their Bash equivalents, and never runs a git command that pushes, switches branches, or discards work.** The core below is defined once, in `references/shared-rules/agent-tool-discipline.md`, and shared with `review-doc`. It stays stated here in full, not cited: you receive this prompt and nothing else, and a prompt that outsources its own limits to a file you never open has no limits.
 - Use Grep (not grep/rg via Bash) for searching file contents
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - **If Grep or Glob is unavailable in your session**, fall back to read-only `git grep` and `git ls-files` via Bash, and say so in your report. The Verification Gap section requires searching by symbol and by import reference before claiming no test exists; that evidence is not optional. A search you could not run is a finding you cannot ground — drop the finding rather than assert it unsearched.

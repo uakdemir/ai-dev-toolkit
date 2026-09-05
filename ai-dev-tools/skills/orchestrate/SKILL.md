@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-argument-hint: "[--auto <spec...>] [--handoff] [--use-roadmap]"
+argument-hint: "[--auto <spec>] [--handoff] [--use-roadmap]"
 description: "Use when the user wants to start a development cycle, continue where they left off, check what's next, or run an automated brainstorm-review-implement-review-commit pipeline — even if they don't use the exact skill name."
 ---
 
@@ -11,19 +11,20 @@ When `--help` is present: read `references/common/help.md`, print its content ve
 # Argument Parsing
 
 ```
-/orchestrate [--auto <spec...>] [--handoff] [--use-roadmap] [--help]
+/orchestrate [--auto <spec>] [--handoff] [--use-roadmap] [--help]
 ```
 
 Parse in order:
 1. `--help` → load and print `references/common/help.md`, exit.
-2. `--auto <spec...>` → collect all positional args as spec paths, set auto mode.
+2. `--auto <spec>` → take the single positional arg as the spec path, set auto mode.
 3. `--handoff` → set handoff flag.
 4. `--use-roadmap` → set roadmap flag.
 
 **Hard errors at argparse time:**
 - `--handoff` + `--auto` → `Error: --handoff and --auto are incompatible. --auto is a targeted post-brainstorm pipeline run; --handoff is for resuming standard-mode sessions. Use one or the other.`
 - `--use-roadmap` + `--auto` → `Error: --use-roadmap is not supported in --auto mode. Refactor-unit execution requires the interactive standard-mode flow.`
-- `--auto` with no positional args → `Error: --auto requires at least one spec path. Usage: /orchestrate --auto <spec1> [<spec2> ...]`
+- `--auto` with no positional args → `Error: --auto requires a spec path. Usage: /orchestrate --auto <spec>`
+- `--auto` with more than one positional arg → `Error: --auto takes exactly one spec. Run it once per spec.` and exit. Auto mode used to queue several and process them serially; that is gone. It was never parallel — the only thing the queue bought was a skip-and-continue failure path, and its rewind machinery destroyed the evidence of the failure it was recovering from.
 
 ---
 
@@ -74,6 +75,8 @@ Every exit point MUST end with the breadcrumb as the literal last line(s). No pr
 
 **Commit breadcrumbs:** When a step produced changes (inner skill modified files), include `/commit` as the first breadcrumb line before the next-step command(s).
 
+`/commit` is a **prerequisite, not a plugin command.** This plugin ships no `commands/` directory and `plugin.json` declares none, so `/commit` resolves only where the user already has it. It leads every breadcrumb in steps 1-7 because the breadcrumb format is commands-only — one per line, no labels, no annotations — which leaves nowhere to explain a fallback inline. If it is unavailable, the equivalent is an ordinary `git add -A && git commit`. Stated here once rather than in eight step files.
+
 **Phase boundaries:** Steps advancing across phases prepend `/clear → ` to recommend clearing context. Phase boundaries: Step 3→4, Step 5→6, Step 6→7.
 
 **When NOT to emit:** Mid-conversation clarifying questions, tool-output displays, internal retries.
@@ -103,23 +106,23 @@ User modifications to inner command before pasting → dispatch verbatim. Receiv
 
 # Auto Mode
 
-**Invariants:** No user prompts, no hint file, no breadcrumbs. Progress via status lines only. Serial spec processing. Non-destructive failure handling.
+**Invariants:** No user prompts, no hint file, no breadcrumbs. Progress via status lines only. One spec per run. Non-destructive failure handling.
 
 ## Initialization
 
-1. **Spec validation:** verify all positional spec args exist, are readable, end in `.md`/`.markdown`. Any failure → hard error, exit.
+1. **Spec validation:** verify the positional spec arg exists, is readable, and ends in `.md`/`.markdown`. Any failure → hard error, exit.
 2. **Stale-state check:** if `tmp/auto-state.md` exists and `state != finalized`, warn and overwrite.
-3. **Initialize state:** write `tmp/auto-state.md` with spec list.
+3. **Initialize state:** set `spec_baseline = HEAD`, then write `tmp/auto-state.md` with all four fields the schema requires — `spec`, `state: started`, `datetime`, `spec_baseline`. Schema: `references/auto/auto-state-schema.md`.
+4. **Initialize the review-failure counter:** set `R = 0`. It lives in orchestrate's own run state and is never written to `tmp/auto-state.md`. Stage i and stage iii increment it; stage iv prints it (see Completion below).
 
-## Per-Spec Pipeline
+## Pipeline
 
 Load `references/auto/pipeline-overview.md` for the 4-stage pipeline overview.
 
-For each spec:
+Auto mode takes **one** spec:
 1. Generate `spec_hash` (8-char base36) for run-id prefix.
-2. Set `spec_baseline = HEAD`.
-3. Load and execute `references/auto/stages/stage-i-spec-review.md`. Each stage file directs you to the next stage upon completion — do NOT skip ahead or look up stage file paths yourself.
-4. On any failure → load `references/auto/failure-handling/overview.md` + specific handler.
+2. Load and execute `references/auto/stages/stage-i-spec-review.md`. Each stage file directs you to the next stage upon completion — do NOT skip ahead or look up stage file paths yourself.
+3. On any failure → load `references/auto/failure-handling/overview.md` + specific handler.
 
 ## Error Logs
 
@@ -131,6 +134,10 @@ Schema in `references/auto/auto-state-schema.md`. Auto mode never reads or write
 
 ## Completion
 
-After all specs processed (or pipeline halted):
-- Print summary: `[auto] complete: N succeeded, M skipped, K halted`
-- Exit.
+Stage iv prints the completion line and exits — `references/auto/stages/stage-iv-verification-gate.md` owns that output. Auto mode adds one line of its own, immediately before it, and only when `R > 0`:
+
+`[auto] R review failures recorded in tmp/_reviews_errors/error-logs.md`
+
+No succeeded/skipped/halted tally: one spec runs, and a run that fails never gets here — Q2 and Q3 both stop the run and exit non-zero (`references/auto/failure-handling/overview.md`).
+
+`R` counts review runs that reported **Error** under `references/shared-rules/run-failure-disclosure.md` — a review that could not complete, as distinct from one that completed and found problems. Such a run leaves its artifact unwritten or unvalidatable, which is a crash under `references/auto/failure-handling/retry-semantics.md`: retry once, and if the retry also fails, `references/auto/failure-handling/crash.md` stops the run. Auto mode never prompts on those; it records each one in `tmp/_reviews_errors/error-logs.md` and increments `R`, which orchestrate holds in its own run state and never persists — so reaching this section with `R > 0` means a review failed and its retry succeeded. The count is here because the useful signal is the *rate*: an occasional failure is noise, a frequent one means a reviewer prompt needs work, and that comparison is only possible if every failure lands in one place and is counted.

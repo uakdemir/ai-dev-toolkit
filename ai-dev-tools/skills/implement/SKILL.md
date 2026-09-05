@@ -118,7 +118,7 @@ If `--auto` is active:
 
 ### Refactor-Unit Branch Handling (pre-check)
 
-Before building the task graph, perform this refactor-unit check (moved verbatim from the previous `orchestrate/SKILL.md` Step 5):
+Before building the task graph, perform this refactor-unit check (moved verbatim from the previous `../orchestrate/SKILL.md` Step 5):
 
 1. Check if a refactor roadmap exists at `docs/monorepo-strategy/roadmap.md` OR `docs/layer-architecture/roadmap.md` with unchecked items.
 2. If so, perform a **case-insensitive substring match** of the feature name against the bold roadmap item labels (text between `**` markers in the checkbox line, not the full rationale). The feature name is derived from:
@@ -145,7 +145,7 @@ Load `references/implementation-step.md` (which transitively loads `references/t
    - **No task carries a `Rollback:` field** → the plan predates the field. Print `Plan predates the Rollback field; no per-task rollback stated` and continue without prompting — except for any task the plan itself describes as a schema migration or an infrastructure apply, which is prompted regardless. Judge that from the task's own text and `Files:` paths; do not infer it from anything outside the plan.
    - **Some tasks carry it and some do not** → list every task whose `Rollback:` field is missing or empty, and ask the user to supply one or confirm forward-fix-only. Do not dispatch until each is resolved.
 2. Compute the execution model recommendation (per `references/implementation-step.md` Execution Model Recommendation section).
-3. **If `--model` flag was provided** → short-circuit the picker, dispatch directly with that model. The preamble block in `implementation-step.md` Override Dispatch section is still prepended.
+3. **If `--model` flag was provided** → short-circuit the picker, dispatch directly with that model. The preamble block in `references/implementation-step.md` Override Dispatch section is still prepended.
 3.5. **If `--auto` flag is active (and `--model` is NOT provided):**
    Use the narrowed 2-option algorithm:
    ```
@@ -153,7 +153,7 @@ Load `references/implementation-step.md` (which transitively loads `references/t
    ELSE                           → dispatch option [1]: single-agent
    ```
    Options [2] subagent-per-task and [3] clear-context are **excluded**.
-   Skip the picker presentation — dispatch directly. The preamble block for the selected option in `implementation-step.md` Override Dispatch section is still prepended, exactly as in step 3.
+   Skip the picker presentation — dispatch directly. The preamble block for the selected option in `references/implementation-step.md` Override Dispatch section is still prepended, exactly as in step 3.
 4. **Else** → present the 4-option dispatch picker exactly as defined in `references/implementation-step.md`:
    ```
    [1] Single-agent <(recommended) if applicable>
@@ -202,7 +202,7 @@ When `/implement` is invoked via orchestrate (breadcrumb `/orchestrate (/impleme
 - **When NOT to write:**
   - Normal dispatch completion (Options [1], [2], [4]) — orchestrate's normal resume path applies.
   - `--model single|subagent|parallel` dispatch returning control after implementation — normal resume.
-  - Refactor-unit path returning after `refactor-execution.md` completes — normal resume.
+  - Refactor-unit path returning after `references/refactor-execution.md` completes — normal resume.
   - Error exits from path-resolution or plan-not-found — orchestrate's existing error-handling path applies; marker is unnecessary.
 - **Unknown-field tolerance:** The `early_exit:` field is the sole load-bearing discriminator. Orchestrate MUST NOT ignore the marker because of unknown or missing informational fields.
 

@@ -1,6 +1,6 @@
 # Technology Bucket Detection
 
-Runtime reference for `learn-discover.md`. Contains all rules for detecting technology buckets from root-level config files.
+Runtime reference for `prompts/learn-discover.md`. Contains all rules for detecting technology buckets from root-level config files.
 
 ---
 

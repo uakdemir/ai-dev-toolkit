@@ -6,23 +6,22 @@ Load this file when any failure occurs. Then load the specific failure-type refe
 
 ## Failure Matrix
 
-| Failure Type | Stage | Response | Reference |
-|---|---|---|---|
-| Q2: Endless loop | Agent i (phase 2 final iter) | Commit wip, skip spec, continue | `endless-loop.md` |
-| Q2: Endless loop | Agent iii (iter 4) | Commit wip, skip spec, continue | `endless-loop.md` |
-| Q3: Crash (retry failed) | Agent i | Skip spec, no commit, continue | `crash-text-stage.md` |
-| Q3: Crash (retry failed) | Agent ii | Commit wip, **HALT pipeline** | `crash-implement.md` |
-| Q3: Crash (retry failed) | Agent iii iter 1 | Soft reset to implement_head, stash, skip, continue | `crash-code-review.md` |
-| Q3: Crash (retry failed) | Agent iii iter N>1 | Soft reset to last_iteration_head, stash, skip, continue | `crash-code-review.md` |
+| Failure Type | Response | Reference |
+|---|---|---|
+| Q2: Unresolved criticals | Commit wip, report the criticals, stop | `unresolved-criticals.md` |
+| Q3: Crash (retry failed) | Commit wip, do not rewind, stop | `crash.md` |
+
+**Two failure types, two responses, no stage column.** Both end the run. Auto mode processes one
+spec, so there is no "continue to the next one" — and it was that continuation, not the failures
+themselves, that used to make the response depend on which stage crashed.
 
 ---
 
 ## Key Invariants
 
-- `git reset --hard` is **NEVER** used anywhere in auto mode
-- All rewinds use `git reset --soft` + `git stash push --include-untracked`
-- Crashed work is always preserved (stash list or reflog)
-- Implement crash halts the whole pipeline; other stage crashes skip the current spec
+- **No `git reset` of any kind, hard or soft.** A failed run leaves the tree exactly as it is.
+- Crashed work is always preserved — in a wip commit on the branch, where it is visible.
+- Every failure ends the run and exits non-zero. There is no partial success to carry forward.
 
 ---
 
@@ -34,4 +33,4 @@ Load this file when any failure occurs. Then load the specific failure-type refe
 | Agent ii | **Strict validation → crash on failure** | Bad commits leave disk inconsistent |
 | Agent iii | **Strict validation → crash on failure** | A review that could not be read is a review that did not happen |
 
-Agent iii previously used optimistic trust, on the reasoning that the next iteration re-reads git state from scratch. That reasoning does not survive the final iteration, where there is no next iteration to recover — and it made an unreadable review indistinguishable from a clean one. Its output is now validated by `scripts/validate-review-json.cjs` and a failure routes into the normal crash path (retry-once, then soft-reset and skip the spec), which is non-destructive.
+Agent iii previously used optimistic trust, on the reasoning that the next iteration re-reads git state from scratch. That reasoning does not survive the final iteration, where there is no next iteration to recover — and it made an unreadable review indistinguishable from a clean one. Its output is now validated by `scripts/validate-review-json.cjs` and a failure routes into the normal crash path (retry-once, then wip-commit and stop, per `crash.md`), which destroys nothing.

@@ -37,10 +37,10 @@ Phase boundary advancing to Step 7 (Complete).
 ```
 
 **Case C (status Incomplete — review did not see every changed file):**
-Do NOT advance to Step 7. A run with 0 criticals and 0 highs can still be Incomplete, and routing on counts alone would send a coverage hole through as a success. Name the files from `coverage.not_inspected` and re-review with the scope narrowed to them:
+Do NOT advance to Step 7. A run with 0 criticals and 0 highs can still be Incomplete, and routing on counts alone would send a coverage hole through as a success. Name the files from `coverage.not_inspected` and re-review with those files front-loaded via `--must-inspect`. The flag does not narrow scope — the paths must already be in the reviewed diff, and the reviewer opens them before anything else rather than instead of anything else (`skills/review-code/SKILL.md` > Argument Parsing):
 ```
 /commit
-/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 1)
+/clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 1 --must-inspect <files from coverage.not_inspected>)
 ```
 Case C is checked **before** Case B, since both match on the same counts. If the user explicitly accepts the coverage hole, advance to Step 7 with the uninspected files carried into the Step 7 status line.
 

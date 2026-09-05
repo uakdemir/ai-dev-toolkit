@@ -52,15 +52,28 @@ After each phase dispatch (phase 1 and phase 2) returns, append one JSONL entry 
 
 ---
 
-## Endless-Loop Check
+## Failed Review Runs
+
+After each phase dispatch returns, determine whether the run reported **Error** under
+`references/shared-rules/run-failure-disclosure.md` — a review that could not complete, as distinct
+from one that completed and found problems. If it did:
+
+1. Record it in `tmp/_reviews_errors/error-logs.md` (`SKILL.md` > Auto Mode > Completion).
+2. Increment `R`, the review-failure counter initialised at `SKILL.md` > Auto Mode > Initialization
+   and printed by `stage-iv-verification-gate.md` step 4.
+3. Treat the dispatch as a crash and apply `../failure-handling/retry-semantics.md`.
+
+---
+
+## Unresolved-Criticals Check
 
 Applies ONLY to phase 2's final iteration (not phase 1):
-- Phase 2 final iter pre-fix criticals ≤ 1 → success, continue pipeline
-- Phase 2 final iter pre-fix criticals > 1 → Q2 failure (see `failure-handling/endless-loop.md`)
+- Phase 2 final iter pre-fix criticals == 0 → success, continue pipeline
+- Phase 2 final iter pre-fix criticals > 0 → Q2 failure (see `../failure-handling/unresolved-criticals.md`)
 
-Phase 1's exit state is irrelevant for the endless-loop check.
+Phase 1's exit state is irrelevant for this check.
 
-**Bounded worst case:** 2 + 2 = 4 review dispatches per spec.
+**Bounded worst case:** 2 dispatches (one per phase), 4 review iterations, per spec.
 
 ---
 

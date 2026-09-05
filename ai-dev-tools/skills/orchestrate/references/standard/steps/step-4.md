@@ -19,7 +19,7 @@ After plan file is saved:
 ```
 /commit
 /orchestrate (/implement <plan_path>)
-/orchestrate (/review-doc <plan_path>)
+/orchestrate (/review-doc <plan_path> --max-iterations 2)
 ```
 
 - Option 1: commit the plan

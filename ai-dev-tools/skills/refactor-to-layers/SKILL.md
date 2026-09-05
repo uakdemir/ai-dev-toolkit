@@ -64,7 +64,7 @@ Present these 6 options:
 
 Record the sub-framework selection — it is used in Phase 1 (file classification) and Phase 3 (test template selection, composition root detection).
 
-**Validation:** After selection (options 1-5), scan the project root for the stack's validation file as defined in `references/tech-stacks.md`. If the expected file is missing, warn: "Expected {file} for {stack} but did not find it. Continue anyway?"
+**Validation:** Validate the selected stack against its validation file before proceeding. Options here are 1-5; the shared procedure and its exact warning text are defined once, in `references/shared-rules/stack-validation.md`.
 
 **If "Other" is selected,** ask these 5 follow-up questions:
 

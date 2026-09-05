@@ -63,7 +63,7 @@ JSON Lines (JSONL). One JSON object per line.
 |---|---|---|
 | i — spec review | 2 (phase 1 + phase 2) | 2 per successful attempt; +1 per retried phase |
 | ii — implement | 1 | 2 if Q3 retry-once fires on a validator-rejected clean return; 1 if Q3 retry-once fires after a crash (only the successful retry logs) |
-| iii — code review | 1 to 4 (one per iter; early-exit if 0 criticals) | same entry count as no-retry under normal completion; a crash-retry of any iter adds +1 entry for that iter's successful retry |
+| iii — code review | 1 to 4 (one dispatch per iter; early exit per `skills/review-code/SKILL.md` > Iteration Flow, which owns the three clauses; stage iii restates them and acts on the result, at `stages/stage-iii-code-review.md` > Early Exit) | same entry count as no-retry under normal completion; a crash-retry of any iter adds +1 entry for that iter's successful retry |
 | iv — verification gate | 0 (no-op in current release) | 0 |
 
 **Total (no retries): 4–7 entries per spec run.** With one stage-ii validator-rejected retry: 5–8. With one stage-ii crash retry: 4–7 (only the successful retry logs).
@@ -109,6 +109,9 @@ Runs around every sub-agent dispatch:
 5. Append exactly one JSONL line using `printf` (single `write(2)` on glibc for lines < PIPE_BUF; see Concurrency safety):
    ```bash
    spec_basename=$(basename "$spec_path")
+   # JSON-escape before substitution (see the note under the worked example): backslashes first, then quotes
+   spec_basename=${spec_basename//\\/\\\\}
+   spec_basename=${spec_basename//\"/\\\"}
    printf '{"schema_version":2,"ts":"%s","spec":"%s","action":"%s","round":%d,"model":"%s","total_time_s":%s}\n' \
      "$ts" "$spec_basename" "$action" "$round" "$model" "$total_time_s" \
      >> "$LOG" 2>/dev/null || true
@@ -126,7 +129,7 @@ printf '{"schema_version":2,"ts":"%s","spec":"%s","action":"%s","round":%d,"mode
   >> "$LOG" 2>/dev/null || true
 ```
 
-The `spec_basename` is JSON-safe because spec filenames in this project are constrained to `[A-Za-z0-9._-]` by upstream validation (pre-pipeline validation — `pipeline-overview.md` Pre-pipeline Validation section, step 1 sub-points (a) and (c) — requires an existing regular file ending in `.md` or `.markdown`). **Defensive invariant:** if that constraint is ever relaxed (e.g., spaces, quotes, or backslashes allowed in basenames), the writer MUST JSON-escape `spec_basename` before substitution into the `printf` format string; otherwise a single unescaped `"` or `\` in the basename will emit a syntactically invalid JSONL line. A regression test SHOULD fail loudly if any incoming basename contains a byte outside `[A-Za-z0-9._-]`.
+The `spec_basename` is not JSON-safe by construction. Nothing upstream constrains it to a safe character set: pre-pipeline validation (`pipeline-overview.md` Pre-pipeline Validation, step 1) checks only that the path is an existing, readable regular file ending in `.md` or `.markdown` — spaces, quotes and backslashes all pass. **The writer MUST therefore JSON-escape `spec_basename` before substituting it into the `printf` format string;** a single unescaped `"` or `\` in the basename emits a syntactically invalid JSONL line.
 
 ---
 

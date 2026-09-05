@@ -53,7 +53,7 @@ Present these 6 options:
 5. Python + React
 6. Other
 
-**Validation:** After selection (options 1-5), scan the project root for the stack's validation file as defined in `references/tech-stacks.md`. Each stack section lists a **Validation file** entry. If the expected file is missing, warn: "Expected {file} for {stack} but did not find it. Continue anyway?"
+**Validation:** Validate the selected stack against its validation file before proceeding. Options here are 1-5; the shared procedure and its exact warning text are defined once, in `references/shared-rules/stack-validation.md`. Note the known variance recorded there: this skill's `references/tech-stacks.md` marks stacks with a `Detection Files` table rather than a per-stack validation file.
 
 **If "Other" is selected,** ask these 5 follow-up questions:
 
