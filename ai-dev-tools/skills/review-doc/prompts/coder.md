@@ -25,7 +25,7 @@ Fix all issues from the review. Be surgical — change what the findings require
    - After applying a fix, check whether it invalidated anything elsewhere in the document — a count ("two named exceptions"), a rule, a cross-reference, a table cell, a summary line. Repair each one and record it in `collateral` on this disposition.
    - If the fix is out of scope for this document: mark as `deferred` with reason.
    - If the reviewer finding is incorrect: mark as `pushed-back` with reason.
-   - For each disposition entry, **copy the issue's `id` field VERBATIM** from the input — do NOT generate IDs sequentially or by counting position. IDs are carried forward across iterations and may have gaps (e.g., `ISSUE-003`, `ISSUE-007`, `ISSUE-012`); the example below shows `ISSUE-001/002/003` only because that is the first-iteration shape, not a template to regenerate.
+   - For each disposition entry, **copy the issue's `id` field VERBATIM** from the input — do NOT generate IDs sequentially or by counting position. Your issues arrive grouped by severity, so an issue's position in your input is not its id: the reviewer numbers from `ISSUE-001` in its own order, the fact-checker appends from `max + 1`, and the grouping reorders both. Ids are minted within this round only, so copy each one exactly as given.
 4. Write `{{FIX_REPORT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`) with dispositions for every issue:
 
 ```json
@@ -56,7 +56,7 @@ Fix all issues from the review. Be surgical — change what the findings require
 }
 ```
 
-Reference each issue by its `id` (the `ISSUE-NNN` value from the reviewer's JSON), not by array position. IDs are stable across iterations; positional order is not.
+Reference each issue by its `id` (the `ISSUE-NNN` value from the reviewer's JSON), not by array position. IDs are stable within the round; positional order is not.
 
 `collateral` is optional — omit it, or use `[]`, when the fix broke nothing. It is only valid on a `fixed` disposition: a `deferred` or `pushed-back` issue was never edited, so it cannot have caused collateral damage.
 

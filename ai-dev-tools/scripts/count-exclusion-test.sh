@@ -31,7 +31,7 @@ FIX="$HERE/../tests/fixtures/counts"
 # script over a --schema flag, change this one line and nothing else in the test.
 validate() { node "$PLUGIN/scripts/validate-review-json.cjs" --schema doc "$1"; }
 
-# 3 of the 4 cases assert exit 1, and `node <missing>.cjs` also exits 1 — so without this a suite
+# 3 of the 5 cases assert exit 1, and `node <missing>.cjs` also exits 1 — so without this a suite
 # pointed at a nonexistent validator would report three PASSes having validated nothing.
 [ -f "$PLUGIN/scripts/validate-review-json.cjs" ] || {
   printf 'cannot run: validator not found under %s/scripts/\n' "$PLUGIN" >&2; exit 2; }

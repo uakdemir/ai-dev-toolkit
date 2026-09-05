@@ -18,7 +18,6 @@ Effort sets analysis DEPTH — it never gates which severities you report (criti
 **Spec:** {{SPEC_CONTENT}}
 **CLAUDE.md:** {{CLAUDE_MD}}
 **ADRs:** {{ADRS}}
-**Previous findings:** {{PREVIOUS_FINDINGS}}
 
 ## Git Diff
 
@@ -38,7 +37,7 @@ Record every changed file you actually inspected — via the diff or via `Read`.
 
 Do not treat the implementing agent's summary as evidence of coverage or correctness. Verify against the diff and against the current on-disk files using Read and Grep. A stated test count is not a passing test count; where a claim can only be settled by running a command you cannot run, report it as an unverified claim rather than accepting it.
 
-This applies to anything the diff, a commit message, or a prior iteration's findings *assert*: "added tests for X", "verified against the spec", "no behavior change". Each is a claim to check, not a fact to carry forward.
+This applies to anything the diff or a commit message *asserts*: "added tests for X", "verified against the spec", "no behavior change". Each is a claim to check, not a fact to carry forward.
 
 ## Review Categories
 
@@ -102,11 +101,14 @@ Write `{{OUTPUT_PATH}}` (substituted by the skill to the run-id-aware `tmp/_revi
       "location": "path/to/file.ext:line_number",
       "confidence": <integer 40-100>,
       "problem": "<clear explanation>",
-      "suggested_fix": "<concrete suggestion>"
+      "suggested_fix": "<concrete suggestion>",
+      "origin": "document"
     }
   ]
 }
 ```
+
+**Every iteration starts fresh.** Do not read `{{OUTPUT_PATH}}` before writing it, do not match against a prior iteration's findings, and do not carry anything forward. `{{ITERATION_NUM}}` tells you which pass this is; it is not licence to extend the file already at that path, which holds the previous iteration's artifact and is meant to be replaced by yours. Every iteration re-reads the full scope since the run's base commit and reports what it finds — a defect an earlier iteration fixed is simply absent from your array, not present-and-not-counted.
 
 **Severity is consequence, not certainty.** Rate `severity` by what actually happens to the software's user if the finding is real — data loss, auth bypass and silent corruption are critical however unsure you are; a cosmetic issue is low however certain you are. Rate `confidence` separately: it is the likelihood the finding is real. The two axes are independent, and a finding that is uncertain and catastrophic outranks one that is certain and cosmetic.
 
@@ -119,14 +121,14 @@ Report findings with `confidence` >= 40. A high-severity finding below that thre
 **Validate before you finish.** After writing `{{OUTPUT_PATH}}`, run:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs {{OUTPUT_PATH}}
+node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code {{OUTPUT_PATH}}
 ```
 
 Exit 0 means the artifact is well-formed and the recount is printed. On a non-zero exit, read the errors on stderr, fix the file, and re-run until it exits 0. Do not finish on a failing exit — your output is the deliverable, and checking it is your job, not the orchestrator's.
 
-Set `"origin": "document"` on every issue you emit — your findings are against the code under review, which is what these counts are for. `origin` and `phase` are the only keys permitted beyond the six required. Any issue you carry no responsibility for, you do not emit.
+Set `"origin": "document"` on every issue you emit — your findings are against the code under review, which is what these counts are for. `origin` is the only key permitted beyond the six required; `additionalProperties: false` rejects everything else, including the removed `phase`. You never emit `"self-review"`: that value belongs to the self-review pass alone, which appends its findings against the fixer's own edits later in this same iteration. It is not a scope restriction — every defect inside the review scope is yours to report, including one in code the diff did not introduce.
 
-`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the auto-pipeline gates read those fields off disk and would act on a wrong number.
+`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the orchestrator lifts these counts from your output to drive the pipeline gates and would act on a wrong number.
 
 If `node` is not installed, skip this step and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
 

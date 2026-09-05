@@ -88,7 +88,7 @@ Fact-check every verifiable claim in each document against the actual source cod
    {"claim": "description of claim", "verdict": "ACCURATE"}
    ```
 5. Compute `fact_check_accuracy`: if `total_claims == 0`, set it to `100` (no verifiable claims → nothing inaccurate); otherwise `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
-6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues), **counting only issues whose `origin` is not `"self-review"`** — an issue with no `origin` counts as `"document"`. Findings a previous fix phase's self-review pass appended belong to the round that wrote those lines and are excluded from this round's gate counts: `references/shared-rules/counts-exclude-self-review.md`.
+6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues), **counting only issues whose `origin` is not `"self-review"`** — an issue with no `origin` counts as `"document"`. Only the self-review pass sets `"self-review"`, and it runs after you, so at your point in the round every issue is document-origin; the filter is stated anyway because the recount rule is the same wherever it is applied — `references/shared-rules/counts-exclude-self-review.md`.
 7. Rewrite `{{OUTPUT_PATH}}` with the updated content using the Write tool.
 
 ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.

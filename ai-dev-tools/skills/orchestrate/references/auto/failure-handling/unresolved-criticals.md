@@ -20,8 +20,24 @@ number can be trusted and the tolerance is unnecessary.
 
 ## Measurement
 
-`critical_count` at the final iteration's REVIEW output, before that iteration's fix phase. The fix
-phase runs regardless.
+`critical_count` as it stands immediately before the final iteration's fix phase — after the
+reviewer and, on a `--fact-check true` run, after the fact-checker's recount. The fix phase runs
+regardless.
+
+Fact-check-added criticals reach this gate, and are meant to: the fact-checker runs against the
+document as authored, before the fixer, so its findings are document-origin and count like any
+other. Reading "the REVIEW output" as the reviewer's own array would drop every one of them, which
+is the class of critical stage i exists to catch.
+
+At stage iii there is a third pre-fix writer, and it counts on the same terms. `review-code`'s stop
+check runs when `critical_count` is zero and, on a verification regression, injects synthetic
+critical issues, updates `critical_count` and rewrites the artifact — all before falling through to
+the fix phase. Those synthetics are inside the measured value: at the moment of measurement the
+regression is real, unrepaired, and about the code under review, exactly like a fact-check finding.
+The consequence follows from the definition and is worth stating plainly — a final iteration whose
+only criticals are regressions that its fix phase then repairs still reads "any critical remaining"
+and stops the run, because the number this gate acts on is taken before that repair and nothing
+re-reads it after.
 
 That field counts findings in the artefact under review. It excludes the round's own self-review
 churn (`origin: "self-review"`, see `../../../../../references/shared-rules/counts-exclude-self-review.md`),

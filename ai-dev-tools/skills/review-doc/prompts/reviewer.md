@@ -161,7 +161,7 @@ Write `{{OUTPUT_PATH}}` using the Write tool with this exact structure:
 }
 ```
 
-Categories you may assign: completeness, consistency, scope, structure, vague-action, vague-step, dependency-gap, ordering-issue, agent-pitfall, missing-criteria, cross-reference. The schema also permits `fact-check` and `verify`, which only the fact-checker and the self-review pass produce — carry those forward untouched per step 5c, never re-label them.
+Categories you may assign: completeness, consistency, scope, structure, vague-action, vague-step, dependency-gap, ordering-issue, agent-pitfall, missing-criteria, cross-reference. The schema also permits `fact-check` and `verify`, which only the fact-checker and the self-review pass produce within this same round. You never emit either category, and you never read a prior round's file to find them.
 
 **Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix) plus `origin` (always `"document"` from you). That is the complete permitted set — no `title`, `description`, `metadata`, `summary`, or `phase`.
 
@@ -173,7 +173,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc {{OUTPU
 
 Exit 0 means the artifact is well-formed and the recount is printed. On a non-zero exit, read the errors on stderr, fix the file, and re-run until it exits 0. Do not finish on a failing exit — your output is the deliverable, and checking it is your job, not the orchestrator's.
 
-`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the auto-pipeline gates read those fields off disk and would act on a wrong number.
+`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the orchestrator lifts these counts from your output to drive the pipeline gates and would act on a wrong number.
 
 If `node` is not installed, skip this step and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
 

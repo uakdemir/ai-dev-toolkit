@@ -42,9 +42,9 @@ const SCHEMAS = {
 };
 
 // `origin` is optional on every issue and defaults to "document". Optional rather than required
-// because the reviewer's carry-forward branch copies prior-iteration entries forward verbatim: on
-// the first run after this field lands, those entries carry no `origin`, and a hard requirement
-// would reject the artifact for a field the writer was told to preserve untouched.
+// because an absent value is not ambiguous: the recount below reads it as "document", which is what
+// every pass but the self-review pass produces. Requiring the field would reject an artifact for
+// omitting the default it already means.
 const ISSUE_OPTIONAL = ['origin'];
 
 const COVERAGE_REQUIRED = ['files_in_diff', 'files_inspected', 'not_inspected'];
@@ -181,9 +181,9 @@ if (!isObj(doc)) {
     if (!Array.isArray(doc.issues)) {
       errors.push('issues: expected an array');
     } else {
-      // The reviewer's carry-forward branch matches prior issues by id, and response_analysis.md
-      // and the fix-report dispositions cite ids as stable handles. A duplicate silently misroutes
-      // all of that, so it is rejected here rather than discovered downstream.
+      // Ids are handles within a round — the fix report's dispositions and tmp/response_analysis.md
+      // both cite them — so a duplicate misroutes a disposition onto the wrong finding. Rejected
+      // here rather than discovered downstream.
       const seenIds = new Set();
       doc.issues.forEach((it, i) => {
         if (isObj(it) && typeof it.id === 'string') {
@@ -236,10 +236,11 @@ if (!isObj(doc)) {
 }
 
 // A declared count that contradicts the issues array is invalid output, not a
-// warning. The auto-pipeline gates read these fields off disk with jq
-// (see references/common/error-logs-format.md), so a file that passes
-// validation while under-declaring criticals trips an early exit on a review
-// that found them. Fail closed; the writer fixes its own artifact.
+// warning. The orchestrator lifts these counts from the review output in flight to
+// drive the auto-pipeline gates — references/common/error-logs-format.md specifies
+// every gate against that in-flight value and says not to wire one to this file on
+// disk — so a file that passes validation while under-declaring criticals trips an
+// early exit on a review that found them. Fail closed; the writer fixes its own artifact.
 //
 // The recount excludes issues carrying `origin: "self-review"` — findings the round's own fix pass
 // introduced. They are reported, never counted.

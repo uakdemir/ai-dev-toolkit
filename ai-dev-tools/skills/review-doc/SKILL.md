@@ -101,17 +101,17 @@ Examples:
    Worded identically to `review-code`'s pre-flight check 2, and for the same reason: **this skill commits.** The Respond to Remaining Issues phase commits what it applies, and it never asks the user first. A skill that commits unattended needs the guard whether or not it dispatches a fixer that commits — the divergence where `review-code` had this check and `review-doc` did not was an oversight, not a policy.
 
 2. Tokens before the first flag (`--*`) are input paths.
-2. If no input paths are provided: print `"Error: no input paths provided."` and exit.
-3. If a path is a directory: expand to all `*.md` files inside it (recursive, sorted alphabetically, max 20 files). If more than 20 `.md` files are found: print `"Error: directory contains more than 20 .md files. Use explicit paths to select a subset."` and exit. If zero `.md` files: print `"Error: directory contains no .md files."` and exit.
-4. When a mix of directories and explicit files is provided, expand directories first, then merge with explicit paths. Deduplicate any paths that appear in both. The 20-file cap applies to the final merged list.
-5. All explicit file paths are validated for existence. If any are missing: print `"Error: file not found: <path>"` for each and exit.
-6. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
-7. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
-8. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output).
+3. If no input paths are provided: print `"Error: no input paths provided."` and exit.
+4. If a path is a directory: expand to all `*.md` files inside it (recursive, sorted alphabetically, max 20 files). If more than 20 `.md` files are found: print `"Error: directory contains more than 20 .md files. Use explicit paths to select a subset."` and exit. If zero `.md` files: print `"Error: directory contains no .md files."` and exit.
+5. When a mix of directories and explicit files is provided, expand directories first, then merge with explicit paths. Deduplicate any paths that appear in both. The 20-file cap applies to the final merged list.
+6. All explicit file paths are validated for existence. If any are missing: print `"Error: file not found: <path>"` for each and exit.
+7. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
+8. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
+9. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output).
 
    **First, is it one document or a naming convention?** This gate runs before the cap, not inside it. A basename that names a file *per directory* — `SKILL.md`, `README.md`, `index.md`, `AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md` — is a convention, not a document duplicated across locations, however few copies exist. Treat any basename whose copies are not substantially the same document as a convention. Print `Warning: <basename> exists at N locations; treated as a naming convention, not expanded. Copies not reviewed: <paths>` and continue with the explicit paths only.
 
-   Gating on the cap alone is not enough, and the failure is not hypothetical: this plugin has `SKILL.md` at 15 locations, so a two-file review fits the 20-file cap and the rule then mandates pulling 13 unrelated skill definitions into scope — whose differences the reviewer reports as `cross-reference` findings, which the fixer must always defer and the reviewer's cap exemption carries forward forever.
+   Gating on the cap alone is not enough, and the failure is not hypothetical: this plugin has `SKILL.md` at 15 locations, so a two-file review fits the 20-file cap and the rule then mandates pulling 13 unrelated skill definitions into scope — whose differences the reviewer reports as `cross-reference` findings, which the fixer must always defer, so every round re-discovers and re-defers the same divergences and the cap is spent on them.
 
    When the copies **are** one document in more than one location:
    - Print every matched path. Never resolve the ambiguity silently — the user must see that more than one copy exists whatever happens next.
@@ -120,7 +120,7 @@ Examples:
 
 ## Review Loop
 
-**`--max-iterations 0`:** Skip loop entirely. Output: `Review Doc Skipped / Reviewed: <docs> / No iterations run. / Brainstorm (needs your decisions): none — no iterations run`. The handoff line prints here too: `references/shared-rules/brainstorm-handoff.md` requires it unconditionally, and a skipped run is exactly the case where a missing line is indistinguishable from a skill that forgot.
+**`--max-iterations 0`:** **Handled during argument parsing, before Setup runs**, exactly as in `review-code` — neither Setup's directory creation nor its stale-file deletion happens, so no files are created and a no-op invocation cannot discard a completed prior run's artifacts. Skip loop entirely. Output: `Review Doc Skipped / Reviewed: <docs> / No iterations run. / Brainstorm (needs your decisions): none — no iterations run`. The handoff line prints here too: `references/shared-rules/brainstorm-handoff.md` requires it unconditionally, and a skipped run is exactly the case where a missing line is indistinguishable from a skill that forgot.
 
 **`--max-iterations >= 1`:** Run the simplified loop below. There is no separate single-pass mode — `--max-iterations 1` is just one iteration of the same loop.
 
@@ -133,7 +133,8 @@ for iter in 1..max_iterations:
     if fact_check:
         fact_check()                    # appends fact-check issues to json
     total_criticals = count(json)       # re-count after fact-check (includes fact-check-added criticals)
-    total_issues = count_issues(json, exclude_origin="self-review")
+    total_issues = count_issues(json)   # the round's own array only — self-review
+                                        # entries are appended after this point
     if total_issues > 0:
         fix()                           # EVERY severity, every iteration — not only criticals
         self_review()                   # always: checks the fixer's own edits, fixes what it
@@ -153,7 +154,7 @@ for iter in 1..max_iterations:
 
    Option Y is unchanged where it is defined: `pre_fix_criticals` is still measured at review output, before fact-check. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the unresolved-criticals gate as "any critical remaining" and the run stops — for criticals the loop itself declined to fix.
 
-   The unresolved-criticals gate is a separate reader and takes a different number: `critical_count` off the artifact, which on a `--fact-check true` run carries the fact-checker's recount over the full issues array (`agents/codebase-fact-checker.md` step 6). Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
+   The unresolved-criticals gate is a separate reader, not a different number. It is evaluated once, at the final round rather than at every round, and it takes `critical_count` off the artifact rather than the loop's own variable — but numerically that is the same pre-fix count the early exit tests: on a `--fact-check true` run the artifact field carries the fact-checker's recount over the full issues array (`agents/codebase-fact-checker.md` step 6), which is `total_criticals`; otherwise it is the reviewer's own count, which is `pre_fix_criticals`. Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
 5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
 6. `validate(json)` runs right after `review()`:
@@ -164,7 +165,7 @@ for iter in 1..max_iterations:
 
    Exit 0 → use the printed recount as the authoritative severity counts. Exit 1 or 2 → retry the reviewer once, and abort the iteration on a second failure — status **Error**, per `references/shared-rules/run-failure-disclosure.md`. If node is unavailable, fall back to reading the file and record `schema validation not run: node unavailable` in the iteration log.
 
-   **This call checks the reviewer's own output and nothing else.** Two later phases rewrite the same file — the fact-checker recomputes `critical_count`, and the self-review pass appends without recomputing — and neither is covered here. On any iteration that has a successor that does not matter: the next reviewer recomputes both counts from the full issues array (step 7 of its prompt), so a wrong count is corrected before anything acts on it. The **final** iteration has no successor, which is where the gap is real and where the closing validation below covers it.
+   **This call checks the reviewer's own output and nothing else.** Two later phases rewrite the same file — the fact-checker recomputes `critical_count`, and the self-review pass appends without recomputing — and neither is covered here. A wrong count written here is not carried anywhere — the next round writes a fresh artifact over this one rather than recounting it — but it is not corrected either, and this round still acts on it: property 3's early exit reads this round's `total_criticals`, so a fact-checker that miscomputes it to 0 ends the loop and there is no successor at all. The closing validation in the Final Report is the only check on the fact-checker's recount and the self-review pass's appends.
 7. `self_review()` runs after `fix()`, in every iteration where the fixer ran. It is **always on** — there is no flag. It reads the fix report, re-reads only the regions that report names, and both **reports and fixes** what it finds, exactly once (depth 1). It never rewrites `critical_count` or `high_count`, and everything it appends carries `origin: "self-review"` (see the Self-Review dispatch section).
 8. **Depth 1, and the tail is disclosed rather than carried.** The text the self-review pass itself writes is not re-reviewed within the same round — unbounded self-review is the same loop with more steps. If another round runs, its reviewer covers those lines as ordinary document text, because every round re-reads the whole document. The tail is only a real gap on the **final** round, and the summary states how many lines the final self-review pass wrote unreviewed. There is no cross-round carry mechanism: the next round's full re-read already is one.
 
@@ -191,7 +192,7 @@ The dispatch prompt must include:
   - path2.md
   ```
   For single file, use the same list format with one entry.
-- Any duplicate copies found by pre-flight check 8, as a separate list:
+- Any duplicate copies found by pre-flight check 9 (**Duplicate locations**), as a separate list:
   ```
   Additional copies (read-only, do not fix):
   - other/path/doc.md
@@ -388,9 +389,9 @@ When the loop completes (final gate passes or max iterations exhausted):
    ```
 
    This is the only point at which the fact-checker's recount and the self-review pass's appends are
-   checked. Every earlier iteration is covered by the next reviewer's recompute; the final one has no
-   next reviewer, so without this the last thing written to the artifact is the one thing nothing
-   verifies — and it is what the summary reports and what a human reads. One invocation per run.
+   checked. No earlier iteration is covered either — the next round overwrites the artifact rather
+   than recounting it — so without this the last thing written to the artifact is the one thing
+   nothing verifies, and it is what the summary reports and what a human reads. One invocation per run.
 
    Exit 0 → proceed. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`,
    naming the phase whose write broke the invariant. Exit 2 → status **Error** as well: the validator
@@ -400,7 +401,7 @@ When the loop completes (final gate passes or max iterations exhausted):
    case proceed, and record `schema validation not run: node unavailable` in the summary, beside the
    status.
 
-1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the issues array. The array is not capped at 20: the reviewer caps its own findings at 20, and the fact-check and self-review entries appended after it are exempt.
+1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the issues array. The array is not capped at 20: the reviewer caps its own findings at 20 but always includes every critical and high finding, so its own array exceeds that cap whenever those alone do (`prompts/reviewer.md` step 4); and the fact-check and self-review entries appended after it are outside the cap as well.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (see Status Logic below).
 4. Derive the next-round recommendation (see Next-Round Recommendation below).
@@ -463,7 +464,7 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 ---
 ```
 
-**When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" means criticals remain — the loop should have handled them, or max iterations were exhausted (user needs to fix manually).
+**When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" is Status Logic rule 2, and it has two triggers: `critical_count > 0` — the loop should have handled them, or max iterations were exhausted — or a fact-check that **completed** and scored under 75. The phase is skipped on either, so a run with zero criticals and a low-scoring fact-check hands the user every remaining high, medium and low issue untriaged — the second trigger, not "criticals remain", is what suppressed the triage there.
 
 ## Brainstorm Document
 
@@ -505,7 +506,7 @@ The orchestrator maintains the following state across the loop:
 - `last_round_fixed = {critical: 0, high: 0, medium: 0, low: 0}` -- per-severity breakdown for the most recent iteration only (populates "Last round:" line)
 - `remaining = {critical: 0, high: 0, medium: 0, low: 0}` -- populates the `Remaining:` line. **Defined as `found_this_round` minus the final round's `fixed` dispositions, plus every self-review finding that pass reported and did NOT fix.** Computed once, after the final iteration's fix phase and its self-review pass.
 
-  Two readings were possible and the difference is not cosmetic. Taking the final review JSON's severity breakdown reports as *remaining* exactly what the last fixer just repaired, which is the opposite of what the word means. Taking `found_this_round` minus `fixed` alone trusts the fixer's own claim that a fix landed — and the self-review pass exists because that claim is sometimes false. Adding back the self-review pass's *verified* failures is what makes the number mean "still wrong in the document", which is what a reader assumes it means and what Status Logic rules 3 and 4 gate on.
+  Two readings were possible and the difference is not cosmetic. Taking the final review JSON's severity breakdown reports as *remaining* exactly what the last fixer just repaired, which is the opposite of what the word means. Taking `found_this_round` minus `fixed` alone trusts the fixer's own claim that a fix landed — and the self-review pass exists because that claim is sometimes false. Adding back the self-review pass's *verified* failures is what makes the number mean "still wrong in the document", which is what a reader assumes it means. **Status Logic does not read this counter.** Rule 3 tests the issues array directly and filters on `origin: "document"`; rule 4 is the fallthrough, `all other cases` — so a self-review finding the pass could not fix raises `Remaining:` without moving the status, and a final round with no document-origin issue left reports Approved while the `Self-Review` section names the defect that is still there.
 
   A self-review finding the pass reported **and fixed** is not remaining. One it reported and could not fix is. This is the single place a self-review finding reaches a headline count, and it does so because by then it is no longer this round's churn — it is an unrepaired defect in the artefact. It changes no gate count: `critical_count` and `high_count` are untouched, per `references/shared-rules/counts-exclude-self-review.md`.
 - `total_deferred = 0` -- flat count (populates "Deferred: D")
@@ -515,7 +516,7 @@ The orchestrator maintains the following state across the loop:
 - `self_review_tail_lines = 0` -- lines written by the FINAL iteration's self-review pass. Those lines are the one part of the document no review pass read, because depth is 1 and no further round follows. Earlier iterations' tails need no tracking: the next round re-reads the whole document. Populates the `Unreviewed tail:` line, which is omitted when the value is 0.
 - `collateral_count = 0` -- running total of `collateral` entries across every fix phase in this invocation, with their `location` values retained for rendering. **Not reset between iterations.** Rule 2 names the regions a focused review has to cover, and a region an *earlier* fix phase disturbed needs that cover as much as one the last fix phase disturbed. Scoping the counter to the final iteration would drop exactly the multi-iteration case: an earlier round fixes criticals and records collateral, the final round's review comes back clean, and the recommendation reports no collateral at all.
 
-After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
+After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. For each disposition with `action: "fixed"`, increment `total_fixed[severity]` immediately; for `deferred` and `pushed-back`, increment the flat counter. Nothing is cached across rounds: ids are per-round, so round 2's `ISSUE-001` is a different finding from round 1's, and a map that outlived a round would resolve it to the earlier round's severity. Every lookup is answered by the artifact of the round that wrote the disposition, and then discarded. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
 
 **IDs are per-round.** Every round's reviewer numbers from `ISSUE-001`; the fact-checker and the self-review pass continue from `max + 1` within that same round. Ids identify a finding while a round is in flight — the fix report and `tmp/response_analysis.md` both reference them — and nothing needs one to outlive its round.
 

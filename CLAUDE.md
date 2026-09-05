@@ -31,7 +31,7 @@ skill or a shared rule; run the whole set before anything that touches `scripts/
 
 ```bash
 node ./ai-dev-tools/scripts/check-shared-semantics.cjs ./ai-dev-tools   # exit 0
-./ai-dev-tools/scripts/count-exclusion-test.sh ./ai-dev-tools           # 6 passed
+./ai-dev-tools/scripts/count-exclusion-test.sh ./ai-dev-tools           # 5 passed
 node ./ai-dev-tools/scripts/check-doc-links.cjs ./ai-dev-tools          # exit 0
 node ./ai-dev-tools/scripts/check-schema-drift.cjs ./ai-dev-tools       # exit 0
 ./ai-dev-tools/scripts/check-detector-coverage.sh ./ai-dev-tools        # PASS
@@ -41,7 +41,7 @@ node ./ai-dev-tools/scripts/check-schema-drift.cjs ./ai-dev-tools       # exit 0
 | gate | what it stops |
 |---|---|
 | `check-shared-semantics.cjs` | a rule governing two skills forking in one of them |
-| `count-exclusion-test.sh` | `critical_count` counting the review loop's own churn, and `phase`/`origin` disagreeing |
+| `count-exclusion-test.sh` | `critical_count` counting the review loop's own churn, and an artifact still carrying the removed `phase` key |
 | `check-doc-links.cjs` | a doc citing a plugin file by a *path* stated relative to the wrong root — found 6 real ones the day it was written (a bare basename that resolves nowhere is reported as a warning, not a failure) |
 | `check-schema-drift.cjs` | a SKILL.md publishing a schema its validator does not enforce |
 | `check-detector-coverage.sh` | the severity detector silently gaining or losing a file |

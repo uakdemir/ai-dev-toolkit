@@ -103,7 +103,7 @@ Examples:
 
 ## Edge Case: `--max-iterations 0`
 
-Skip the loop entirely. Do not create any files. Print and exit:
+**Handled during argument parsing, before Setup runs.** Skip the loop entirely. Neither Setup's directory creation nor its stale-file deletion happens, so no files are created and a no-op invocation cannot discard a completed prior run's artifacts. Print and exit:
 ```
 Review Code Skipped
   Scope: last N commits
@@ -176,12 +176,13 @@ No final-gate pattern for review-code. Since all rounds use the same single agen
 
 ## Reviewer Agent
 
-Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, `{{ITERATION_NUM}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{PREVIOUS_FINDINGS}}`, `{{GIT_DIFF}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, `{{ITERATION_NUM}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{GIT_DIFF}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
 - Git diff (up to 3000 lines, strategically trimmed)
 - Spec content (if `--against` provided)
 - CLAUDE.md (if exists)
 - ADRs (scope-based filtering, up to 200 lines)
-- Previous iteration findings (if iteration > 1)
+
+**Each iteration's reviewer starts fresh — it reads no prior artifact and is handed no prior iteration's findings.** Every iteration re-reads the full scope since the resolved base, where a defect an earlier iteration fixed is simply absent. There was a `{{PREVIOUS_FINDINGS}}` slot here; no phase computed it, so the placeholder reached the agent unsubstituted.
 
 Read `prompts/reviewer.md` from this skill's directory for dispatch instructions. The reviewer writes to the resolved `{{OUTPUT_PATH}}` (`tmp/_reviews_errors/[<run_id>-]review-code.json`) directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
 
@@ -198,7 +199,7 @@ Read `prompts/reviewer.md` from this skill's directory for dispatch instructions
 
 ## Fixer Agent
 
-Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes `{{EFFORT}}` and `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json` in `prompts/coder.md`). Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/coder.md` — `{{EFFORT}}`, `{{ALL_ISSUES}}`, `{{VERIFICATION_REGRESSIONS}}`, `{{SPEC_CONTENT}}`, and `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json`). Receives:
 - All issues grouped by severity
 - Verification regressions (if any)
 - Spec content (if `--against` provided)
@@ -217,19 +218,19 @@ Runs **after the fixer**, in every iteration where the fixer ran. Always on — 
 
 Before dispatch, the orchestrator backs up `tmp/_reviews_errors/[<run_id>-]review-code.json` to `<path>.bak`. **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** On detection the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues; any other failure mode (crash, exception, no response) is treated identically. Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-doc`.
 
-Read `prompts/self-review.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The dispatch prompt must include the effort level, the fixer's diff range (`$before_sha..$fixer_sha`), the fix report path, and the review JSON path.
+Read `prompts/self-review.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The skill substitutes every `{{PLACEHOLDER}}` in that prompt, exactly as it does for `prompts/reviewer.md` and `prompts/coder.md` — `{{DIFF_RANGE}}` → the fixer's diff range `$before_sha..$fixer_sha`, `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`. A path described in prose instead of substituted is a path the agent has to guess at, and the prompt stops rather than guessing: it reports the placeholder as unsubstituted. The effort level is not a placeholder — it goes in the dispatch prompt as a reasoning-depth directive.
 
 It appends every defect to the `issues` array with `origin: "self-review"`, following the same synthetic-issue shape the verification regressions use (all six schema-required fields), and commits with `fix(review-code): self-review of iteration M's fixes`.
 
 **Count invariant: Counts measure the artefact under review, never the review loop's own edits.** Self-review findings are NOT counted in `critical_count` or `high_count` for the iteration that produced them. That iteration both wrote and reviewed those lines, so counting them there reports the loop's own churn as evidence against the code under review — and the unresolved-criticals gate stops the run on a spec at `any critical remaining`. From the next iteration those lines are ordinary code: the reviewer re-reads the full scope and emits anything still wrong in them as `origin: "document"`, counted normally.
 
-The exclusion is **round-local** and flips at the iteration boundary. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-doc`.
+The exclusion is **round-local**, and needs no boundary flip to stay that way: iterations carry nothing forward, so the next iteration's reviewer re-reads the full scope and reports defects in those lines as ordinary `"document"` findings. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-doc`.
 
 **Not counted is not not-shown.** Self-review findings print on their own line in the terminal output and appear in the summary. Without that, the loop would have a sanctioned channel for silent degradation.
 
-**Disclose the depth-1 tail.** The code the self-review pass itself writes is not reviewed within the iteration, and on the FINAL iteration no later one reads it either. Track `self_review_tail_lines` — lines written by the final iteration's self-review pass — and print `Unreviewed tail: N lines committed by the final self-review pass`, omitting the line when the count is 0. `prompts/self-review.md` returns that count. This matters more here than in `review-doc`: `--max-iterations` defaults to **1**, so on a default invocation the final iteration is the only iteration and every line the pass writes is committed unreviewed. Required by `references/shared-rules/counts-exclude-self-review.md`.
+**Disclose the depth-1 tail.** The code the self-review pass itself writes is not reviewed within the iteration, and on the FINAL iteration no later one reads it either. Track `self_review_tail_lines` — lines written by the final iteration's self-review pass — and print `Unreviewed tail: N lines committed by the final self-review pass`, omitting the line when the count is 0. `prompts/self-review.md` returns that count. On a `--max-iterations 1` run the final iteration is the only iteration, so every line the pass writes is committed unreviewed. Required by `references/shared-rules/counts-exclude-self-review.md`.
 
-**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, the `critical_count` iteration N+1's reviewer computes measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. This skill's Status Logic and `orchestrate`'s stage-i unresolved-criticals gate therefore gate on the right signal without either being rewritten. Do not "fix" them to compensate. (`found_this_round` and a Next-Round Recommendation are `review-doc`'s; this skill has neither, and naming them here was a copy from that skill.)
+**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, the `critical_count` iteration N+1's reviewer computes measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. This skill's Status Logic and `orchestrate`'s stage-iii unresolved-criticals gate (`../orchestrate/references/auto/stages/stage-iii-code-review.md` — "Pre-fix criticals > 0 → Q2 unresolved-criticals failure") therefore gate on the right signal without either being rewritten. Do not "fix" them to compensate. (`found_this_round` and a Next-Round Recommendation are `review-doc`'s; this skill has neither, and naming them here was a copy from that skill.)
 
 ## Verification Commands
 
@@ -412,7 +413,7 @@ Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-code-bra
 ## Final Report
 
 When the loop completes (criticals zero + verification pass, or max iterations exhausted):
-0. **Validate the finished artifact**, once, before anything reads it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code <output-path>`. This is the only point at which the self-review pass's appends are checked — earlier iterations are covered by the next reviewer's recompute, and the final one has no next reviewer. With `--max-iterations` defaulting to 1, that is every default run. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`; exit 2 → status **Error** as well — the validator returns `2` for an artifact it could not read or a command it could not parse, not for a check it chose to skip, and a finished artifact nothing can open is not a run that completed. `node` being absent is a different condition: the command never runs and the shell returns `127`. Only in that case proceed and record `schema validation not run: node unavailable` under Checks SKIPPED.
+0. **Validate the finished artifact**, once, before anything reads it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code <output-path>`. This is the only point at which the self-review pass's appends are checked. Nothing checks them in-iteration, and no later reviewer corrects them either: the next iteration writes a fresh artifact over this one rather than recounting it, so a bad append is discarded rather than repaired, and the final iteration has no next write at all. On a `--max-iterations 1` run that is the whole review. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`; exit 2 → status **Error** as well — the validator returns `2` for an artifact it could not read or a command it could not parse, not for a check it chose to skip, and a finished artifact nothing can open is not a run that completed. `node` being absent is a different condition: the command never runs and the shell returns `127`. Only in that case proceed and record `schema validation not run: node unavailable` under Checks SKIPPED.
 1. Generate `tmp/_reviews_errors/review-code-summary.md` from the last iteration's `tmp/_reviews_errors/review-code.json` (top 10 issues by severity, then descending confidence).
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (below).
@@ -470,27 +471,29 @@ Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cann
 ---
 ```
 
-**When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" means criticals remain — the loop should have handled them, or max iterations were exhausted (user needs to fix manually).
+**When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" is Status Logic rule 2, and it has two triggers: `critical_count > 0` — the loop should have handled them, or max iterations were exhausted — or verification regressions present. The phase is skipped on either, so a run whose only outstanding defect is a verification regression hands the user every remaining high, medium and low issue untriaged — the second trigger, not "criticals remain", is what suppressed the triage there.
 
 **When status is "Incomplete":** run the phase, and add one line to its summary naming the files in `coverage.not_inspected`, so a reader knows the triage happened over a partial view. An applied fix could in principle conflict with something in an unopened file; naming them is what makes that risk visible rather than hidden.
 
 ## Cross-Iteration Tracking
 
 Orchestrator maintains running counters across iterations:
-- `total_fixed` (per-severity: critical, high, medium, low). The fix report cannot supply the severity — `prompts/coder.md` emits `{issue_index, action, detail}` and no more — so resolve each disposition's severity by `issue_index` into the CURRENT `tmp/_reviews_errors/review-code.json` *before* the next iteration's reviewer overwrites it, and cache the resolved `(issue_index → severity)` map in orchestrator state, first-write-wins.
+- `total_fixed` (per-severity: critical, high, medium, low). The fix report cannot supply the severity — `prompts/coder.md` emits `{issue_index, action, detail}` and no more — so resolve each disposition's severity by `issue_index` into the CURRENT `tmp/_reviews_errors/review-code.json` *before* the next iteration's reviewer overwrites it, and increment `total_fixed[severity]` there and then. Nothing is cached across iterations: `issue_index` is a position in that iteration's own array, so a map that outlived the iteration would resolve the next one's indices against the previous one's findings.
 - `last_round_fixed` (per-severity: critical, high, medium, low) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
 - `remaining` (per-severity: critical, high, medium, low) -- populates the `Remaining:` line. **Defined as the final round's findings minus that round's `fixed` dispositions, plus every self-review finding that pass reported and did NOT fix.** Computed once, after the final iteration's fix phase and its self-review pass.
 
-  Taking the final review JSON's severity breakdown instead would report as *remaining* exactly what the last fixer just repaired. Subtracting `fixed` alone trusts the fixer's own claim that a fix landed — and the self-review pass exists because that claim is sometimes false. Adding back that pass's verified failures is what makes the number mean "still wrong in the code", which is what Status Logic gates on. A self-review finding the pass reported and fixed is not remaining; one it could not fix is. This changes no gate count — `critical_count` and `high_count` are untouched, per `references/shared-rules/counts-exclude-self-review.md`.
+  Taking the final review JSON's severity breakdown instead would report as *remaining* exactly what the last fixer just repaired. Subtracting `fixed` alone trusts the fixer's own claim that a fix landed — and the self-review pass exists because that claim is sometimes false. Adding back that pass's verified failures is what makes the number mean "still wrong in the code", which is what a reader assumes it means. **Status Logic does not read this counter.** Rule 4 tests the issues array directly and filters on `origin: "document"` — so a self-review finding the pass could not fix raises `Remaining:` without moving the status. A self-review finding the pass reported and fixed is not remaining; one it could not fix is. This changes no gate count — `critical_count` and `high_count` are untouched, per `references/shared-rules/counts-exclude-self-review.md`.
 - `total_pushed_back` (flat count)
-- `self_review_found = {found: 0, fixed: 0}` — running total across every self-review pass in this run, sourced from the agent's returned summary (`prompts/self-review.md` requires it). Populates the `Self-review:` terminal line and the summary's `## Self-Review` section. **Never** added to `total_fixed`, `critical_count` or `high_count` for the iteration that produced it: `references/shared-rules/counts-exclude-self-review.md`.
+- `self_review_found = {found: 0, fixed: 0}` — running total across every self-review pass in this run, sourced from the agent's returned summary (`prompts/self-review.md` requires it), **with each finding's category, severity, location, problem and whether the pass fixed it retained for rendering.** The two scalars alone serve only the `Self-review:` terminal line. Three consumers need the per-finding detail: the summary's `## Self-Review` section, which prints one line per finding; the `remaining` computation, which adds back every self-review finding the pass reported and did NOT fix; and the Respond-phase skip rule, which passes over the ones it did. None of it is recoverable from the issues array afterwards — the fixed/remaining disposition never reaches the issue record, because `additionalProperties: false` rejects it, so `prompts/self-review.md` keeps it in the returned summary and nowhere else. (No `id`: the review-code schema has none. `review-doc` retains an id here because its schema does.) **Never** added to `total_fixed`, `critical_count` or `high_count` for the iteration that produced it: `references/shared-rules/counts-exclude-self-review.md`.
 - `self_review_tail_lines` — lines written by the FINAL iteration's self-review pass, for the `Unreviewed tail:` line. Earlier iterations need no tracking; the next iteration reviews them.
 
 Parse `tmp/_reviews_errors/review-code-fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `fixer_sha != before_sha`, append the short SHA, and again after the self-review pass where `after_sha != fixer_sha`. This populates the "Commits added" line in terminal output.
 
 ## Verification with `--max-iterations 1`
 
-With a single iteration: if the reviewer finds zero criticals, the stop-check runs verification. If regressions are detected, the orchestrator appends synthetic critical issues to `tmp/_reviews_errors/review-code.json` (update the issues array and `critical_count`), re-writes the file, then continues to the fix phase within the same iteration. After the fix phase, run verification one final time to determine terminal status. The loop then ends (cap reached). If regressions persist, status is "Issues Found." If resolved, apply normal status logic.
+With a single iteration: if the reviewer finds zero criticals, the stop-check runs verification. If regressions are detected, the orchestrator appends synthetic critical issues to `tmp/_reviews_errors/review-code.json` (update the issues array and `critical_count`), re-writes the file, then continues to the fix phase within the same iteration. After the fix phase, run verification one final time and report its result under the summary's `## Validation` bullets. The loop then ends (cap reached).
+
+**A regression that reached the stop check leaves the run at "Issues Found" whether or not the fix phase repaired it.** The synthetic criticals stay in the artifact: the fixer writes only `review-code-fix-report.json`, the self-review pass appends without recomputing, and Final Report step 0 only validates — and validation in fact *requires* `critical_count` to equal a recount that includes them. So `critical_count > 0` when Status Logic rule 2 reads it, and that alone fires the rule — its second trigger, verification regressions present, never has to be consulted. The final verification run therefore records whether the regression was repaired; it does not change the status.
 
 ## When `--verify` Is Not Provided
 
