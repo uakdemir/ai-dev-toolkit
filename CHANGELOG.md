@@ -47,6 +47,7 @@ Accepted with a warning and otherwise ignored, rather than rejected — the flag
 - **review:** close the gate defects the Step 0 payload review found (3ec1a1b)
 - **review:** close two gaps the end-to-end self-review run exposed (fc3aaf5)
 - **orchestrate:** name the review artifacts the pipeline actually writes (91351c5)
+- **orchestrate:** resolve 10 findings from the focused review of the stage-iii change — `--must-inspect` was handed on only at zero criticals, step-6's Case C had the rule without the mechanism, and the run-id convention contradicted the layout every stage depends on (ae29240)
 - **orchestrate:** drop the `/respond-to-review` dependency from step 3 (e7137c7)
 - **scripts:** escape the NUL separator in score-severity-eval so the file is text (fae38f3)
 - **scripts:** resolve eval matches by specificity, not by severity alone (eefce4a)
