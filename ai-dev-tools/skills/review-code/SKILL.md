@@ -581,8 +581,7 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },
           "problem": { "type": "string" },
           "suggested_fix": { "type": "string" },
-          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" },
-          "phase": { "type": "string", "enum": ["review", "fact-check", "self-review"] }
+          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" }
         }
       }
     }
@@ -590,7 +589,9 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
 }
 ```
 
-`origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the six required; `additionalProperties: false` still rejects everything else. `phase` records where a finding was found (`"review"` or `"self-review"` here) and never changes, where `origin` is round-relative and flips at the iteration boundary — it is for diagnostics, and the counts stay on `origin`. The validator rejects `origin: "self-review"` paired with a phase other than `"self-review"`; a missing `phase` is not caught, because the check is guarded on the key existing. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
+`origin` is the only optional per-issue key and the only one permitted beyond the six required; `additionalProperties: false` rejects everything else, including `phase`. It marks findings the round's own self-review pass raised against the fixer's edits, which are reported but not counted — `references/shared-rules/counts-exclude-self-review.md`.
+
+There used to be a second key, `phase`, recording which pass found a finding. It existed only because iterations carried findings forward and reset `origin` at the boundary, destroying that record. Iterations now start fresh, so `origin` is set once and never changes.
 
 Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. A file that passes validation is internally consistent — its declared counts equal its own recount. That is not a freshness guarantee: `../orchestrate/references/common/error-logs-format.md` states that the gates read this value in flight, not off disk, because the file is rewritten mid-iteration and overwritten by the next one. Consistent is not current.
 

@@ -41,14 +41,13 @@ Report findings with `confidence` >= 40. A high-severity finding below that thre
 
 Append to the `issues` array in the review JSON. Every issue you append carries all six required fields — `severity`, `category`, `location`, `confidence`, `problem`, `suggested_fix` — following the same shape the verification regressions use, plus:
 
-- `"phase": "self-review"` — on every issue you append. Never reset: a later iteration flips `origin` to `"document"`, and `phase` keeps the record of which pass found it.
 - `"origin": "self-review"` — **on every issue you append, without exception.** This is what keeps the iteration that wrote these lines from counting its own churn against the code it was reviewing. Omit it and the loop reports its own sloppiness as evidence the implementation is bad, which via the unresolved-criticals gate can fail the whole pipeline. See `references/shared-rules/counts-exclude-self-review.md`.
 
 **Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts that `/orchestrate`'s unresolved-criticals gate reads. Your issues are folded into the counts by the next iteration's reviewer, which re-reads the full scope and emits anything still wrong in your lines as `origin: "document"`.
 
 Never reorder or remove existing issues — dispositions are keyed on `issue_index`. You append only.
 
-⚠ An issue object carries exactly the six required fields plus `origin` and `phase`, and nothing
+⚠ An issue object carries exactly the six required fields plus `origin`, and nothing
 else — the schema is `additionalProperties: false`, so an invented key such as `fixed_by_self_review`
 fails validation and the orchestrator discards the whole artifact. Whether you fixed a defect belongs
 in your returned summary and in the commit, never on the issue record.

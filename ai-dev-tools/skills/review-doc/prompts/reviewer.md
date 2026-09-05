@@ -14,7 +14,6 @@ Review each document for completeness gaps, internal contradictions, implementab
 - Document paths: newline-separated list provided in dispatch prompt (may be a single path)
 - Additional copies (read-only, do not fix): newline-separated list provided in dispatch prompt, or absent. These are same-basename copies found at other locations — review them, never propose editing them.
 - Reference document path: provided in dispatch prompt (or "none")
-- Fix report: `{{FIX_REPORT_PATH}}` — the previous iteration's dispositions, or absent on iteration 1. Read it when it exists: an id dispositioned `fixed` there was resolved by the last fix phase, and must not be counted again (step 7).
 - Read the project's CLAUDE.md for conventions and constraints
 
 **Location format:** When multiple documents are provided, prefix each finding's location with the filename: `strategy.md > Section 3.2`. For cross-file findings, use: `strategy.md + module-map.md > Module counts`. When only one document is provided, omit the filename prefix — unless read-only copies are also in scope, in which case always prefix with the full path, so a duplicate-divergence finding names exactly which copy it is about.
@@ -121,34 +120,20 @@ After collecting all findings:
 2. **Rate both axes** — assign `severity` and `confidence` independently, per Rating Findings above.
 3. **Filter** — report findings with `confidence` >= 40. A high-severity finding below that threshold should be investigated until it can be grounded or dropped — not silently discarded.
 4. **Cap at 20** — include all critical + high first, then fill with medium and low by descending confidence. If critical + high exceed 20, raise the cap to include all of them.
-5. **Assign stable IDs** — every issue gets an `id` of the form `ISSUE-NNN`, zero-padded to **at least** 3 digits (`ISSUE-001`, `ISSUE-007`, `ISSUE-1024`). The algorithm depends on whether a prior iteration's JSON exists.
+5. **Assign IDs** — sort the capped issues most-severe-first, breaking ties on descending confidence and then alphabetically by `location` so the order is deterministic. Assign sequentially from `ISSUE-001`, zero-padded to at least 3 digits.
 
-   **First, read the prior file** at `{{OUTPUT_PATH}}`. If it doesn't exist, run the **fresh-start** branch below; otherwise run the **carry-forward** branch.
+   **Every round starts at `ISSUE-001`.** Do not read a prior iteration's file, do not match against it, do not carry anything forward. Each round reviews the document as it now stands and reports what it finds; a defect an earlier round fixed is simply absent, not present-and-not-counted.
 
-   **Fresh-start branch (no prior file):** Sort the capped issues array by severity descending (critical → high → medium → low), with confidence descending as the tiebreaker and alphabetical-by-`location` as the deterministic fallback. Assign IDs sequentially in that order starting from `ISSUE-001`.
+   Ids are unique within a round, not across them. The fact-checker and the self-review pass continue your numbering from `max + 1` in the same round, which is what keeps the fix report and `tmp/response_analysis.md` unambiguous while a round is in flight. Nothing needs an id to outlive its round: the fix report is written and consumed within one.
 
-   **Carry-forward branch (prior file exists):**
-   a. Compute `next_id_seed` as the largest numeric suffix across every well-formed id in the prior file's `issues` array, plus 1. A well-formed id matches `^ISSUE-\d{3,}$`; ignore malformed entries when computing the max. If the prior issues array is empty, set `next_id_seed = 1`.
-   b. For each issue in your current (capped, sorted) output, **match against prior issues using the tuple `(normalized_location, category)`** where `normalized_location` is the `location` string lowercased with internal whitespace collapsed to single spaces and trailing punctuation stripped, and `category` must be an exact enum match. If exactly one prior issue matches, REUSE its `id` AND snap the output record's `location` field to the PRIOR issue's verbatim `location` string (so external references citing the prior `location` text stay valid); the issue's other fields (`severity`, `category`, `confidence`, `problem`, `suggested_fix`) come from the CURRENT iteration — only the `id` and `location` are preserved from the prior entry. If multiple prior issues share the tuple, reuse the highest-confidence one's id for the current finding; treat every OTHER matching prior issue as "not re-discovered" so step 5c preserves it (do not silently drop their IDs). If no prior issue matches, MINT a new id `ISSUE-NNN` from `next_id_seed`, then increment `next_id_seed`.
-   c. **Preserve every prior id that was not assigned to a current-iteration finding in 5b** — copy each such prior entry forward verbatim (id, severity, category, location, confidence, problem, suggested_fix, **and `phase`**), **except `origin`: set it to `"document"` on every entry you carry forward.**
+   This replaces a carry-forward algorithm — tuple matching on `(location, category)`, an append-only id invariant, a cap exemption, and an `origin` reset at the round boundary. All of it existed so that round N+1 could see round N's findings, and it cost more than it bought: carried-forward entries landed in the new round's array, so the count could not tell "found now" from "found earlier and already fixed", and `critical_count` could not decrease within a run.
 
-   `phase` is carried forward UNCHANGED. It records which pass found the issue, which does not become untrue later; `origin` records whether the issue belongs to this round's own churn, which does. Resetting `phase` too would erase the only record of where a carried-forward finding came from.
+6. **Set `origin`** — every issue you emit gets `"origin": "document"`. Yours are findings against the document as it stands, which is what the counts are for. The only issues carrying `"self-review"` are those the self-review pass appends against the fixer's own edits, later in this same round.
 
-   ⚠ That reset is the round boundary. A prior entry marked `origin: "self-review"` was raised by an earlier round against text that round's own fixer had just written, and was excluded from *that* round's counts for exactly that reason. That round is over. The lines are now ordinary document text you have just re-read as part of the whole artefact, so the finding counts here like any other. Carrying `"self-review"` forward would suppress it permanently, which is a different rule and a wrong one.
- This includes fact-check entries (`category: "fact-check"`) and verifier entries (`category: "verify"`) appended in prior iterations: even though you produce neither category yourself, you must not drop their IDs, or the append-only invariant breaks. It also includes the "loser" entries when 5b had multiple prior matches for one tuple.
-   d. **Cap exemption:** Step 4's 20-cap applies ONLY to newly-minted IDs. Carried-forward issues (whether re-matched in 5b or copied through in 5c) are always included regardless of the cap, so external references to their IDs stay valid.
+7. **Compute counts** — `critical_count` and `high_count` from your `issues` array. Since the array holds only this round's findings, that is simply the number of `critical` and `high` entries in it.
 
-   **Append-only invariant:** existing IDs are never renumbered, even if their underlying issues were fixed, deferred, or pushed back in a prior iteration. IDs stay attached to their finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. A change in an issue's severity bucket between iterations is normal and reflected in the current JSON; the id does not change.
-6. **Set `origin` and `phase`** — every issue you emit gets `"origin": "document"` and `"phase": "review"`. Your findings are against the document as it stands, which is what these counts are for. The only issues carrying `"self-review"` are those the self-review pass appends after a fix phase, and per step 5c you reset those to `"document"` when you carry them forward.
-7. **Compute counts — this round only.** `critical_count` and `high_count` count **the findings this iteration actually made**: your own findings after step 4's cap, whether newly minted or matched to a prior id in step 5b. They do **not** count entries copied forward by step 5c.
+   The count is a per-round signal. It answers "what does this round say about the document now", which is the only question a reader or a gate asks of it.
 
-   **The count is a per-round signal, not a running total.** A count that accumulates answers no question anyone asks. What a reader and every automated gate want to know is *what does this round say about the document now* — and an issue you did not re-discover is, by definition, not something this round found.
-
-   This is also the only reading that terminates. Under the previous rule a `fixed` critical was carried forward at critical severity and counted again — the reviewer never reads which issues were fixed, so a resolved finding was indistinguishable from an open one. `critical_count` could therefore never decrease within a run: the early exit could only ever fire on iteration 1, Status Logic pinned to "Issues Found" (which skips the triage phase), and the fixer was re-dispatched every round holding issues it had already fixed. A dogfood round reproduced this exactly — iteration 2 reported four criticals of which three had been fixed and verified minutes earlier.
-
-   Carried-forward entries stay **in the array**: their ids must remain valid for `tmp/response_analysis.md`, the fix-report dispositions and the severity cache, and the fixer still reads them to see what is outstanding. They are excluded from the two count fields, nothing more.
-
-   Where `{{FIX_REPORT_PATH}}` exists, use it as the second guard: never count an id it disposes as `fixed`, even if step 5b re-matched it — if the defect is genuinely still there, you will have found it yourself this iteration and it counts as your own finding.
 8. **Set fact-check fields** — `fact_check_claims: []` and `fact_check_accuracy: 100` (the fact-checker handles these separately).
 
 ## JSON Output Format
@@ -170,8 +155,7 @@ Write `{{OUTPUT_PATH}}` using the Write tool with this exact structure:
       "confidence": 85,
       "problem": "Description of what's wrong",
       "suggested_fix": "Concrete suggestion",
-      "origin": "document",
-      "phase": "review"
+      "origin": "document"
     }
   ]
 }
@@ -179,7 +163,7 @@ Write `{{OUTPUT_PATH}}` using the Write tool with this exact structure:
 
 Categories you may assign: completeness, consistency, scope, structure, vague-action, vague-step, dependency-gap, ordering-issue, agent-pitfall, missing-criteria, cross-reference. The schema also permits `fact-check` and `verify`, which only the fact-checker and the self-review pass produce — carry those forward untouched per step 5c, never re-label them.
 
-**Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix) plus `origin` (always `"document"`) and `phase` (always `"review"`). That is the complete permitted set — no `title`, `description`, `metadata`, or `summary` fields.
+**Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix) plus `origin` (always `"document"` from you). That is the complete permitted set — no `title`, `description`, `metadata`, `summary`, or `phase`.
 
 **Validate before you finish.** After writing `{{OUTPUT_PATH}}`, run:
 

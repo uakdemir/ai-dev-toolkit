@@ -7,9 +7,14 @@
 #
 # This is the machine-checkable half of the churn fix. Three pipeline gates read `critical_count`
 # (stage-iii early-exit, stage-i and stage-iii unresolved-criticals --
-# skills/orchestrate/references/common/error-logs-format.md), and the unresolved-criticals gate FAILS a
-# spec at "any critical remaining". Without this invariant enforced at the artefact, the loop's own
+# skills/orchestrate/references/common/error-logs-format.md), and the unresolved-criticals gate stops
+# the run at "any critical remaining". Without this invariant enforced at the artefact, the loop's own
 # churn can fail the auto-pipeline, and nothing catches it.
+#
+# `origin` is the ONLY per-issue flag. A second field, `phase`, recorded which pass found a finding;
+# it existed solely because rounds carried findings forward and flipped `origin` at the boundary,
+# destroying that record. Rounds now start fresh, so `origin` never changes and `phase` is gone --
+# case 5 pins its removal.
 #
 # RED TODAY, on purpose, for both reasons the fix must address:
 #   1. the validator has no doc schema, so it rejects a review-doc.json outright, and
@@ -54,18 +59,18 @@ expect reject churn-inflated.json     "critical_count 5 counts the loop's own ch
 expect accept churn-excluded.json     "critical_count 2 counts only the document -> accepted"
 expect reject churn-undercounted.json "critical_count 1 drops a real document critical -> rejected"
 
-# The exclusion is ROUND-LOCAL. Once the round that wrote those lines is over, they are ordinary
-# document text: the next round re-reviews the whole artefact and counts everything it finds.
-# Without this case the suite would equally pass an implementation that suppressed those findings
-# forever, which is a different -- and wrong -- rule.
-expect accept churn-next-round.json    "next round: origin flips to document, all five count -> accepted"
+# The exclusion is ROUND-LOCAL, and with no carry-forward that is enforced by construction: a later
+# round re-reviews the whole artefact and reports what IT finds, so lines an earlier round's fixer
+# wrote arrive as ordinary document text. This fixture is that round -- five findings, every one
+# origin "document", all five counted. Without it the suite would equally pass an implementation
+# that suppressed self-review findings forever, which is a different -- and wrong -- rule.
+expect accept churn-next-round.json    "a later round counts all five as document-origin -> accepted"
 
-# `phase` is immutable provenance and must never drive the counts. These two pin the one invariant
-# that ties it to `origin`: only the self-review pass may mark a finding as this round's own churn.
-# The reverse pairing -- phase "self-review" with origin "document" -- is the normal carried-forward
-# shape and is exercised by churn-next-round.json above.
-expect accept churn-phase-tagged.json  "phase tagged consistently with origin -> accepted"
-expect reject churn-phase-mismatch.json "origin self-review with phase review -> rejected"
+# `phase` was removed with carry-forward. An artifact still carrying it is rejected rather than
+# tolerated: the key is not in ISSUE_OPTIONAL, and additionalProperties is false. Silently accepting
+# it would let a stale producer keep emitting a field nothing reads, which is how the two-rule
+# counting contradiction survived unnoticed in the first place.
+expect reject churn-phase-tagged.json  "an artifact still carrying the removed \`phase\` key -> rejected"
 
 echo
 echo "-------- $pass passed, $fail failed --------"

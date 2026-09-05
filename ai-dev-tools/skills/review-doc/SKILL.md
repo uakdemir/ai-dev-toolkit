@@ -178,9 +178,9 @@ All `agents/` and `prompts/` paths in this section are relative to this skill's 
 
 The orchestrator dispatches a single reviewer agent, inheriting the caller's session model and running at the `--effort` reasoning level.
 
-Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
 
-**From iteration 2 onward the reviewer receives the previous iteration's fix report.** It reads which ids the last fix phase resolved, so a fixed finding is never counted again. Without that input the reviewer cannot distinguish a resolved issue from an open one — it re-reads the document and simply does not re-discover either — and `critical_count` becomes monotonically non-decreasing. See the reviewer prompt's step 7.
+**Each round's reviewer starts fresh.** It is not given the previous iteration's fix report and does not read the previous artifact. Round 2 re-reads the document as it now stands and reports what it finds; a defect round 1 fixed is absent from its findings rather than carried forward and excluded. That is what makes `critical_count` a per-round number by construction instead of by bookkeeping.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive: `max` = exhaustive analysis; `xhigh`/`high` proportionally less. All severities stay in scope regardless.
@@ -267,7 +267,7 @@ It appends every defect to the `issues` array with `origin: "self-review"` and e
 
 **Count invariant: Counts measure the artefact under review, never the review loop's own edits.** The self-review pass does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i unresolved-criticals gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 0 → Q2 failure"). Its findings carry `origin: "self-review"` and are excluded from this round's counts: the round that wrote those lines both authored and reviewed them, so counting them here would report the loop's own churn as evidence against the authored document — and via the unresolved-criticals gate, that churn could fail the whole auto-pipeline. Self-review issues are folded into the counts by the NEXT iteration's reviewer, which re-reads the whole document, emits anything still wrong in those lines as `origin: "document"`, and recomputes both fields from the full issues array.
 
-The exclusion is **round-local** and flips at the round boundary. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-code`.
+The exclusion is **round-local**, and rounds carry nothing forward — so a later round re-reads the whole document and reports defects in those lines as ordinary `"document"` findings, with no boundary flip to arrange it. Defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-code`.
 
 **Not counted is not not-shown.** A fixer edit can genuinely damage a document. Self-review findings print on their own line in the terminal output and appear in the summary — outside the round's gate counts, never invisible. Without that, the loop would have a sanctioned channel for silent degradation.
 
@@ -400,7 +400,7 @@ When the loop completes (final gate passes or max iterations exhausted):
    case proceed, and record `schema validation not run: node unavailable` in the summary, beside the
    status.
 
-1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the issues array. The array is not capped at 20: the reviewer caps newly-minted findings at 20, and carried-forward, fact-check and self-review entries are exempt.
+1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the issues array. The array is not capped at 20: the reviewer caps its own findings at 20, and the fact-check and self-review entries appended after it are exempt.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (see Status Logic below).
 4. Derive the next-round recommendation (see Next-Round Recommendation below).
@@ -517,9 +517,9 @@ The orchestrator maintains the following state across the loop:
 
 After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
 
-If a carried-forward `id` has been displaced from a later iteration's JSON (e.g., it dropped out of the active issues set), use the cached severity from the iteration where the id was first introduced — never silently skip a disposition just because its id is no longer in the latest JSON.
+**IDs are per-round.** Every round's reviewer numbers from `ISSUE-001`; the fact-checker and the self-review pass continue from `max + 1` within that same round. Ids identify a finding while a round is in flight — the fix report and `tmp/response_analysis.md` both reference them — and nothing needs one to outlive its round.
 
-**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker and `verify` entries appended by the self-review pass), so their IDs stay valid — preserved verbatim except `origin`, which is reset to `"document"` on every carried-forward entry. That reset is the round boundary: it is what makes the count exclusion round-local rather than permanent. `phase` is NOT reset. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
+They used to be append-only across iterations, matched on a `(location, category)` tuple and exempt from the reviewer's cap, so that round N+1 could re-use round N's numbering. That machinery is gone with carry-forward, and so is the counting contradiction it caused: carried entries sat in the new round's array, so the count could not tell a finding made now from one made earlier and already fixed.
 
 ## Status Logic
 
@@ -660,8 +660,7 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
           "confidence": { "type": "integer", "minimum": 40, "maximum": 100 },
           "problem": { "type": "string" },
           "suggested_fix": { "type": "string" },
-          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" },
-          "phase": { "type": "string", "enum": ["review", "fact-check", "self-review"] }
+          "origin": { "type": "string", "enum": ["document", "self-review"], "default": "document" }
         }
       }
     }
@@ -671,6 +670,6 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
 
 Note: `fact_check_claims` is only populated when `--fact-check true` is passed. When `--fact-check false` (default), set `fact_check_claims: []` and `fact_check_accuracy: 100`.
 
-Note: `origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the seven required — `additionalProperties: false` still rejects everything else. It defaults to `"document"`; an issue without it counts as document-origin. The reviewer and the fact-checker emit `"document"`; the self-review pass emits `"self-review"` for the findings it raises against the fixer's own edits, and those are excluded from that round's `critical_count` and `high_count`. See `references/shared-rules/counts-exclude-self-review.md`.
+Note: `origin` is the only optional per-issue key and the only one permitted beyond the seven required — `additionalProperties: false` rejects everything else, including `phase`. It defaults to `"document"`; an issue without it counts as document-origin. The reviewer and the fact-checker emit `"document"`; the self-review pass emits `"self-review"` for what it raises against the fixer's own edits, and those are excluded from the round's `critical_count` and `high_count`. See `references/shared-rules/counts-exclude-self-review.md`.
 
-Note: `phase` records WHERE a finding was found — `"review"`, `"fact-check"` or `"self-review"` — and unlike `origin` it never changes. The reviewer flips `origin` to `"document"` on every carried-forward entry, so without `phase` nothing records which pass produced a finding after the first round; `category` cannot stand in, because the fact-checker and the self-review pass both emit `"fact-check"`. It is for diagnostics — which pass is producing the criticals, and therefore which prompt needs work. **The gate counts stay on `origin`.** Counting on `phase` would exclude a carried-forward self-review finding forever, which is exactly the permanently-suppress rule the round boundary exists to reject. The validator enforces one direction, and only where `phase` is present: it rejects `origin: "self-review"` paired with a phase other than `"self-review"`. A missing `phase` is not caught — the check is guarded on the key existing. The reverse is the normal carried-forward shape.
+There used to be a second key, `phase`, recording which pass found a finding. It existed only because rounds carried findings forward and reset `origin` at the boundary, which destroyed that record. Rounds now start fresh, so `origin` is set once and never changes, and there is nothing for `phase` to recover. `scripts/validate-review-json.cjs` rejects an artifact still carrying it — `tests/fixtures/counts/churn-phase-tagged.json` pins that.

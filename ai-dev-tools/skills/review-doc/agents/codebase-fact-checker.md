@@ -64,7 +64,6 @@ Fact-check every verifiable claim in each document against the actual source cod
 3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
    - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is the decimal value of `next_id_seed` zero-padded to **at least** 3 digits (use more digits when `next_id_seed >= 1000`, e.g. `ISSUE-1024`); then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
    - `"category": "fact-check"`
-   - `"phase": "fact-check"` — this never changes, including when a later round carries the issue forward. It is what distinguishes your findings from the self-review pass's, which also emits `category: "fact-check"`.
    - `"origin": "document"` — you run before the fixer, against the document as authored, so your findings are document-origin and count normally. (The self-review pass, which runs after the fixer, is the only producer of `"self-review"`.)
    - `"location"`: the document section where the claim appears
    - `"problem"`: the claim text + your evidence

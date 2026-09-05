@@ -23,10 +23,15 @@ It holds only within the round that wrote those lines. That round both authored 
 so counting them there reports the loop's own sloppiness as evidence against the authored artefact
 — and the unresolved-criticals gate stops the run when any critical remains.
 
-**At the round boundary the origin flips to `"document"`.** From the next round onward those lines
-are ordinary artefact text: the next reviewer re-reads the whole artefact and counts everything it
-finds, including defects in text an earlier round wrote. An implementation that suppresses
+**A later round counts them normally, and needs no mechanism to do it.** Rounds carry nothing
+forward: the next reviewer re-reads the whole artefact from scratch and reports what it finds,
+including defects in text an earlier round's fixer wrote — as ordinary `"document"` findings,
+because that reviewer is not the pass that wrote them. An implementation that suppresses
 self-review findings permanently is a different rule, and a wrong one.
+
+This used to require an `origin` reset at the round boundary, and a second field (`phase`) to
+preserve the provenance that reset destroyed. Removing carry-forward removed the need for both:
+`origin` is set once by the pass that raises a finding and never changes.
 
 **The exception is the final round.** The argument above rests on there being a next round to do
 the counting, and on the last round there is not: findings the self-review pass raises there are
@@ -38,31 +43,6 @@ later round will notice.
 Worked example. A 600-line document. Round 1's fixer writes 100 lines; round 1's self-review pass
 checks those and writes more; round 1's counts reflect only the original 600. Round 2 reviews the
 whole file and counts everything in it.
-
-## `phase` records where a finding came from — and must not be counted on
-
-Every issue also carries `phase` — `"review"`, `"fact-check"` or `"self-review"` — recording which
-pass found it. Unlike `origin`, it is **never reset**: a later round flips `origin` to `"document"`
-while `phase` keeps the provenance. It exists because `origin` alone loses that information after one
-round, and `category` cannot supply it — the fact-checker and the self-review pass both emit
-`"fact-check"`.
-
-**Do not compute the counts from `phase`.** A carried-forward self-review finding keeps
-`phase: "self-review"` forever, so a phase-based count would suppress it permanently — which is the
-wrong rule this whole section exists to distinguish from the round-local one, and the one
-`tests/fixtures/counts/churn-next-round.json` is built to reject. `phase` is for diagnostics: which
-pass is producing the criticals, and therefore which prompt needs work.
-
-The validator enforces the one direction that must hold, and only where `phase` is present: it
-rejects `origin: "self-review"` paired with a phase other than `"self-review"`, because only that
-pass may mark a finding as the round's own churn. **A missing `phase` is not caught** — the check is
-guarded on the key existing, and that is deliberate. `phase` is optional on every issue: the
-self-review pass has exactly one phase, so `origin: "self-review"` already carries the information
-`phase: "self-review"` would repeat. Requiring it would tighten the artifact contract that three
-auto-pipeline gates and both skills write against, in exchange for a field that is redundant
-wherever the constraint would apply. What the validator rejects is a *contradiction* — `origin`
-claiming the round's own churn while `phase` names a different pass — not an omission. The reverse — `phase: "self-review"` with `origin: "document"` — is the
-normal carried-forward shape.
 
 ## Not counted is not not-shown
 

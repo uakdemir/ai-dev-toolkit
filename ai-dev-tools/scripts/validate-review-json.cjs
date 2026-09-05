@@ -13,16 +13,15 @@
 const fs = require('node:fs');
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'];
-const ORIGINS = ['document', 'self-review'];
-// `phase` is WHERE A FINDING WAS FOUND, and unlike `origin` it never changes. `origin` is
-// round-relative — the reviewer flips it to "document" on every carried-forward entry — so after one
-// round nothing records which pass produced a finding. `category` cannot stand in: the fact-checker
-// and the self-review pass both emit "fact-check".
+// `origin` is the ONLY per-issue flag, and it answers one question: did this round's own fix phase
+// cause this finding? The self-review pass sets "self-review" on what it raises against the fixer's
+// edits; everything else is "document" and counts.
 //
-// It exists for diagnostics, not for the gate counts. Counting on `phase` would exclude a
-// carried-forward self-review finding forever, which is the permanently-suppress rule that
-// tests/fixtures/counts/churn-next-round.json exists to reject. Counts stay on `origin`.
-const PHASES = ['review', 'fact-check', 'self-review'];
+// There was a second field, `phase`, recording WHICH pass found a finding. It existed only because
+// rounds used to carry findings forward and flip `origin` at the boundary, which destroyed that
+// record. Rounds no longer carry anything forward — each one reviews the document fresh and reports
+// its own numbers — so `origin` never changes after it is set and `phase` has nothing to recover.
+const ORIGINS = ['document', 'self-review'];
 
 const SCHEMAS = {
   code: {
@@ -46,7 +45,7 @@ const SCHEMAS = {
 // because the reviewer's carry-forward branch copies prior-iteration entries forward verbatim: on
 // the first run after this field lands, those entries carry no `origin`, and a hard requirement
 // would reject the artifact for a field the writer was told to preserve untouched.
-const ISSUE_OPTIONAL = ['origin', 'phase'];
+const ISSUE_OPTIONAL = ['origin'];
 
 const COVERAGE_REQUIRED = ['files_in_diff', 'files_inspected', 'not_inspected'];
 const FACT_CHECK_CLAIM_REQUIRED = ['claim', 'verdict'];
@@ -207,19 +206,6 @@ if (!isObj(doc)) {
           errors.push(at + '.origin: ' + JSON.stringify(it.origin) +
             ' is not one of ' + ORIGINS.join('|'));
         }
-        if ('phase' in it && !PHASES.includes(it.phase)) {
-          errors.push(at + '.phase: ' + JSON.stringify(it.phase) +
-            ' is not one of ' + PHASES.join('|'));
-        }
-        // The one direction that must hold: only the self-review pass can produce a finding the
-        // round excludes from its own counts. The reverse is legitimate and common — a
-        // carried-forward self-review finding keeps phase "self-review" and gains origin
-        // "document", which is the round boundary doing its job.
-        if (it.origin === 'self-review' && 'phase' in it && it.phase !== 'self-review') {
-          errors.push(at + ': origin "self-review" with phase ' + JSON.stringify(it.phase) +
-            ' — only the self-review pass may mark a finding as this round\'s own churn. ' +
-            'Either the origin or the phase is wrong.');
-        }
         if ('severity' in it) {
           if (!SEVERITIES.includes(it.severity)) {
             errors.push(at + '.severity: ' + JSON.stringify(it.severity) +
@@ -255,11 +241,17 @@ if (!isObj(doc)) {
 // validation while under-declaring criticals trips an early exit on a review
 // that found them. Fail closed; the writer fixes its own artifact.
 //
-// The recount excludes issues carrying `origin: "self-review"` — findings the review loop's own
-// fix pass introduced within THIS round. They are reported, never counted here. The exclusion is
-// round-local: once the producing round ends those lines are ordinary artefact text, the next
-// round's reviewer re-reads the whole document, and it emits them as `origin: "document"`, at
-// which point they count normally.
+// The recount excludes issues carrying `origin: "self-review"` — findings the round's own fix pass
+// introduced. They are reported, never counted.
+//
+// The recount is over the WHOLE array, and that is correct because the array holds exactly one
+// round's findings. Rounds do not carry findings forward: round 2 re-reads the document and reports
+// what IT finds, so a defect round 1 fixed is simply absent rather than present-and-not-counted.
+//
+// That was not always true, and the difference mattered. When rounds carried findings forward, this
+// recount counted them, while the reviewer was told to count only its own — two rules, no artifact
+// able to satisfy both, and `critical_count` unable to decrease within a run. Removing carry-forward
+// removed the contradiction without adding a field to mark what to skip.
 // See references/shared-rules/counts-exclude-self-review.md.
 if (errors.length === 0) {
   if (counts.critical !== doc.critical_count) {

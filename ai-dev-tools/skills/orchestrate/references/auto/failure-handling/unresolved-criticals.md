@@ -13,10 +13,10 @@ clear every critical.
 
 The old framing did real harm. Calling it "endless loop" implied the loop was misbehaving, so the
 response was tuned to tolerate a bad count (`≤1 critical` counted as success) rather than to trust
-it. That tolerance existed because `critical_count` used to accumulate: a critical the fixer had
-already resolved was carried forward and counted again, so the number grew whatever the fixer did.
-With counts now scoped to the round that produced them, the number can be trusted and the tolerance
-is unnecessary.
+it. That tolerance existed because `critical_count` used to accumulate: rounds carried their findings
+forward, so a critical the fixer had already resolved was counted again and the number grew whatever
+the fixer did. Rounds now start fresh — each one re-reviews and reports only what it finds — so the
+number can be trusted and the tolerance is unnecessary.
 
 ## Measurement
 

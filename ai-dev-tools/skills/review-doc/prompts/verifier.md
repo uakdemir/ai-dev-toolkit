@@ -47,7 +47,6 @@ Four things, and only these four:
 4. For each defect, append an issue object to the `issues` array:
    - `"id"`: `ISSUE-NNN` where NNN is `next_id_seed` zero-padded to **at least** 3 digits (more when `next_id_seed >= 1000`); then increment. **Never reuse or renumber existing IDs.**
    - `"category"`: `"verify"` for a fidelity defect (checks 1-3), `"fact-check"` for a defect in the accuracy of the new text (check 4)
-   - `"phase": "self-review"` — on every issue you append. Unlike `origin` this is never reset: a later round flips `origin` to `"document"` but `phase` keeps the record of which pass found it.
    - `"origin": "self-review"` — **on every issue you append, without exception.** This is what keeps the round that wrote these lines from counting its own churn against the document it was reviewing. Omit it and the loop reports its own sloppiness as evidence the authored document is bad, which via the unresolved-criticals gate can fail the whole pipeline. See `references/shared-rules/counts-exclude-self-review.md`.
    - `"location"`: where the defect is
    - `"problem"`: what is wrong, naming the disposition id whose fix caused or falsely claimed it
@@ -78,7 +77,7 @@ Four things, and only these four:
 8. Rewrite the review JSON with the updated `issues` array using the Write tool. If you found nothing, leave the file untouched and return a one-line summary saying so.
 9. Return a summary naming, for each finding, its id, category, severity, location and whether you fixed it — plus the total lines you wrote. The orchestrator prints these; they are excluded from the round's counts, never from its output.
 
-⚠ **That disposition goes in your returned summary, never in the issue record.** An issue object carries exactly the seven required fields plus `origin` and `phase` — the schema is `additionalProperties: false`, so an extra key like `fixed_by_self_review` fails validation and the orchestrator discards the whole artifact. Whether you fixed a defect is reported to the orchestrator, not stored on the issue.
+⚠ **That disposition goes in your returned summary, never in the issue record.** An issue object carries exactly the seven required fields plus `origin` — the schema is `additionalProperties: false`, so an extra key like `fixed_by_self_review` fails validation and the orchestrator discards the whole artifact. Whether you fixed a defect is reported to the orchestrator, not stored on the issue.
 
 ## Rules
 
