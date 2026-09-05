@@ -413,7 +413,11 @@ When the loop completes (final gate passes or max iterations exhausted):
 
 ## Respond to Remaining Issues
 
-**Trigger:** Status is "Approved with suggestions" (high, medium, or low issues remain, zero criticals).
+**Trigger:** the run completed (status is not **Error**) and anything is left to triage.
+
+**Not gated on status, and not on severity.** Triage used to require "Approved with suggestions", which meant zero criticals — so the runs that most needed automated help got the least of it. A critical the loop could not clear is still a finding with a disposition: `apply` if it has one defensible answer, `push back` with reasoning if the agent believes it is wrong, `defer` if it needs something the repository does not say. Skipping the phase hands every one of them to a human raw, including the ones an agent should simply have fixed.
+
+This is the same rule the fix phase follows. Fixing and iterating are separate decisions; so are triaging and reporting. **Status describes the outcome; it does not gate the work.** The one exception is **Error**: a run that did not complete has no trustworthy artifact to triage from.
 
 After printing the terminal output, auto-triage each remaining issue from `tmp/_reviews_errors/review-doc.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
 
@@ -466,7 +470,9 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 ---
 ```
 
-**When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" is Status Logic rule 2, and it has two triggers: `critical_count > 0` — the loop should have handled them, or max iterations were exhausted — or a fact-check that **completed** and scored under 75. The phase is skipped on either, so a run with zero criticals and a low-scoring fact-check hands the user every remaining high, medium and low issue untriaged — the second trigger, not "criticals remain", is what suppressed the triage there.
+**Skipped only on Error.** Every other status runs this phase, including **Issues Found**. That was not always so: the phase used to require "Approved with suggestions", so rule 2 suppressed it on either of its triggers — `critical_count > 0`, or (per skill) a sub-75 fact-check / verification regressions present. Both suppressions were wrong for the same reason. A low fact-check score says some claims were wrong, which is a reason to triage more carefully rather than to stop; and outstanding criticals are precisely the findings a human most needs sorted into "already applied" and "genuinely needs you".
+
+**Approved** reaches this phase and finds nothing to do, which is the correct no-op. **Error** is the only skip: a run that did not complete has no trustworthy artifact to triage from, and its handoff document is the failure report.
 
 ## Brainstorm Document
 

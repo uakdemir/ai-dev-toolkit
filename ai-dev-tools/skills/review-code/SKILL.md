@@ -142,11 +142,11 @@ For iteration 1 to max_iterations:
 
   STOP CHECK (only when critical_count == 0):
     Run verification commands, compare to baseline
-    Set regressions_present = (verification regressed)
-    If regressions_present OR coverage.not_inspected is non-empty:
-      Continue the loop — do NOT treat this as the last iteration
-    Else:
-      This is the last iteration.
+    This is the last iteration ONLY IF ALL THREE hold:
+      - critical_count == 0          (this branch's own condition)
+      - verification did not regress
+      - coverage.not_inspected is empty
+    Any one of them failing continues the loop.
     Either way: fall through to the Fix Phase if the round found anything at all,
       then go to Final Report. Zero criticals is not zero findings.
     NOTHING is written to review-code.json here. The artifact is the reviewer's.
@@ -430,7 +430,11 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 
 ## Respond to Remaining Issues
 
-**Trigger:** Status is "Approved with suggestions" OR "Incomplete", and issues remain (zero criticals).
+**Trigger:** the run completed (status is not **Error**) and anything is left to triage.
+
+**Not gated on status, and not on severity.** Triage used to require "Approved with suggestions" or "Incomplete" and zero criticals — so the runs that most needed automated help got the least of it. A critical the loop could not clear is still a finding with a disposition: `apply` if it has one defensible answer, `push back` with reasoning if the agent believes it is wrong. Skipping the phase hands every one to a human raw, including ones an agent should simply have fixed.
+
+This is the same rule the fix phase follows. Fixing and iterating are separate decisions; so are triaging and reporting. **Status describes the outcome; it does not gate the work.** The one exception is **Error**: a run that did not complete has no trustworthy artifact to triage from.
 
 Incomplete triggers it too. A finding is real whether or not some *other* file went unread — the coverage hole makes the verdict incomplete, it does not make the findings less true, and suppressing triage would punish the run twice. The status stays Incomplete; only the triage phase is unblocked.
 
@@ -478,7 +482,9 @@ Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cann
 ---
 ```
 
-**When status is "Approved" or "Issues Found":** Skip this phase entirely. "Approved" has nothing to address. "Issues Found" is Status Logic rule 2, and it has two triggers: `critical_count > 0` — the loop should have handled them, or max iterations were exhausted — or verification regressions present. The phase is skipped on either, so a run whose only outstanding defect is a verification regression hands the user every remaining high, medium and low issue untriaged — the second trigger, not "criticals remain", is what suppressed the triage there.
+**Skipped only on Error.** Every other status runs this phase, including **Issues Found**. That was not always so: the phase used to require "Approved with suggestions", so rule 2 suppressed it on either of its triggers — `critical_count > 0`, or (per skill) a sub-75 fact-check / verification regressions present. Both suppressions were wrong for the same reason. A low fact-check score says some claims were wrong, which is a reason to triage more carefully rather than to stop; and outstanding criticals are precisely the findings a human most needs sorted into "already applied" and "genuinely needs you".
+
+**Approved** reaches this phase and finds nothing to do, which is the correct no-op. **Error** is the only skip: a run that did not complete has no trustworthy artifact to triage from, and its handoff document is the failure report.
 
 **When status is "Incomplete":** run the phase, and add one line to its summary naming the files in `coverage.not_inspected`, so a reader knows the triage happened over a partial view. An applied fix could in principle conflict with something in an unopened file; naming them is what makes that risk visible rather than hidden.
 
