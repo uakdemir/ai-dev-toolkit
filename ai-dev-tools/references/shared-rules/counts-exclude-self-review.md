@@ -17,6 +17,28 @@ critical_count = count(severity == "critical" AND origin != "self-review")
 high_count     = count(severity == "high"     AND origin != "self-review")
 ```
 
+## The loop's own edits are not only self-review findings
+
+The formula above is the self-review half of the invariant, and it is the half both review skills
+apply. `review-code` applies a second half on the same reasoning. A **verification regression** is
+measured against a baseline captured before the first iteration runs, so a command that passes at
+baseline and fails later is failing on the loop's own edits by construction — the artefact under
+review did not carry that failure when the run started. It is therefore never written into the
+review JSON, and the counts above never move because of one. `origin` cannot express this case:
+a regression is not a finding a pass raised, it is a command's exit code, and there is no issue
+record to tag.
+
+Excluded from the counts is still not excluded from the output, and the channels are named rather
+than implied: the round's fixer receives the regression through `{{VERIFICATION_REGRESSIONS}}`, and
+`review-code`'s Status Logic reads "verification regressions still present at the final post-fix
+verification run" as a disjunct standing beside `critical_count > 0`, not folded into it. A
+regression one round's fixer introduced and a later round's repaired then leaves no residue in
+either the count or the status — which is the whole point of keeping it out of the count.
+
+This half is `review-code`'s alone: `review-doc` runs no verification commands and so has no
+regressions to exclude, and `orchestrate` is governed here as a reader of the counts, which it reads
+the same way whichever half kept a number out of them.
+
 ## The exclusion is round-local
 
 It holds only within the round that wrote those lines. That round both authored and reviewed them,

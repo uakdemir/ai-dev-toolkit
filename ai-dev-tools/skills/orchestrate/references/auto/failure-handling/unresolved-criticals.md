@@ -29,15 +29,19 @@ document as authored, before the fixer, so its findings are document-origin and 
 other. Reading "the REVIEW output" as the reviewer's own array would drop every one of them, which
 is the class of critical stage i exists to catch.
 
-At stage iii there is a third pre-fix writer, and it counts on the same terms. `review-code`'s stop
-check runs when `critical_count` is zero and, on a verification regression, injects synthetic
-critical issues, updates `critical_count` and rewrites the artifact — all before falling through to
-the fix phase. Those synthetics are inside the measured value: at the moment of measurement the
-regression is real, unrepaired, and about the code under review, exactly like a fact-check finding.
-The consequence follows from the definition and is worth stating plainly — a final iteration whose
-only criticals are regressions that its fix phase then repairs still reads "any critical remaining"
-and stops the run, because the number this gate acts on is taken before that repair and nothing
-re-reads it after.
+At stage iii there is no third pre-fix writer. `review-code`'s stop check runs when `critical_count`
+is zero and writes **nothing** to the artifact: a verification regression reaches that round's fixer
+through `{{VERIFICATION_REGRESSIONS}}` and reaches the reported status through a disjunct of
+`review-code`'s own Status Logic, never through this count. The measured value is the reviewer's,
+plus the fact-checker's recount on a `--fact-check true` run, and nothing else.
+
+The stop check used to inject synthetic critical issues here, bump `critical_count` and rewrite the
+artifact before falling through to the fix phase, which put the loop's own regressions inside the
+measured value and made the number unable to fall: a final iteration whose only criticals were
+regressions its own fix phase then repaired still read "any critical remaining" and stopped the run.
+Removing the injection removed that outcome. A regression introduced and repaired inside one run no
+longer holds this gate; one that survives the final fix phase surfaces in `review-code`'s own status
+(**Issues Found**) rather than in the count this gate reads.
 
 That field counts findings in the artefact under review. It excludes the round's own self-review
 churn (`origin: "self-review"`, see `../../../../../references/shared-rules/counts-exclude-self-review.md`),

@@ -81,10 +81,12 @@ Examples:
 
 1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
 2. Delete stale files from prior runs:
-   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-brainstorm.md`, `./tmp/_reviews_errors/review-doc-iteration-*.md`
+   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-brainstorm.md`, `./tmp/_reviews_errors/review-doc-iteration-*.md`, `./tmp/_reviews_errors/review-doc-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fix-report-iteration-*.json`
    - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
 
    The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's fact-check or self-review phase would otherwise survive into the next run.
+
+   The two per-round snapshot globs matter for the same reason: the exact filenames beside them name only the live artifacts, so without the globs a four-round run followed by a two-round run leaves the earlier run's `-iteration-3` and `-iteration-4` snapshots sitting beside the new run's rounds with nothing to tell them apart — and those files are the durable per-round record every cross-round aggregate is checked against. The `--run-id` branch needs no addition: `<run_id>-review-doc*.json` already matches both.
 
 ## Pre-Flight Checks
 
@@ -140,6 +142,11 @@ for iter in 1..max_iterations:
         self_review()                   # always: checks the fixer's own edits, fixes what it
                                         # finds ONCE, appends its findings with
                                         # origin: "self-review" (never counted this round)
+    snapshot(iter)                      # EVERY round, inside the loop and outside the `if`:
+                                        # copy this round's artifacts to …-iteration-N.json
+                                        # before the next round's reviewer overwrites them —
+                                        # the review JSON always, the fix report ONLY if fix()
+                                        # ran this round (see Cross-Iteration Tracking)
     exit_gate = total_criticals if fact_check else pre_fix_criticals
     if exit_gate == 0:
         break                           # no criticals left -> this was the last round
@@ -289,8 +296,8 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 | `tmp/_reviews_errors/[<run_id>-]review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
-| `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.json` | That round's findings, snapshotted before the next round overwrites them | Final Report aggregates, audit |
-| `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report-iteration-N.json` | That round's dispositions, same reason | Final Report aggregates, audit |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.json` | That round's findings, snapshotted before the next round overwrites them | Post-hoc audit; the Final Report's aggregates are accumulated in flight |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report-iteration-N.json` | That round's dispositions, same reason | Post-hoc audit; the Final Report's aggregates are accumulated in flight |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` | Items needing a human decision; its absolute path is the run's last line | Humans |
 
 **Run-id prefixing (applies throughout):** every `tmp/_reviews_errors/review-doc*` path referenced anywhere in this document (Review Loop, Agent Dispatch, Hash Verification, Terminal, Final Report, Respond, Cross-Iteration, Iteration Log, Brainstorm, Schema) is prefixed to `tmp/_reviews_errors/<run_id>-review-doc*` when `--run-id` is active — matching the run-id-aware paths the reviewer, fact-checker and self-review prompts write to. The `[<run_id>-]` prefix is elided inline for brevity and shown explicitly only in the Output Artifacts table above.
@@ -408,7 +415,7 @@ When the loop completes (final gate passes or max iterations exhausted):
 3. Apply status logic (see Status Logic below).
 4. Derive the next-round recommendation (see Next-Round Recommendation below).
 5. Print terminal output (see Terminal Output above), ending with the `Found this round:` line — the brainstorm path in step 7 follows it as the run's last line.
-6. If status is "Approved with suggestions", run the Respond to Remaining Issues phase (below).
+6. Unless the status is **Error**, run the Respond to Remaining Issues phase (below).
 7. Write the brainstorm document and print its absolute path as the run's last line (see Brainstorm Document below). This runs whatever the status is — a run with nothing to hand back still prints the line.
 
 ## Respond to Remaining Issues
@@ -436,12 +443,13 @@ After auto-triage, print a summary and commit applied fixes:
 
 ```
 ── Remaining Issues ────────────────────────────
-N issues triaged (H high, M medium).
+N issues triaged (C critical, H high, M medium, L low).
 
-  [Applied]     ISSUE-001 high: <title>
-  [Applied]     ISSUE-002 medium: <title>
-  [Pushed back] ISSUE-003 medium: <title> — <one-line reason>
-  [Deferred]    ISSUE-004 medium: <title> — <one-line reason>
+  [Pushed back] ISSUE-001 critical: <title> — <one-line reason>
+  [Applied]     ISSUE-002 high: <title>
+  [Applied]     ISSUE-003 medium: <title>
+  [Pushed back] ISSUE-004 medium: <title> — <one-line reason>
+  [Deferred]    ISSUE-005 medium: <title> — <one-line reason>
 
 Applied: N | Deferred: N | Pushed back: N
 ```
@@ -526,14 +534,16 @@ The orchestrator maintains the following state across the loop:
 
 After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. For each disposition with `action: "fixed"`, increment `total_fixed[severity]` immediately; for `deferred` and `pushed-back`, increment the flat counter. Nothing is cached across rounds: ids are per-round, so round 2's `ISSUE-001` is a different finding from round 1's, and a map that outlived a round would resolve it to the earlier round's severity. Every lookup is answered by the artifact of the round that wrote the disposition, and then discarded. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
 
-**Snapshot the round before the next one overwrites it.** After each iteration's self-review pass returns, copy the round's two artifacts to iteration-scoped names:
+**Snapshot the round before the next one overwrites it.** At the end of every iteration — after the self-review pass returns if it ran — copy the round's artifacts to iteration-scoped names:
 
 ```bash
 cp tmp/_reviews_errors/[<run_id>-]review-doc.json            tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.json
 cp tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json tmp/_reviews_errors/[<run_id>-]review-doc-fix-report-iteration-N.json
 ```
 
-Rounds start fresh, so round N+1's reviewer **overwrites** both files rather than appending to them. Every cross-round number the Final Report prints — `Aggregate`, `Deferred`, `Pushed back`, `collateral_count` — is summed across iterations, and without these snapshots the only copy of round N's data is orchestrator state in a context window. That is not a durable source, and a run that reports an aggregate it cannot reconstruct from disk is reporting a number nobody can check.
+**The first `cp` runs unconditionally; the second runs only when this round's fix phase ran.** The loop guards both `fix()` and `self_review()` behind `total_issues > 0`, and the round that finds nothing is the round a converged run ends on — so a trigger keyed to the self-review pass would leave the final round's findings with no durable copy at all. Such a round has no fix report of its own either: whatever sits at `review-doc-fix-report.json` belongs to an earlier round, and copying it would file that round's dispositions as this one's. When the self-review pass aborted under `references/shared-rules/agent-abort-contract.md`, snapshot the artifact the orchestrator restored from `.bak` — that is what the round ended with.
+
+Rounds start fresh, so round N+1's reviewer **overwrites** both files rather than appending to them. Every cross-round number the Final Report prints — `Aggregate`, `Deferred`, `Pushed back`, `collateral_count` — is accumulated in flight, as each round's fix report is parsed before the next round overwrites it, and without these snapshots the only copy of round N's data is orchestrator state in a context window. That is not a durable source, and a run that reports an aggregate it cannot reconstruct from disk is reporting a number nobody can check.
 
 This is the cost of removing carry-forward, paid deliberately: the accumulating array used to be the record. Two `cp` calls per iteration replace it, and they make each round independently auditable — which the accumulating array never was.
 
