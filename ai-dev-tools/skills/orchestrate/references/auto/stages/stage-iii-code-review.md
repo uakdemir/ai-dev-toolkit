@@ -47,7 +47,7 @@ This commit is load-bearing for rollback anchors. The hash update in step 4 alwa
 
 **If `node` is unavailable**, the validator cannot run and the third clause is waived — the artifact's existence and a clean agent return are sufficient. Record `schema validation not run: node unavailable` in the stage's error log, matching the same carve-out in `review-code`'s VALIDATION step and reviewer prompt. Without this waiver a machine without Node could never produce a successful iteration, so every spec in every auto run would be skipped.
 
-An artifact that exists but does not validate is a crash (`retry-semantics.md` crash item 4), not a successful iteration. Without the third clause `last_iteration_head` advances past a review that never validated, and the crash path's soft-reset to that anchor becomes a no-op — the same advance-as-clean behaviour the Output Validation section below removes, arriving by a different route.
+An artifact that exists but does not validate is a crash (`references/auto/failure-handling/retry-semantics.md` crash item 4), not a successful iteration. Without the third clause `last_iteration_head` advances past a review that never validated, and the crash path's soft-reset to that anchor becomes a no-op — the same advance-as-clean behaviour the Output Validation section below removes, arriving by a different route.
 
 ---
 
@@ -63,7 +63,7 @@ At iter 4's REVIEW output, pre-fix:
 
 Agent iii's output is validated like any other artifact — by `scripts/validate-review-json.cjs`, per `review-code`'s VALIDATION step. There is no optimistic-trust exemption and no fail-open at the final iteration.
 
-Malformed or missing output is a crash (`references/auto/failure-handling/retry-semantics.md`), which means retry-once and then `crash-code-review.md`: soft-reset to `last_iteration_head`, stash, state `skipped-crash-code-review`, continue to the next spec. One spec is skipped loudly and the reason is recorded; the batch is not halted and no work is destroyed.
+Malformed or missing output is a crash (`references/auto/failure-handling/retry-semantics.md`), which means retry-once and then `references/auto/failure-handling/crash-code-review.md`: soft-reset to `last_iteration_head`, stash, state `skipped-crash-code-review`, continue to the next spec. One spec is skipped loudly and the reason is recorded; the batch is not halted and no work is destroyed.
 
 Advancing unvalidated output as clean was a silent false green — a review that never ran, reported as a review that passed.
 

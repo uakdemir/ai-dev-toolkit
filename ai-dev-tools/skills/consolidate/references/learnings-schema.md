@@ -1,6 +1,6 @@
 # Learnings Schema
 
-Runtime reference for `learn-report.md`. Contains all rules for writing `learnings.md` entries and organizing the `configs/` folder structure.
+Runtime reference for `prompts/learn-report.md`. Contains all rules for writing `learnings.md` entries and organizing the `configs/` folder structure.
 
 ---
 
