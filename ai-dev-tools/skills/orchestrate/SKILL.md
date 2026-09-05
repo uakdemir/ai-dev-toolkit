@@ -132,5 +132,8 @@ Schema in `references/auto/auto-state-schema.md`. Auto mode never reads or write
 ## Completion
 
 After all specs processed (or pipeline halted):
-- Print summary: `[auto] complete: N succeeded, M skipped, K halted`
+- Print summary: `[auto] complete: N succeeded, M skipped, K halted, R review runs failed`
+- When `R > 0`, add one line naming the log: `[auto] R review failures recorded in tmp/_reviews_errors/error-logs.md`
 - Exit.
+
+`R` counts review runs that reported **Error** under `references/shared-rules/run-failure-disclosure.md` — a review that could not complete, as distinct from one that completed and found problems. Auto mode never prompts on those; it records and continues. The count is here because the useful signal is the *rate*: an occasional failure is noise, a frequent one means a reviewer prompt needs work, and that comparison is only possible if every failure lands in one place and is counted.

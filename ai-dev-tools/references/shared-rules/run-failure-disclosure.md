@@ -59,9 +59,17 @@ Review <Doc|Code> FAILED
   Retry the failed phase / continue with what completed / abort the run? [retry|continue|abort]
 ```
 
-**Programmatic or auto dispatch — do not ask.** There is nobody to answer, and a prompt in auto mode
-is a hung pipeline rather than a safe default. Exit non-zero, write the reason to the run's error
-log, and let the caller's failure path handle it — `orchestrate` already has one.
+**Programmatic or auto dispatch — record, do not ask.** There is nobody to answer, and a prompt in
+auto mode is a hung pipeline rather than a safe default. Append the failure block to
+`tmp/_reviews_errors/error-logs.md`, exit non-zero, and let the caller's failure path handle it —
+`orchestrate` already has one, and already has the log.
+
+**The reason to surface failures at all is frequency, not triage.** One failed run in a hundred is
+noise; one in five means a prompt needs work. That signal only exists if every failure is written
+down in the same place and counted — which is why the auto branch records rather than asks, and why
+`orchestrate`'s completion summary reports how many runs failed. A prompt answers "what do I do
+about this one"; the log answers "is this worth fixing", and the second question is the one that
+improves the skill.
 
 A rule that says "ask the human" without this split is the same defect as a guard that delegates to a
 caller nobody wrote: correct-looking on the path where it is never needed, absent on the path where
