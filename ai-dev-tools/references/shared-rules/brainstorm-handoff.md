@@ -14,6 +14,28 @@ answer, and that part is exactly what gets lost — spread across a fix report's
 scrolls off the screen. Collecting it into one file, and printing that file's path where it cannot
 be missed, is what turns a review into something the founder can act on.
 
+## The fix phase always runs — including on a focused review
+
+**Fix what has one defensible answer; hand back only what has more than one.** A review that reports
+without fixing hands the whole list to a human, which is the failure this rule exists to prevent: it
+makes the brainstorm document a dumping ground instead of a decision queue, and it wastes the one
+thing an agent is reliably good at.
+
+There is no "report-only" mode and no scope small enough to skip fixing. A focused review, a
+single-file review, a `--max-iterations 1` review — all of them fix. The narrower the scope, the
+*more* certain the agent should be about the obvious repairs in it.
+
+The test for handing something back is not difficulty and not size. It is: **can the agent name more
+than one defensible answer, or does the right answer depend on something the repository does not
+say?** If yes, it goes in the document. If no, fix it — a finding the agent could have fixed and
+chose to escalate has cost a human's attention for nothing.
+
+Concretely, fix: a stale path, a wrong count, a contradiction with one obviously-correct side, a
+missing statement the rest of the document already implies, a name that does not match its
+definition. Hand back: a choice between two consistent designs, anything that changes an interface
+another skill depends on, anything whose right answer is a policy the documents do not record, and
+anything where fixing it would mean inventing content rather than repairing it.
+
 ## What goes in it
 
 Everything triage could not settle on its own:

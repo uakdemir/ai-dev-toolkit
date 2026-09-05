@@ -91,7 +91,13 @@ Examples:
 5. All explicit file paths are validated for existence. If any are missing: print `"Error: file not found: <path>"` for each and exit.
 6. `--against` must be a file path, not a directory. If a directory is passed: print `"Error: --against value must be a file, not a directory."` and exit.
 7. If `--against` provided, validate `<ref-path>` exists. If not: `"Error: reference document not found: <ref-path>"`
-8. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output). When a document exists in more than one location:
+8. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output).
+
+   **First, is it one document or a naming convention?** This gate runs before the cap, not inside it. A basename that names a file *per directory* — `SKILL.md`, `README.md`, `index.md`, `AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md` — is a convention, not a document duplicated across locations, however few copies exist. Treat any basename whose copies are not substantially the same document as a convention. Print `Warning: <basename> exists at N locations; treated as a naming convention, not expanded. Copies not reviewed: <paths>` and continue with the explicit paths only.
+
+   Gating on the cap alone is not enough, and the failure is not hypothetical: this plugin has `SKILL.md` at 15 locations, so a two-file review fits the 20-file cap and the rule then mandates pulling 13 unrelated skill definitions into scope — whose differences the reviewer reports as `cross-reference` findings, which the fixer must always defer and the reviewer's cap exemption carries forward forever.
+
+   When the copies **are** one document in more than one location:
    - Print every matched path. Never resolve the ambiguity silently — the user must see that more than one copy exists whatever happens next.
    - Pass the copies to the reviewer as read-only context if that keeps the total within the 20-file cap. The reviewer then reads **both** and surfaces the conflict as a `cross-reference` finding. Read-only copies never enter the fixer's document paths: which copy is authoritative is the user's call, not the fixer's.
    - If adding them would exceed the cap, do NOT expand and do NOT error — a common basename (`README.md`, `index.md`) is not a duplicated document. Print `Warning: <basename> exists at N locations; not expanded (20-file cap). Copies not reviewed: <paths>` and continue with the explicit paths. This is a skipped check, so it is stated, not dropped.
@@ -112,8 +118,9 @@ for iter in 1..max_iterations:
         fact_check()                    # appends fact-check issues to json
     total_criticals = count(json)       # re-count after fact-check (includes fact-check-added criticals)
     is_final_iter = (iter == max_iterations)
-    if pre_fix_criticals == 0 and not is_final_iter:
-        break                           # early-exit: no criticals, skip fix phase, skip remaining iters
+    exit_gate = total_criticals if fact_check else pre_fix_criticals
+    if exit_gate == 0 and not is_final_iter:
+        break                           # early-exit: nothing to fix, skip fix phase and remaining iters
     if total_criticals == 0:            # final iter, 0 criticals: skip fixer, clean exit
         break
     fix()                               # fixer runs when total_criticals > 0
@@ -125,7 +132,9 @@ for iter in 1..max_iterations:
 **Key behavioral properties:**
 1. No phase logic, no tier promotion, no hidden final gate.
 2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
-3. Early exit only on `pre_fix_criticals == 0` (option Y — always measure at review output, before fact-check).
+3. Early exit is gated on `total_criticals == 0` when `--fact-check true`, and on `pre_fix_criticals == 0` otherwise.
+
+   Option Y is unchanged: `pre_fix_criticals` is still measured at review output, before fact-check, and is still what the endless-loop gate reads. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the endless-loop gate as ">1 criticals remaining" and the spec is skipped — for criticals the loop itself declined to fix.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
 5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
 6. `validate(json)` runs right after `review()`:
@@ -219,7 +228,7 @@ Runs **after the fixer**, in every iteration where the fixer ran. Always on — 
 
 Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants), exactly as it does for the fact-checker. If the pass fails, the orchestrator restores the backup and prints a warning.
 
-**Abort detection contract:** identical to the fact-checker's — the self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
+**Abort detection contract:** **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-code`. Identical to the fact-checker's — the self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
 
 Read `prompts/verifier.md` and dispatch: `Agent(prompt: <self-review-prompt>)`.
 
@@ -406,7 +415,7 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 
 ## Brainstorm Document
 
-**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-code`. This skill writes it to `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` after the triage phase, and ends the run with:
+**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-code`. The fix phase always runs — there is no report-only mode and no scope small enough to skip it. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` after the triage phase, and ends the run with:
 
 ```
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-doc-brainstorm.md

@@ -80,7 +80,17 @@ Examples:
 ## Pre-Flight Checks
 
 1. `git rev-parse HEAD` succeeds. If not: `"Error: no commits in repository."`
-2. If on `main` or `master`: `"Warning: you are on branch 'main'. Fix commits will land here. Continue?"` Print the warning and pause for user confirmation. This is a blocking prompt — the user must explicitly approve. If the skill is invoked programmatically (e.g., from orchestrate), the invoking skill is responsible for branch validation before dispatch.
+2. **Branch guard — unconditional, never waived.** Resolve the current branch yourself:
+
+   ```bash
+   git rev-parse --abbrev-ref HEAD
+   ```
+
+   If it is `main` or `master`, the behaviour depends on whether there is a user to ask:
+   - **Interactive:** print `Warning: you are on branch '<name>'. Fix commits will land here. Continue?` and pause for explicit approval. Blocking.
+   - **Programmatic or auto dispatch (no user to prompt):** abort — `Error: refusing to run on branch '<name>'; dispatch from a feature branch.`
+
+   This check previously delegated itself to "the invoking skill" whenever the caller was programmatic. **No caller discharged it.** `main` and `master` appear nowhere under `skills/orchestrate/`, and `git rev-parse --abbrev-ref` / `git symbolic-ref` appear nowhere in this plugin at all — so the one path where no human can be prompted, and where the fixer, the self-review pass and stage-iii all commit, was the path with no guard. A guard that delegates to a caller nobody wrote is not a guard.
 3. If `git status --porcelain` non-empty: `"Working tree is dirty. Please commit or stash your changes before running review-code."` This check runs once during pre-flight only. Verification command side-effects (coverage reports, cache files) are expected during the loop and do not re-trigger this check. The fixer uses `git add -u` (tracked files only) when committing to avoid including verification artifacts.
 
 ## Edge Case: `--max-iterations 0`
@@ -134,7 +144,7 @@ For iteration 1 to max_iterations:
     Fixer commits: "fix(review-code): resolve N issues from iteration M"
 
   SELF-REVIEW (always, whenever the fix phase ran):
-    Scope = the fixer's own commits: git diff $before_sha..$after_sha
+    Scope = the fixer's own commits: git diff $before_sha..$fixer_sha
     Dispatch self-review agent (prompts/self-review.md)
     Reports defects in the fixer's own changes AND fixes them, exactly once (depth 1)
     Appends issues with origin: "self-review" — excluded from THIS iteration's
@@ -186,13 +196,15 @@ Read `prompts/coder.md` from this skill's directory for dispatch instructions. E
 
 Runs **after the fixer**, in every iteration where the fixer ran. Always on — there is no flag.
 
-**Scope is a git diff.** The fixer commits its own work, so its changes are mechanically identifiable: `git diff $before_sha..$after_sha`. No fix-report region matching is needed — this is the one thing that makes the pass simpler here than in `review-doc`.
+**Scope is a git diff.** The fixer commits its own work, so its changes are mechanically identifiable: `git diff $before_sha..$fixer_sha` — the fixer's commits and nothing else. No fix-report region matching is needed; this is the one thing that makes the pass simpler here than in `review-doc`. Note it is `$fixer_sha`, not `$after_sha`: this pass has not made its own commit yet, and reviewing its own future output is not what depth 1 means.
 
 **Remit** is the fixer's own changes, on the same categories the reviewer uses: a fix that does not do what its disposition claims, two fixes that contradict each other, a fix that breaks a call site it did not touch, and a fix that is wrong on its own terms.
 
 **It fixes what it finds, exactly once.** Depth 1 — it edits and commits, and the code *it* writes is not re-reviewed within the iteration. The next iteration's reviewer covers it: both scope modes review the full scope since the resolved base, so nothing the self-review pass writes escapes review as long as another iteration runs.
 
-Read `prompts/self-review.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The dispatch prompt must include the effort level, the fixer's diff range, the fix report path, and the review JSON path.
+Before dispatch, the orchestrator backs up `tmp/_reviews_errors/[<run_id>-]review-code.json` to `<path>.bak`. **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** On detection the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues; any other failure mode (crash, exception, no response) is treated identically. Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-doc`.
+
+Read `prompts/self-review.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The dispatch prompt must include the effort level, the fixer's diff range (`$before_sha..$fixer_sha`), the fix report path, and the review JSON path.
 
 It appends every defect to the `issues` array with `origin: "self-review"`, following the same synthetic-issue shape the verification regressions use (all six schema-required fields), and commits with `fix(review-code): self-review of iteration M's fixes`.
 
@@ -201,6 +213,8 @@ It appends every defect to the `issues` array with `origin: "self-review"`, foll
 The exclusion is **round-local** and flips at the iteration boundary. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-doc`.
 
 **Not counted is not not-shown.** Self-review findings print on their own line in the terminal output and appear in the summary. Without that, the loop would have a sanctioned channel for silent degradation.
+
+**Disclose the depth-1 tail.** The code the self-review pass itself writes is not reviewed within the iteration, and on the FINAL iteration no later one reads it either. Track `self_review_tail_lines` — lines written by the final iteration's self-review pass — and print `Unreviewed tail: N lines committed by the final self-review pass`, omitting the line when the count is 0. `prompts/self-review.md` returns that count. This matters more here than in `review-doc`: `--max-iterations` defaults to **1**, so on a default invocation the final iteration is the only iteration and every line the pass writes is committed unreviewed. Required by `references/shared-rules/counts-exclude-self-review.md`.
 
 **Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, `found_this_round.critical` in iteration N+1 measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. The Next-Round Recommendation and the endless-loop gate therefore gate on the right signal without either being rewritten. Do not "fix" those rules to compensate.
 
@@ -224,7 +238,7 @@ Scope-based filtering:
 
 ## Brainstorm Document
 
-**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-doc`. This skill writes it to `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` after the triage phase, and ends the run with:
+**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-doc`. The fix phase always runs — there is no report-only mode and no scope small enough to skip it. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` after the triage phase, and ends the run with:
 
 ```
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-code-brainstorm.md
@@ -244,11 +258,27 @@ After each iteration, append all issues to `tmp/past-issues-backlog.md`:
 ## Git Diff Scope
 
 **Count mode (integer argument):**
+**Three SHAs, and where each is captured.** They are distinct commits and conflating them is what
+makes the next iteration's scope wrong:
+
+| variable | captured | what it points at |
+|---|---|---|
+| `original_base` | once, at iteration 1, before anything runs | the commit the whole review is measured from; **never recomputed** |
+| `before_sha` | at the start of each iteration, before the fixer is dispatched | HEAD as that iteration found it |
+| `fixer_sha` | after the fixer commits, before the self-review pass is dispatched | the end of the fixer's work — the self-review pass's scope is `before_sha..fixer_sha` |
+| `after_sha` | after the self-review pass commits (or `= fixer_sha` if it made no commit) | the end of the whole iteration |
+
+`after_sha` is captured **after** the self-review pass, which is what puts that pass's own commit
+inside the next iteration's scope. Capture it before, and the code the self-review pass writes is
+never reviewed by anything — and the round-local count exclusion in
+`references/shared-rules/counts-exclude-self-review.md` is justified by the claim that the next
+iteration reads it.
+
 - **Iteration 1:** resolve the base **once** and keep it — `original_base=$(git rev-parse HEAD~N)` — then `git diff $original_base..HEAD`
   - If `HEAD~N` fails (fewer commits): `original_base=$(git hash-object -t tree /dev/null)`, then `git diff $original_base..HEAD`
 - **Iteration 2+:** `git diff $original_base..$after_sha` — always reviews full scope since the resolved base, including prior iteration fixes.
   - `original_base` is the SHA captured at iteration 1 and is **never recomputed**. A literal `HEAD~N` re-evaluated at iteration 2 points somewhere else, because the fixer's commits have moved `HEAD`: the expression silently narrows the scope every iteration and the original implementation is never reviewed again after iteration 1.
-  - If the fixer made no commits: `$after_sha` is unchanged and the same command re-reviews the same scope.
+  - If neither the fixer nor the self-review pass committed: `$after_sha` equals `$before_sha` and the same command re-reviews the same scope.
 
 **Since mode (git ref argument):**
 - **Iteration 1:** `git diff <ref>..HEAD`
@@ -302,6 +332,11 @@ Remaining: A Critical | B High | C Medium | D Low
 Last round: X Critical fixed | Y High fixed | Z Medium fixed | W Low fixed
 Pushed back: P
 
+## Self-Review
+S findings against this run's own fixes (F fixed, R remaining) — excluded from the counts above.
+  [category] [severity] at [location] — <problem> (fixed | remaining)
+Unreviewed tail: N lines committed by the final self-review pass
+
 ## Validation
 - Commands run (exact) and their results
   - `<cmd>` — PASS | REGRESSION (exit N, baseline exit M)
@@ -340,6 +375,7 @@ Review Code Complete
   Remaining: 0 Critical | 2 High | 1 Medium | 0 Low
   Last round: 2 Critical fixed | 1 High fixed | 0 Medium fixed | 0 Low fixed
   Self-review: 3 found, 3 fixed — not counted above (this run's own churn)
+  Unreviewed tail: 12 lines committed by the final self-review pass
   Verification: all passing
   Commits added: abc1234, def5678
   Summary: tmp/_reviews_errors/review-code-summary.md
@@ -422,7 +458,7 @@ Orchestrator maintains running counters across iterations:
 - `last_round_fixed` (per-severity: critical, high, medium, low) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
 - `total_pushed_back` (flat count)
 
-Parse `tmp/_reviews_errors/review-code-fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `after_sha != before_sha`, append the short SHA. This populates the "Commits added" line in terminal output.
+Parse `tmp/_reviews_errors/review-code-fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `fixer_sha != before_sha`, append the short SHA, and again after the self-review pass where `after_sha != fixer_sha`. This populates the "Commits added" line in terminal output.
 
 ## Verification with `--max-iterations 1`
 
@@ -452,7 +488,7 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 
 **Model:** inherited from caller session
 **Effort:** <--effort value>
-**Scope:** last N commits | commits original_base..after_sha | commits <ref>..after_sha
+**Scope:** last N commits | commits original_base..after_sha | commits <ref>..after_sha (`after_sha` = HEAD after the self-review pass)
 **Issues found:** X critical, Y high, Z medium, W low
 **Outcome:** "Fixed N issues (P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>"
 **Issues fixed:** [category] [severity] at [location]
@@ -516,5 +552,6 @@ Note: `medium_count` and a low count are not in the schema — both are derived 
 | Git operations fail | Abort with error. |
 | Verification command fails | Not an error — data for regression comparison. |
 | Max iterations exhausted | Stop with "Issues Found" status, report remaining issues. |
+| Self-review pass aborts (`ABORT: ` sentinel, crash, or no response) | Restore the `.bak`, print `Warning: self-review aborted — <reason>. Fix results unverified.`, continue. See `references/shared-rules/agent-abort-contract.md`. |
 
 No explicit per-agent timeout. The `--max-iterations` cap prevents runaway loops.
