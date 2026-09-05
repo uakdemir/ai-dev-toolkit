@@ -51,7 +51,7 @@ const files = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) { if (!SKIP_DIR.test(full)) walk(full); }
+    if (e.isDirectory()) { if (!SKIP_DIR.test(full) && !e.name.startsWith('.')) walk(full); }
     else if (e.name.endsWith('.md')) files.push(full);
   }
 })(skillsDir);

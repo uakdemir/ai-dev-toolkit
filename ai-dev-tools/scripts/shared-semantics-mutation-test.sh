@@ -479,6 +479,17 @@ else
   bad "P2  --print-coverage changed the verdict (red tree): $rc_plain -> $rc_flag"
 fi
 
+# A dot-directory under skills/ is tooling, not a skill. Walking one is how the gate met a config
+# path masked to a character device and reported "cannot run" on a tree that was perfectly fine —
+# `skills/.claude/loop.md`, unreadable, turned a green tree into exit 2. Enumerating skills must
+# skip dot-directories; scaffold's template payload at templates/**/.claude/ is deeper and unaffected.
+build_base
+mkdir -p "$BASE/skills/.claude"
+printf 'irrelevant\n' > "$BASE/skills/.claude/loop.md"
+chmod 000 "$BASE/skills/.claude/loop.md"
+expect green "$BASE" "P3  an unreadable dot-directory under skills/ is not a skill and does not break the gate"
+chmod 644 "$BASE/skills/.claude/loop.md"
+
 echo
 echo "-------- $pass passed, $fail failed --------"
 [ "$fail" -eq 0 ] || exit 1

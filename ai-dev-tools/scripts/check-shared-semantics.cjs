@@ -313,8 +313,12 @@ function isReferenceFile(skill, file) {
   return path.relative(path.join(skillsDir, skill), file).split(path.sep).includes('references');
 }
 
+// A skill is a NAMED directory. Dot-directories under skills/ are tooling — `.claude`, `.git`,
+// editor state — not skills, and walking them is how the gate met a config path masked to a
+// character device and reported "cannot run" for a tree that was perfectly fine. Scaffold's
+// template payload lives deeper (templates/**/.claude/) and is untouched by this.
 const allSkills = fs.readdirSync(skillsDir).filter((s) =>
-  fs.statSync(path.join(skillsDir, s)).isDirectory()).sort();
+  !s.startsWith('.') && fs.statSync(path.join(skillsDir, s)).isDirectory()).sort();
 
 // ---- the four checks ----------------------------------------------------------
 

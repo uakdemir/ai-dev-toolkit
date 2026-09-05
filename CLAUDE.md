@@ -71,8 +71,8 @@ touched; the gate exists so the next such divergence fails loudly, but only if i
 If you change a gate, re-run its mutation suite and add a case for what you changed:
 
 ```bash
-./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 41 passed
+./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 42 passed
 ```
 
 A gate tested only against the bug it was written from proves the author can grep. That suite has
-now caught six defects in the gate itself that reading did not.
+now caught seven defects in the gate itself that reading did not.

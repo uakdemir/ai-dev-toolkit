@@ -17,13 +17,13 @@ Iterative code review with automatic fix cycles. Reviews the last N commits, fin
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <spec-path>` | none | any file path | Spec as implementation contract |
-| `--effort` | max | high, xhigh, max | Reasoning-effort level for the reviewer and fixer |
+| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, self-reviewer) |
 | `--max-iterations` | 1 | 0-10 | Safety cap (0 = skip, 1 = single-pass) |
 | `--verify "<cmd>"` | none | any shell command | Repeatable — verification commands run after each fix |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional |
 | `--help` | — | — | Print usage and exit |
 
-**Removed flags:** `--max-model` (clean break, no backward-compat shim). The reviewer and fixer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
+**Removed flags:** `--max-model` (clean break, no backward-compat shim). The reviewer, fixer and self-reviewer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
 
 If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
 
@@ -122,7 +122,7 @@ For iteration 1 to max_iterations:
     Agent produces tmp/_reviews_errors/review-code.json directly (no synthesis)
 
   VALIDATION:
-    Run: node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs <output-path>
+    Run: node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code <output-path>
     Exit 0 → use the printed recount as the authoritative severity counts
     Exit 1 or 2 → retry review once, abort on second failure
     If node is unavailable: fall back to reading the file, and record
@@ -163,7 +163,7 @@ No final-gate pattern for review-code. Since all rounds use the same single agen
 
 ## Reviewer Agent
 
-Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes `{{EFFORT}}` and the output path `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json` in `prompts/reviewer.md`). Receives:
+Single agent, inheriting the caller's session model and running at the `--effort` reasoning level (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, `{{ITERATION_NUM}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{REGRESSIONS}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
 - Git diff (up to 3000 lines, strategically trimmed)
 - Spec content (if `--against` provided)
 - CLAUDE.md (if exists)
@@ -243,6 +243,14 @@ Scope-based filtering:
 ```
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-code-brainstorm.md
 ```
+
+When there is nothing to hand back, print the line anyway and write no file:
+
+```
+Brainstorm (needs your decisions): none — every finding was applied or resolved
+```
+
+A missing line is indistinguishable from a skill that forgot.
 
 ## Backlog Writing
 
@@ -387,12 +395,11 @@ Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-code-bra
 
 `Self-review:` reports what the self-review pass found against this run's own fixes. Those findings are excluded from every other count on the screen — `Aggregate`, `Remaining`, `Last round` — because the iteration that wrote those lines both authored and reviewed them. **They are excluded from the counts, never from the output.** Print the line whenever the self-review pass ran, including when it found nothing (`0 found`).
 
-`origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the six required; `additionalProperties: false` still rejects everything else. `phase` records where a finding was found (`"review"` or `"self-review"` here) and never changes, where `origin` is round-relative and flips at the iteration boundary — it is for diagnostics, and the counts stay on `origin`. The validator enforces that `origin: "self-review"` implies `phase: "self-review"`. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
 
 ## Final Report
 
 When the loop completes (criticals zero + verification pass, or max iterations exhausted):
-0. **Validate the finished artifact**, once, before anything reads it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs <output-path>`. This is the only point at which the self-review pass's appends are checked — earlier iterations are covered by the next reviewer's recompute, and the final one has no next reviewer. With `--max-iterations` defaulting to 1, that is every default run. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`; exit 2 → proceed and record `schema validation not run: node unavailable` under Checks SKIPPED.
+0. **Validate the finished artifact**, once, before anything reads it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code <output-path>`. This is the only point at which the self-review pass's appends are checked — earlier iterations are covered by the next reviewer's recompute, and the final one has no next reviewer. With `--max-iterations` defaulting to 1, that is every default run. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`; exit 2 → proceed and record `schema validation not run: node unavailable` under Checks SKIPPED.
 1. Generate `tmp/_reviews_errors/review-code-summary.md` from the last iteration's `tmp/_reviews_errors/review-code.json` (top 10 issues by severity, then descending confidence).
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (below).
@@ -455,9 +462,11 @@ Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cann
 ## Cross-Iteration Tracking
 
 Orchestrator maintains running counters across iterations:
-- `total_fixed` (per-severity: critical, high, medium, low)
+- `total_fixed` (per-severity: critical, high, medium, low). The fix report cannot supply the severity — `prompts/coder.md` emits `{issue_index, action, detail}` and no more — so resolve each disposition's severity by `issue_index` into the CURRENT `tmp/_reviews_errors/review-code.json` *before* the next iteration's reviewer overwrites it, and cache the resolved `(issue_index → severity)` map in orchestrator state, first-write-wins.
 - `last_round_fixed` (per-severity: critical, high, medium, low) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
 - `total_pushed_back` (flat count)
+- `self_review_found = {found: 0, fixed: 0}` — running total across every self-review pass in this run, sourced from the agent's returned summary (`prompts/self-review.md` requires it). Populates the `Self-review:` terminal line and the summary's `## Self-Review` section. **Never** added to `total_fixed`, `critical_count` or `high_count` for the iteration that produced it: `references/shared-rules/counts-exclude-self-review.md`.
+- `self_review_tail_lines` — lines written by the FINAL iteration's self-review pass, for the `Unreviewed tail:` line. Earlier iterations need no tracking; the next iteration reviews them.
 
 Parse `tmp/_reviews_errors/review-code-fix-report.json` after each fix phase before it is overwritten by the next iteration. Additionally maintains `fix_commit_shas = []` — after each fix phase where `fixer_sha != before_sha`, append the short SHA, and again after the self-review pass where `after_sha != fixer_sha`. This populates the "Commits added" line in terminal output.
 
@@ -475,7 +484,7 @@ First match wins:
 1. **Error**: loop aborted — includes reviewer output that failed validation twice
 2. **Issues Found**: `critical_count > 0` OR verification regressions present
 3. **Incomplete**: `coverage.not_inspected` is non-empty
-4. **Approved with suggestions**: any high, medium, or low issues remain
+4. **Approved with suggestions**: any high, medium, or low issue with `origin: "document"` remains
 5. **Approved**: all other cases
 
 **Incomplete** names the files that were not inspected rather than announcing the run clean. It has exactly one trigger. Output that fails validation resolves to **Error** at rule 1 in both standard and auto mode, so it never reaches rule 3.
@@ -513,7 +522,9 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 **Issues fixed:** [category] [severity] at [location]
 **Issues pushed back:** [category] [severity] at [location] — reason
 **Issues found (no disposition):** [category] [severity] at [location], or "none"
-**Commits added:** after_sha (or "none")
+**Agents:** 1 (reviewer), plus self-reviewer (whenever the fixer ran)
+**Self-review:** N found, M fixed (excluded from the counts above)
+**Commits added:** fixer_sha, after_sha (or "none")
 **Verification:** command1 PASS | command2 REGRESSION | ...
 ```
 
@@ -561,7 +572,9 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
 }
 ```
 
-Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. Consumers reading these fields off disk (see `../orchestrate/references/common/error-logs-format.md`) are therefore safe.
+`origin` and `phase` are the only optional per-issue keys and the only ones permitted beyond the six required; `additionalProperties: false` still rejects everything else. `phase` records where a finding was found (`"review"` or `"self-review"` here) and never changes, where `origin` is round-relative and flips at the iteration boundary — it is for diagnostics, and the counts stay on `origin`. The validator enforces that `origin: "self-review"` implies `phase: "self-review"`. It defaults to `"document"`. The reviewer emits `"document"`; the self-review pass emits `"self-review"`, and the validator excludes those from the recount. See `references/shared-rules/counts-exclude-self-review.md`.
+
+Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. A file that passes validation is internally consistent — its declared counts equal its own recount. That is not a freshness guarantee: `../orchestrate/references/common/error-logs-format.md` states that the gates read this value in flight, not off disk, because the file is rewritten mid-iteration and overwritten by the next one. Consistent is not current.
 
 ## Error Handling
 

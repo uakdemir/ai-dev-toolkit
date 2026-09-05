@@ -1,6 +1,6 @@
 ---
 name: review-doc
-argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] --fact-check <true|false> [--max-iterations N] [--run-id <id>]"
+argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] [--fact-check <true|false>] [--max-iterations N] [--run-id <id>]"
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
@@ -16,7 +16,7 @@ Parse arguments after `/review-doc`:
 
 ```
 /review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
-            --fact-check <true|false>
+            [--fact-check <true|false>]
             [--max-iterations N] [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
@@ -199,7 +199,7 @@ The fact-checker:
 
 Dispatched when `total_criticals > 0` after review (and optional fact-check).
 
-Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`.
+Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list and `{{AGAINST_PATH}}` → the `--against` value or `none`.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive
@@ -207,7 +207,7 @@ The dispatch prompt must include:
 - The document paths list
 - Reference document path (if `--against` provided)
 
-The fixer reads each document's content using the Read tool (not passed via dispatch context). Edits documents using the Edit tool for targeted fixes. Uses Write tool only for creating new files.
+The fixer reads each document's content using the Read tool (not passed via dispatch context). Edits documents using the Edit tool for targeted fixes. Uses the Write tool only for the fix report — never to create new documents.
 
 Produces `tmp/_reviews_errors/review-doc-fix-report.json` (or `<run_id>-review-doc-fix-report.json`) with dispositions for every issue:
 - `fixed` -- issue resolved
@@ -232,7 +232,7 @@ Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json`
 
 **Abort detection contract:** **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-code`. Identical to the fact-checker's — the self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
 
-Read `prompts/verifier.md` and dispatch: `Agent(prompt: <self-review-prompt>)`.
+Read `prompts/verifier.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive
@@ -250,6 +250,8 @@ The exclusion is **round-local** and flips at the round boundary. It is defined 
 
 ## Hash Verification
 
+Two agents edit the documents in each iteration — `fix()` and then `self_review()` — so the hashes bracket both: capture **before `fix()`** and again **after `self_review()` returns**, not around the fixer alone. A change made only by the self-review pass must not read as "no documents were modified".
+
 Before fix phase: compute `sha256sum '<path>' | cut -d' ' -f1` via Bash for each document path.
 After fix phase: same commands, compare values per file.
 
@@ -264,6 +266,8 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 | `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` | Items needing a human decision; its absolute path is the run's last line | Humans |
+
+**Run-id prefixing (applies throughout):** every `tmp/_reviews_errors/review-doc*` path referenced anywhere in this document (Review Loop, Agent Dispatch, Hash Verification, Terminal, Final Report, Respond, Cross-Iteration, Iteration Log, Brainstorm, Schema) is prefixed to `tmp/_reviews_errors/<run_id>-review-doc*` when `--run-id` is active — matching the run-id-aware paths the reviewer, fact-checker and self-review prompts write to. The `[<run_id>-]` prefix is elided inline for brevity and shown explicitly only in the Output Artifacts table above.
 
 ## Review Summary Format
 
@@ -327,7 +331,7 @@ Review Doc Complete
 Recommended next: focused review — collateral recorded in § 3 rule 3, § 7
 /review-doc docs/spec.md --fact-check true --max-iterations 2
 
-Found this round: 3 Critical | 4 High | 2 Medium | 1 Low
+Found this round: 0 Critical | 4 High | 2 Medium | 1 Low
 Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-doc-brainstorm.md
 ```
 
@@ -367,11 +371,11 @@ When the loop completes (final gate passes or max iterations exhausted):
    naming the phase whose write broke the invariant. Exit 2 (node unavailable) → proceed, and record
    `schema validation not run: node unavailable` in the summary's Validation section.
 
-1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the capped 20.
+1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the issues array. The array is not capped at 20: the reviewer caps newly-minted findings at 20, and carried-forward, fact-check and self-review entries are exempt.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (see Status Logic below).
 4. Derive the next-round recommendation (see Next-Round Recommendation below).
-5. Print terminal output (see Terminal Output above), ending with the `Found this round:` line.
+5. Print terminal output (see Terminal Output above), ending with the `Found this round:` line — the brainstorm path in step 7 follows it as the run's last line.
 6. If status is "Approved with suggestions", run the Respond to Remaining Issues phase (below).
 7. Write the brainstorm document and print its absolute path as the run's last line (see Brainstorm Document below). This runs whatever the status is — a run with nothing to hand back still prints the line.
 
@@ -438,6 +442,14 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-doc-brainstorm.md
 ```
 
+When there is nothing to hand back, print the line anyway and write no file:
+
+```
+Brainstorm (needs your decisions): none — every finding was applied or resolved
+```
+
+A missing line is indistinguishable from a skill that forgot.
+
 ## Error Handling
 
 | Failure mode | Behavior |
@@ -471,7 +483,7 @@ After each fix phase, **before dispatching the next iteration's reviewer** (whic
 
 If a carried-forward `id` has been displaced from a later iteration's JSON (e.g., it dropped out of the active issues set), use the cached severity from the iteration where the id was first introduced — never silently skip a disposition just because its id is no longer in the latest JSON.
 
-**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker and `verify` entries appended by the self-review pass), so their IDs stay valid. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
+**ID stability:** Issue IDs (`ISSUE-NNN`, zero-padded to at least 3 digits) are append-only across iterations within a single review session. The reviewer carries forward existing IDs for issues that match a prior iteration's finding (matched on the `(location, category)` tuple) and mints new IDs starting from `max(existing_id) + 1` for genuinely new findings. The reviewer also preserves prior issues that were not re-discovered this iteration (including fact-check entries appended by the fact-checker and `verify` entries appended by the self-review pass), so their IDs stay valid — preserved verbatim except `origin`, which is reset to `"document"` on every carried-forward entry. That reset is the round boundary: it is what makes the count exclusion round-local rather than permanent. `phase` is NOT reset. Existing IDs are never renumbered, even if the underlying issue was fixed, deferred, or pushed back in a prior iteration — the ID stays attached to that specific finding for the lifetime of the review session, so external references (`tmp/response_analysis.md`, fix-report dispositions, user conversation) remain valid across rounds. Carried-forward issues are exempt from the reviewer's 20-issue cap.
 
 ## Status Logic
 
@@ -479,7 +491,7 @@ First match wins:
 
 1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
 2. **Issues Found**: `critical_count > 0` OR `fact_check_accuracy < 75`
-3. **Approved with suggestions**: `fact_check_accuracy < 90` OR any high, medium, or low issues remain
+3. **Approved with suggestions**: `fact_check_accuracy < 90` OR any high, medium, or low issue with `origin: "document"` remains
 4. **Approved**: all other cases
 
 Error is rule 1 so that nothing which aborted can reach a rule that would call it clean. Before this rule existed, review-doc's Status Logic ended at "all other cases" and a run whose reviewer failed validation twice reported **Approved**.

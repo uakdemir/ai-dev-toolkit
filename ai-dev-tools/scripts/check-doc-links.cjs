@@ -36,7 +36,7 @@ const docs = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) { if (!SKIP_DIR.test(full)) walk(full); }
+    if (e.isDirectory()) { if (!SKIP_DIR.test(full) && !e.name.startsWith('.')) walk(full); }
     else if (DOC_EXT.test(e.name)) docs.push(full);
   }
 })(pluginRoot);
@@ -48,7 +48,7 @@ const byBasename = new Map();
 (function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) { if (!SKIP_DIR.test(full)) walk(full); }
+    if (e.isDirectory()) { if (!SKIP_DIR.test(full) && !e.name.startsWith('.')) walk(full); }
     else {
       if (!byBasename.has(e.name)) byBasename.set(e.name, []);
       byBasename.get(e.name).push(full);
