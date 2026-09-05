@@ -479,6 +479,24 @@ First match wins:
 
 **Incomplete** names the files that were not inspected rather than announcing the run clean. It has exactly one trigger. Output that fails validation resolves to **Error** at rule 1 in both standard and auto mode, so it never reaches rule 3.
 
+**A run that could not complete reports Error, names the phase that failed and why, and never prints a status or a count that implies a review happened.** Defined once, in `references/shared-rules/run-failure-disclosure.md`, and shared with `review-doc`.
+
+On an Error the count block is replaced, not relabelled — `Aggregate`, `Remaining`, `Last round` come from an artifact the run did not finish writing:
+
+```
+Review Code FAILED
+  Phase: <reviewer | fact-check | fixer | self-review>
+  Reason: <one line — the validator's stderr, the ABORT reason, or the exception>
+  Artifact: <path> — <not written | restored from backup | partial, left as-is>
+  Reviewed: <paths>
+  Iterations completed: N of M
+  Counts: not reported — this run did not complete a review
+```
+
+Interactive runs then ask `Retry the failed phase / continue with what completed / abort the run? [retry|continue|abort]` and wait. **Programmatic or auto dispatch does not ask** — there is nobody to answer and a prompt in auto mode hangs the pipeline. Exit non-zero, write the reason to the run's error log, and let the caller's failure path handle it. The brainstorm handoff line still prints last; on an Error that document is the failure report.
+
+
+
 ## Iteration Log Format
 
 Write to `tmp/_reviews_errors/review-code-iteration-N.md`:

@@ -421,6 +421,18 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-doc-brainstorm.md
 ```
 
+## Error Handling
+
+| Failure mode | Behavior |
+|---|---|
+| Reviewer returns invalid JSON or schema validation fails | Retry the reviewer once. Second failure: abort the iteration, status **Error**. |
+| Fact-checker aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, continue. Not an Error. |
+| Self-review pass aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: self-review aborted — <reason>. Fix results unverified.`, continue. Not an Error. |
+| Fix phase fails | Abort the run, status **Error**. Documents are left as the fixer left them; say so in the Artifact line. |
+| Max iterations exhausted | Not an Error — status follows the normal rules and the remaining issues are reported. |
+
+Both abort rows follow `references/shared-rules/agent-abort-contract.md`.
+
 ## Backlog Writing
 
 review-doc does **NOT** write to `tmp/past-issues-backlog.md`. Document reviews produce section-level locations (e.g., "Section 3.2"), not code-level locations (e.g., "src/auth.ts:42"). The backlog format is designed for code findings. Deferred and pushed-back document review items are recorded in iteration logs and the review summary only.
@@ -448,9 +460,30 @@ If a carried-forward `id` has been displaced from a later iteration's JSON (e.g.
 
 First match wins:
 
-1. **Issues Found**: `critical_count > 0` OR `fact_check_accuracy < 75`
-2. **Approved with suggestions**: `fact_check_accuracy < 90` OR any high, medium, or low issues remain
-3. **Approved**: all other cases
+1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
+2. **Issues Found**: `critical_count > 0` OR `fact_check_accuracy < 75`
+3. **Approved with suggestions**: `fact_check_accuracy < 90` OR any high, medium, or low issues remain
+4. **Approved**: all other cases
+
+Error is rule 1 so that nothing which aborted can reach a rule that would call it clean. Before this rule existed, review-doc's Status Logic ended at "all other cases" and a run whose reviewer failed validation twice reported **Approved**.
+
+**A run that could not complete reports Error, names the phase that failed and why, and never prints a status or a count that implies a review happened.** Defined once, in `references/shared-rules/run-failure-disclosure.md`, and shared with `review-code`.
+
+On an Error the count block is replaced, not relabelled — `Aggregate`, `Remaining`, `Last round` and `Found this round` come from an artifact the run did not finish writing:
+
+```
+Review Doc FAILED
+  Phase: <reviewer | fact-check | fixer | self-review>
+  Reason: <one line — the validator's stderr, the ABORT reason, or the exception>
+  Artifact: <path> — <not written | restored from backup | partial, left as-is>
+  Reviewed: <paths>
+  Iterations completed: N of M
+  Counts: not reported — this run did not complete a review
+```
+
+Interactive runs then ask `Retry the failed phase / continue with what completed / abort the run? [retry|continue|abort]` and wait. **Programmatic or auto dispatch does not ask** — there is nobody to answer and a prompt in auto mode hangs the pipeline. Exit non-zero, write the reason to the run's error log, and let the caller's failure path handle it. The brainstorm handoff line still prints last; on an Error that document is the failure report.
+
+
 
 ## Next-Round Recommendation
 
