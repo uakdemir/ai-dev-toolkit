@@ -23,6 +23,8 @@ Iterative code review with automatic fix cycles. Reviews the last N commits, fin
 | `--run-id` | none | string | Prefixes output files for run scoping; optional |
 | `--help` | — | — | Print usage and exit |
 
+**Removed flags:** If a removed flag is still passed, print `Warning: <flag> is no longer supported; all agents inherit the caller's session model. Ignoring.` — substituting the flag actually passed — and continue. Do not exit: the flag is inert, not invalid. Accepting it silently was the previous behaviour and gave the caller no signal that it had done nothing. Worded as in `review-doc`, which specified this while this skill did not.
+
 **Removed flags:** `--max-model` (clean break, no backward-compat shim). The reviewer, fixer and self-reviewer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
 
 If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
@@ -92,7 +94,7 @@ Examples:
    - **Interactive:** print `Warning: you are on branch '<name>'. Fix commits will land here. Continue?` and pause for explicit approval. Blocking.
    - **Programmatic or auto dispatch (no user to prompt):** abort — `Error: refusing to run on branch '<name>'; dispatch from a feature branch.`
 
-   This check previously delegated itself to "the invoking skill" whenever the caller was programmatic. **No caller discharged it.** `main` and `master` appear nowhere under `skills/orchestrate/`, and `git rev-parse --abbrev-ref` / `git symbolic-ref` appear nowhere in this plugin at all — so the one path where no human can be prompted, and where the fixer, the self-review pass and stage-iii all commit, was the path with no guard. A guard that delegates to a caller nobody wrote is not a guard.
+   This check previously delegated itself to "the invoking skill" whenever the caller was programmatic. **No caller discharged it.** `main` and `master` appear nowhere under `skills/orchestrate/`, and before this check was written `git rev-parse --abbrev-ref` / `git symbolic-ref` appeared nowhere in the plugin at all — no caller resolved the branch. So the one path where no human can be prompted, and where the fixer, the self-review pass and stage-iii all commit, was the path with no guard. A guard that delegates to a caller nobody wrote is not a guard.
 3. If `git status --porcelain` non-empty: `"Working tree is dirty. Please commit or stash your changes before running review-code."` This check runs once during pre-flight only. Verification command side-effects (coverage reports, cache files) are expected during the loop and do not re-trigger this check. The fixer uses `git add -u` (tracked files only) when committing to avoid including verification artifacts.
 
 ## Edge Case: `--max-iterations 0`
@@ -102,7 +104,11 @@ Skip the loop entirely. Do not create any files. Print and exit:
 Review Code Skipped
   Scope: last N commits
   No iterations run. Code was not reviewed.
+
+Brainstorm (needs your decisions): none — no iterations run
 ```
+
+The handoff line prints here too, and writes no file. `references/shared-rules/brainstorm-handoff.md` requires it unconditionally, and a skipped run is exactly the case where a missing line is indistinguishable from a skill that forgot.
 
 ## Edge Case: `--max-iterations 1`
 
@@ -219,7 +225,7 @@ The exclusion is **round-local** and flips at the iteration boundary. It is defi
 
 **Disclose the depth-1 tail.** The code the self-review pass itself writes is not reviewed within the iteration, and on the FINAL iteration no later one reads it either. Track `self_review_tail_lines` — lines written by the final iteration's self-review pass — and print `Unreviewed tail: N lines committed by the final self-review pass`, omitting the line when the count is 0. `prompts/self-review.md` returns that count. This matters more here than in `review-doc`: `--max-iterations` defaults to **1**, so on a default invocation the final iteration is the only iteration and every line the pass writes is committed unreviewed. Required by `references/shared-rules/counts-exclude-self-review.md`.
 
-**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, `found_this_round.critical` in iteration N+1 measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. The Next-Round Recommendation and the endless-loop gate therefore gate on the right signal without either being rewritten. Do not "fix" those rules to compensate.
+**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, the `critical_count` iteration N+1's reviewer computes measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. This skill's Status Logic and `orchestrate`'s stage-i endless-loop gate therefore gate on the right signal without either being rewritten. Do not "fix" them to compensate. (`found_this_round` and a Next-Round Recommendation are `review-doc`'s; this skill has neither, and naming them here was a copy from that skill.)
 
 ## Verification Commands
 
@@ -241,7 +247,7 @@ Scope-based filtering:
 
 ## Brainstorm Document
 
-**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-doc`. The fix phase runs whenever there is something to fix — there is no report-only mode and no scope small enough to exempt one; what the loop skips is a fix phase with zero criticals to act on. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` after the triage phase, and ends the run with:
+**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-doc`. The fix phase runs whenever there is something to fix — there is no report-only mode and no scope small enough to exempt one; the fixer runs whenever the round found any issue at any severity, and the only fix phase the loop skips is one with nothing to act on. Only the decision to run *another* iteration is gated on criticals. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-code-brainstorm.md` after the triage phase, and ends the run with:
 
 ```
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-code-brainstorm.md
@@ -402,7 +408,7 @@ Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-code-bra
 ## Final Report
 
 When the loop completes (criticals zero + verification pass, or max iterations exhausted):
-0. **Validate the finished artifact**, once, before anything reads it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code <output-path>`. This is the only point at which the self-review pass's appends are checked — earlier iterations are covered by the next reviewer's recompute, and the final one has no next reviewer. With `--max-iterations` defaulting to 1, that is every default run. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`; exit 2 → proceed and record `schema validation not run: node unavailable` under Checks SKIPPED.
+0. **Validate the finished artifact**, once, before anything reads it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema code <output-path>`. This is the only point at which the self-review pass's appends are checked — earlier iterations are covered by the next reviewer's recompute, and the final one has no next reviewer. With `--max-iterations` defaulting to 1, that is every default run. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`; exit 2 → status **Error** as well — the validator returns `2` for an artifact it could not read or a command it could not parse, not for a check it chose to skip, and a finished artifact nothing can open is not a run that completed. `node` being absent is a different condition: the command never runs and the shell returns `127`. Only in that case proceed and record `schema validation not run: node unavailable` under Checks SKIPPED.
 1. Generate `tmp/_reviews_errors/review-code-summary.md` from the last iteration's `tmp/_reviews_errors/review-code.json` (top 10 issues by severity, then descending confidence).
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (below).
@@ -417,6 +423,8 @@ When the loop completes (criticals zero + verification pass, or max iterations e
 Incomplete triggers it too. A finding is real whether or not some *other* file went unread — the coverage hole makes the verdict incomplete, it does not make the findings less true, and suppressing triage would punish the run twice. The status stays Incomplete; only the triage phase is unblocked.
 
 After printing the terminal output, auto-triage each remaining issue from `tmp/_reviews_errors/review-code.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
+
+**Read the final round's fix report first.** `tmp/_reviews_errors/review-code-fix-report.json` is the fixer's output; `review-code.json` is the reviewer's, written before the fix phase and never updated by it. Skip every issue whose `issue_index` that report dispositions as `fixed` — the fixer already resolved it and committed the change, and re-triaging it would land a second commit on a location that no longer says what the finding described. What reaches this phase is what the fixer `pushed-back`, plus any issue with no disposition at all. A self-review finding the pass reported as fixed is the one exception: it carries no `issue_index` disposition because the fixer ran before it, and the pass that raised it already repaired and committed it. If no fix report exists for this run, every issue is triaged.
 
 **Auto-triage rules (per issue)** — every issue resolves to exactly one of these two outcomes. There is no "defer" option; the agent must either fix or justify rejecting the finding:
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly — same approach as the fixer agent (edit the file, run `--verify` commands if configured). Default to this option whenever the fix is within reach.
@@ -498,10 +506,10 @@ On an Error the count block is replaced, not relabelled — `Aggregate`, `Remain
 
 ```
 Review Code FAILED
-  Phase: <reviewer | fact-check | fixer | self-review>
+  Phase: <reviewer | fixer | self-review>
   Reason: <one line — the validator's stderr, the ABORT reason, or the exception>
   Artifact: <path> — <not written | restored from backup | partial, left as-is>
-  Reviewed: <paths>
+  Scope: last N commits | commits <ref>..HEAD
   Iterations completed: N of M
   Counts: not reported — this run did not complete a review
 ```
@@ -521,7 +529,7 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 **Effort:** <--effort value>
 **Scope:** last N commits | commits original_base..after_sha | commits <ref>..after_sha (`after_sha` = HEAD after the self-review pass)
 **Issues found:** X critical, Y high, Z medium, W low
-**Outcome:** "Fixed N issues (P pushed back), continuing" | "0 criticals + verification pass, loop complete" | "Fix phase failed: <error>"
+**Outcome:** "Fixed N issues (P pushed back), continuing" | "Fixed N issues (P pushed back), 0 criticals + verification pass, loop complete" | "0 criticals + verification pass, loop complete" | "Fixed N issues (P pushed back), max iterations reached" | "Fix phase failed: <error>" — whenever the fixer ran, the outcome carries its counts as well as the reason the loop stopped; the bare form is for a round that found nothing to fix at any severity.
 **Issues fixed:** [category] [severity] at [location]
 **Issues pushed back:** [category] [severity] at [location] — reason
 **Issues found (no disposition):** [category] [severity] at [location], or "none"
@@ -588,7 +596,7 @@ Note: `medium_count` and a low count are not in the schema — both are derived 
 | Fix introduces new criticals | Normal loop — next iteration catches them. |
 | Git operations fail | Abort with error. |
 | Verification command fails | Not an error — data for regression comparison. |
-| Max iterations exhausted | Stop with "Issues Found" status, report remaining issues. |
+| Max iterations exhausted | Not an Error — status follows the normal rules (Status Logic has no iteration-exhaustion trigger) and the remaining issues are reported. |
 | Self-review pass aborts (`ABORT: ` sentinel, crash, or no response) | Restore the `.bak`, print `Warning: self-review aborted — <reason>. Fix results unverified.`, continue. See `references/shared-rules/agent-abort-contract.md`. |
 
 No explicit per-agent timeout. The `--max-iterations` cap prevents runaway loops.

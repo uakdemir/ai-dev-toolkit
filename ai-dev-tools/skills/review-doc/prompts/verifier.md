@@ -40,7 +40,7 @@ Four things, and only these four:
 
 1. Read the fix report. If it is missing or unparseable, abort by:
    1. Leaving the review JSON UNCHANGED — do not write or modify it.
-   2. Returning a text response whose **first line begins with the literal sentinel `ABORT: `** followed by a one-line reason, e.g. `ABORT: fix report not found at tmp/_reviews_errors/review-doc-fix-report.json`.
+   2. Returning a text response whose **first line begins with the literal sentinel `ABORT: `** followed by a one-line reason, e.g. `ABORT: fix report not found at {{FIX_REPORT_PATH}}` — naming the path you were actually given, never the unprefixed default.
    The orchestrator detects the prefix, restores its backup, prints a warning, and continues.
 2. Read the review JSON. Compute `next_id_seed = max(numeric suffix of every well-formed id) + 1`, ignoring malformed entries so a single bad one cannot poison the max. If the issues array is empty, set `next_id_seed = 1`.
 3. Read only the document regions named by a disposition's issue `location` or a `collateral` entry's `location`.
@@ -102,6 +102,10 @@ Four things, and only these four:
 - NEVER run destructive git commands (reset --hard, clean -f)
 
 `{{OUTPUT_PATH}}` is substituted by the skill before this prompt reaches you, to the run-id-aware
-`tmp/_reviews_errors/[<run_id>-]review-doc.json`. If it still appears literally in your copy, the
-substitution did not happen: report `output path not substituted` and stop rather than guessing at
-the path — writing to the unprefixed default would silently clobber another run's artifact.
+`tmp/_reviews_errors/[<run_id>-]review-doc.json`; `{{FIX_REPORT_PATH}}` and `{{DOC_PATHS}}` are
+substituted the same way. If any of the three still appears literally in your copy, the substitution
+did not happen: report `output path not substituted`, `fix report path not substituted` or
+`document paths not substituted` and stop rather than guessing at the path — writing to the
+unprefixed default would silently clobber another run's artifact. An unsubstituted
+`{{FIX_REPORT_PATH}}` is a substitution failure, not a missing fix report: report it that way rather
+than through the `ABORT: ` branch of step 1, which says the fixer produced nothing.

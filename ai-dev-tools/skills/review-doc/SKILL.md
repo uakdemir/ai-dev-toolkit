@@ -26,7 +26,7 @@ Parse arguments after `/review-doc`:
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
 | `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, self-reviewer) |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
-| `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Honors option Y early-exit when pre-fix criticals == 0 |
+| `--max-iterations` | 3 | 0-10 | Safety cap (0 = skip). Early exit when the round's criticals reach 0 — `total_criticals` with `--fact-check true`, `pre_fix_criticals` otherwise (see Review Loop property 3) |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
 
@@ -84,7 +84,19 @@ Examples:
 
 ## Pre-Flight Checks
 
-1. Tokens before the first flag (`--*`) are input paths.
+1. **Branch guard — unconditional, never waived.** Resolve the current branch yourself:
+
+   ```bash
+   git rev-parse --abbrev-ref HEAD
+   ```
+
+   If it is `main` or `master`, the behaviour depends on whether there is a user to ask:
+   - **Interactive:** print `Warning: you are on branch '<name>'. Fix commits will land here. Continue?` and pause for explicit approval. Blocking.
+   - **Programmatic or auto dispatch (no user to prompt):** abort — `Error: refusing to run on branch '<name>'; dispatch from a feature branch.`
+
+   Worded identically to `review-code`'s pre-flight check 2, and for the same reason: **this skill commits.** The Respond to Remaining Issues phase commits what it applies, and it never asks the user first. A skill that commits unattended needs the guard whether or not it dispatches a fixer that commits — the divergence where `review-code` had this check and `review-doc` did not was an oversight, not a policy.
+
+2. Tokens before the first flag (`--*`) are input paths.
 2. If no input paths are provided: print `"Error: no input paths provided."` and exit.
 3. If a path is a directory: expand to all `*.md` files inside it (recursive, sorted alphabetically, max 20 files). If more than 20 `.md` files are found: print `"Error: directory contains more than 20 .md files. Use explicit paths to select a subset."` and exit. If zero `.md` files: print `"Error: directory contains no .md files."` and exit.
 4. When a mix of directories and explicit files is provided, expand directories first, then merge with explicit paths. Deduplicate any paths that appear in both. The 20-file cap applies to the final merged list.
@@ -104,7 +116,7 @@ Examples:
 
 ## Review Loop
 
-**`--max-iterations 0`:** Skip loop entirely. Output: `Review Doc Skipped / Reviewed: <docs> / No iterations run.`
+**`--max-iterations 0`:** Skip loop entirely. Output: `Review Doc Skipped / Reviewed: <docs> / No iterations run. / Brainstorm (needs your decisions): none — no iterations run`. The handoff line prints here too: `references/shared-rules/brainstorm-handoff.md` requires it unconditionally, and a skipped run is exactly the case where a missing line is indistinguishable from a skill that forgot.
 
 **`--max-iterations >= 1`:** Run the simplified loop below. There is no separate single-pass mode — `--max-iterations 1` is just one iteration of the same loop.
 
@@ -135,7 +147,9 @@ for iter in 1..max_iterations:
 
    Gating the fix phase on criticals meant a round that found eleven highs and ten mediums and no criticals fixed **nothing** and handed all twenty-one to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run and the document to receive only what has more than one defensible answer. It also silently disabled the self-review pass, which runs only after a fix phase: on the zero-critical path the triage phase then applied edits with nothing reviewing them. A minor finding the agent can fix is still worth fixing; whether it justifies another *round* is a different question, and that one is still severity-gated.
 
-   Option Y is unchanged: `pre_fix_criticals` is still measured at review output, before fact-check, and is still what the endless-loop gate reads. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the endless-loop gate as ">1 criticals remaining" and the spec is skipped — for criticals the loop itself declined to fix.
+   Option Y is unchanged where it is defined: `pre_fix_criticals` is still measured at review output, before fact-check. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the endless-loop gate as ">1 criticals remaining" and the spec is skipped — for criticals the loop itself declined to fix.
+
+   The endless-loop gate is a separate reader and takes a different number: `critical_count` off the artifact, which on a `--fact-check true` run carries the fact-checker's recount over the full issues array (`agents/codebase-fact-checker.md` step 6). Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
 5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
 6. `validate(json)` runs right after `review()`:
@@ -202,7 +216,7 @@ The fact-checker:
 
 Dispatched whenever the round found **any** issue after review (and optional fact-check) — critical, high, medium or low. Not gated on severity: see Review Loop property 3.
 
-Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list and `{{AGAINST_PATH}}` → the `--against` value or `none`.
+Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{AGAINST_PATH}}` → the `--against` value or `none`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
 
 The dispatch prompt must include:
 - The effort level (`--effort` value) as a reasoning-depth directive
@@ -373,8 +387,12 @@ When the loop completes (final gate passes or max iterations exhausted):
    verifies — and it is what the summary reports and what a human reads. One invocation per run.
 
    Exit 0 → proceed. Exit 1 → status **Error** per `references/shared-rules/run-failure-disclosure.md`,
-   naming the phase whose write broke the invariant. Exit 2 (node unavailable) → proceed, and record
-   `schema validation not run: node unavailable` in the summary's Validation section.
+   naming the phase whose write broke the invariant. Exit 2 → status **Error** as well: the validator
+   returns `2` for an artifact it could not read or a command it could not parse, not for a check it
+   chose to skip, and a finished artifact nothing can open is not a run that completed. `node` being
+   absent is a different condition — the command never runs and the shell returns `127`. Only in that
+   case proceed, and record `schema validation not run: node unavailable` in the summary, beside the
+   status.
 
 1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the issues array. The array is not capped at 20: the reviewer caps newly-minted findings at 20, and carried-forward, fact-check and self-review entries are exempt.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
@@ -389,6 +407,8 @@ When the loop completes (final gate passes or max iterations exhausted):
 **Trigger:** Status is "Approved with suggestions" (high, medium, or low issues remain, zero criticals).
 
 After printing the terminal output, auto-triage each remaining issue from `tmp/_reviews_errors/review-doc.json` (sorted by severity descending, then confidence descending). The agent decides autonomously — no user interaction.
+
+**Read the final round's fix report first.** `tmp/_reviews_errors/review-doc-fix-report.json` is the fixer's output; `review-doc.json` is the reviewer's, written before the fix phase and never updated by it. Skip every issue whose `id` that report dispositions as `fixed` — the fixer already resolved it, and re-triaging it would apply a second edit to a location that no longer says what the finding described. What reaches this phase is what the fixer `deferred`, what it `pushed-back`, and any issue with no disposition at all. A self-review finding the pass reported as fixed is the one exception: it carries no disposition because the fixer ran before it, and the pass that raised it already repaired it. If no fix report exists for this run, every issue is triaged.
 
 **Auto-triage rules (per issue):**
 - **Apply:** The suggested fix is actionable and the agent can make the edit. Apply directly to the document — surgical edits only.
@@ -441,7 +461,7 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 
 ## Brainstorm Document
 
-**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-code`. The fix phase runs whenever there is something to fix — there is no report-only mode and no scope small enough to exempt one; what the loop skips is a fix phase with zero criticals to act on. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` after the triage phase, and ends the run with:
+**Everything the run could not decide goes in one brainstorm document, and its absolute path is the last line printed.** What goes in it, how entries are grouped, and what each one states are defined once, in `references/shared-rules/brainstorm-handoff.md`, and shared with `review-code`. The fix phase runs whenever there is something to fix — there is no report-only mode and no scope small enough to exempt one; the fixer runs whenever the round found any issue at any severity, and the only fix phase the loop skips is one with nothing to act on. Only the decision to run *another* round is gated on criticals. Fix what has one defensible answer; hand back only what has more than one, or what depends on something the repository does not say. This skill writes the document to `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` after the triage phase, and ends the run with:
 
 ```
 Brainstorm (needs your decisions): /abs/path/to/tmp/_reviews_errors/review-doc-brainstorm.md
@@ -482,7 +502,7 @@ The orchestrator maintains the following state across the loop:
 - `found_this_round = {critical: 0, high: 0, medium: 0, low: 0}` -- severity breakdown of the `issues` array in the CURRENT iteration, measured after review and fact-check but before the fix phase. Overwritten each iteration; the final iteration's value populates the "Found this round:" line and rule 1 of the recommendation.
 - `self_review_found = {found: 0, fixed: 0}` -- running total across every self-review pass in this invocation, with each finding's id, category, severity, location and disposition retained for rendering. These populate the `Self-Review` section and the `Self-review:` terminal line. They are **never** added to `total_fixed`, `found_this_round`, `critical_count` or `high_count` for the round that produced them: `references/shared-rules/counts-exclude-self-review.md`.
 - `self_review_tail_lines = 0` -- lines written by the FINAL iteration's self-review pass. Those lines are the one part of the document no review pass read, because depth is 1 and no further round follows. Earlier iterations' tails need no tracking: the next round re-reads the whole document. Populates the `Unreviewed tail:` line, which is omitted when the value is 0.
-- `collateral_count = 0` -- running total of `collateral` entries across every fix phase in this invocation, with their `location` values retained for rendering. **Not reset between iterations.** Scoping it to the final iteration would make recommendation rule 2 unreachable: `fix()` only runs when `total_criticals > 0`, so any iteration that records collateral also leaves `found_this_round.critical > 0` and matches rule 1 first, while an iteration that reaches rule 2 is by definition one where the fixer did not run and recorded nothing.
+- `collateral_count = 0` -- running total of `collateral` entries across every fix phase in this invocation, with their `location` values retained for rendering. **Not reset between iterations.** Rule 2 names the regions a focused review has to cover, and a region an *earlier* fix phase disturbed needs that cover as much as one the last fix phase disturbed. Scoping the counter to the final iteration would drop exactly the multi-iteration case: an earlier round fixes criticals and records collateral, the final round's review comes back clean, and the recommendation reports no collateral at all.
 
 After each fix phase, **before dispatching the next iteration's reviewer** (which will overwrite `review-doc.json`), parse `tmp/_reviews_errors/review-doc-fix-report.json` and resolve each disposition's severity by `id` lookup against the CURRENT `tmp/_reviews_errors/review-doc.json`. Cache the resulting `(id → severity)` map in orchestrator state. The cache is initialized empty at the start of the review session; for each disposition's id, INSERT INTO the cache only if the id is not already present (**first-write-wins** — never overwrite). The cache lives for the duration of one review-doc invocation and is discarded when the loop exits. For each disposition with `action: "fixed"`, increment `total_fixed[severity]`. For `deferred` and `pushed-back`, increment the flat counter. Reset `last_round_fixed` to `{critical: 0, high: 0, medium: 0, low: 0}` before each iteration and increment it alongside `total_fixed`.
 
@@ -543,7 +563,7 @@ Rules, first match wins:
 
 Rule 1 dominates rule 2 — a full round covers the collateral regions as well, so there is no point recommending the narrower action when the broader one is already warranted.
 
-**When each rule fires.** Rule 1 matches whenever the final iteration's review still found criticals, which includes every `--max-iterations 1` run in which the fixer ran. Rule 2 therefore describes a specific multi-iteration shape: an earlier iteration fixed criticals and recorded collateral, and the final iteration's review came back clean. That is why `collateral_count` accumulates across the whole invocation rather than being scoped to the last fix phase — scoped to the last one, rule 2 could never match.
+**When each rule fires.** Rule 1 matches whenever the final iteration's review found criticals. Rule 2 matches otherwise, whenever any fix phase in the invocation recorded collateral — including a single-iteration run whose fixer ran on a round of highs and mediums and no criticals, which is the ordinary shape now that fixing is not severity-gated. It also covers the multi-iteration shape: an earlier iteration fixed criticals and recorded collateral, and the final iteration's review came back clean. That second shape is why `collateral_count` accumulates across the whole invocation rather than being scoped to the last fix phase — scoped to the last one, an earlier round's collateral would go unreported.
 
 **Rule 1** — reprint the invocation exactly as it was given, so it can be pasted directly:
 
@@ -565,7 +585,7 @@ Recommended next: focused review — collateral recorded in § 3 rule 3, § 7, �
 Recommended next: continue to implementation — 0 criticals, no collateral recorded
 ```
 
-The recommendation names a next action, not a scoped review mode. There is no flag that restricts a review to recently-changed regions: document fixes are left uncommitted in the working tree (the fixer never commits, and orchestrate commits once per phase, spanning both iterations), so no git ref can isolate the last fix pass. Rule 2 therefore names the sections and lets the reader decide.
+The recommendation names a next action, not a scoped review mode. There is no flag that restricts a review to recently-changed regions: document fixes are left uncommitted by the fix phase itself (the fixer never commits; the triage phase does, and its commit spans every edit the run has made, not just the last pass — and orchestrate commits once per phase besides), so no git ref can isolate the last fix pass. Rule 2 therefore names the sections and lets the reader decide.
 
 ## Iteration Log Format
 
@@ -577,8 +597,8 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 **Model:** inherited from caller session
 **Effort:** <--effort value>
 **Agents:** 1 (merged reviewer), plus fact-checker (when --fact-check true), plus self-reviewer (whenever the fixer ran)
-**Issues found:** X critical, Y high, Z medium
-**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "0 criticals, early exit" | "0 criticals, loop complete" | "Max iterations reached" | "Fix phase failed: <error>"
+**Issues found:** X critical, Y high, Z medium, W low
+**Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "Fixed N issues (D deferred, P pushed back), 0 criticals, loop complete" | "0 criticals, early exit" | "0 criticals, loop complete" | "Fixed N issues (D deferred, P pushed back), max iterations reached" | "Fix phase failed: <error>" -- whenever the fixer ran, the outcome carries its counts as well as the reason the loop stopped; the bare "0 criticals" forms are for a round that found nothing to fix at any severity.
 **Issues fixed:** [ISSUE-NNN] [category] [severity] at [location]
 **Issues deferred:** [ISSUE-NNN] [category] [severity] at [location] -- reason
 **Issues pushed back:** [ISSUE-NNN] [category] [severity] at [location] -- reason

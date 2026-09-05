@@ -172,10 +172,10 @@ Categories you may assign: completeness, consistency, scope, structure, vague-ac
 
 **Do NOT include** any fields beyond the 7 required per issue (id, severity, category, location, confidence, problem, suggested_fix) plus `origin` (always `"document"`) and `phase` (always `"review"`). That is the complete permitted set — no `title`, `description`, `metadata`, or `summary` fields.
 
-**Validate before you finish.** After writing your output path, run:
+**Validate before you finish.** After writing `{{OUTPUT_PATH}}`, run:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>
+node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc {{OUTPUT_PATH}}
 ```
 
 Exit 0 means the artifact is well-formed and the recount is printed. On a non-zero exit, read the errors on stderr, fix the file, and re-run until it exits 0. Do not finish on a failing exit — your output is the deliverable, and checking it is your job, not the orchestrator's.
@@ -200,7 +200,8 @@ is `severity`, rated separately.
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Write (not echo/cat heredoc via Bash) for writing files
-- Do not use Bash for file operations — only for git log, git diff, git status commands
+- Do not use Bash for file operations — only for git log, git diff, git status commands, and the one exception below
+- **Exception, and the only one:** the validator command under **Validate before you finish**, run against your own output path. `${CLAUDE_PLUGIN_ROOT}` and `{{OUTPUT_PATH}}` in that command are substituted before this prompt reaches you — run the resulting literal path. If either still appears literally in your copy, the substitution did not happen: report `validator skipped: path not substituted` rather than guessing at the path. This permits that one command against that one path. It is not a general relaxation of the Bash rule.
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)
 

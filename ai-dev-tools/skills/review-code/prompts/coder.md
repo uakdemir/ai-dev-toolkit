@@ -58,7 +58,7 @@ The `action` field must be either `"fixed"` or `"pushed-back"`. `"deferred"` is 
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Write (not echo/cat heredoc via Bash) for writing files
-- Do not use Bash for file operations — only for git log, git diff, git status commands
+- Do not use Bash for file operations — only for git log, git diff, git status, and the `git add -u` / `git commit` that step 4 of the Procedure requires
 - Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)

@@ -9,9 +9,9 @@ canonical: A dispatched agent uses Read, Grep, Glob and Write for file work rath
 **A dispatched agent uses Read, Grep, Glob and Write for file work rather than their Bash equivalents, and never runs a git command that pushes, switches branches, or discards work.**
 
 Seven prompts across the two review skills carry a `## Tool Usage Rules` block. They were copied,
-then edited in place, and by the time this rule was written they had five distinct shapes. The
-duplication reporter ranks them as its top pair; that is what a fork looks like before anyone
-notices it is one.
+then edited in place, and by the time this rule was written they had five distinct shapes. Five
+shapes of one block, with nothing recording which of the differences were meant, is what a fork
+looks like before anyone notices it is one.
 
 ## The invariant core
 
@@ -37,9 +37,9 @@ differs by design:
 
 | Addition | Who carries it | Why |
 |---|---|---|
-| `Use Edit …— targeted edits only` | `skills/review-code/prompts/self-review.md`, `skills/review-doc/prompts/verifier.md` | Only the passes that repair may edit. A reviewer that could edit would fix instead of report. |
-| A `git commit` allowance | `skills/review-code/prompts/self-review.md` | It commits its own pass; nothing else does. |
-| A validator-command exception | `skills/review-code/prompts/reviewer.md` | One named command against one named path, so the agent can check its own artifact. |
+| `Use Edit …— targeted edits only` | `skills/review-code/prompts/self-review.md`, `skills/review-doc/prompts/verifier.md`; and — stated in their `## Rules` section rather than in the block — `skills/review-code/prompts/coder.md`, `skills/review-doc/prompts/coder.md` | Only the four repair passes may edit: the two fixers and the two self-review passes. A reviewer that could edit would fix instead of report. |
+| A `git commit` allowance | `skills/review-code/prompts/self-review.md`, `skills/review-code/prompts/coder.md` | Each commits its own pass. The fixer's commit is load-bearing — `fixer_sha`, the self-review pass's `before_sha..fixer_sha` scope, and `after_sha` all read from it. `review-doc`'s fixer never commits; its skill leaves the edits in the working tree. |
+| A validator-command exception | `skills/review-code/prompts/reviewer.md`, `skills/review-doc/prompts/reviewer.md` | One named command against one named path, so the agent can check its own artifact. Both reviewers are required to validate their own output before finishing. |
 | A Grep/Glob unavailability fallback | `skills/review-code/prompts/reviewer.md` | Its Verification Gap section requires search evidence; a search it cannot run is a finding it must drop. |
 
 An addition is legitimate when it **widens** one agent's surface for a stated reason. A silent
@@ -53,11 +53,15 @@ it reads as drift rather than design; but adding it changes what two live agents
 do, which is a behaviour change and not a documentation repair. Promote it to the core or delete it
 from the other five — either is defensible, and this file is where that gets decided.
 
-The same goes for the Bash-scope line, which every prompt phrases differently ("only for git log,
-git diff, git status commands" versus "…and the one exception below" versus "Use Bash for `git
-diff`, `git log`, `git status`, and your one `git commit`"). Those differences are real — the three
-agents genuinely have three different Bash surfaces — which is why the line is an addition rather
-than part of the core.
+The same goes for the Bash-scope line, which takes four shapes across the seven prompts. The bare
+form — "only for git log, git diff, git status commands" — is carried by
+`skills/review-doc/agents/codebase-fact-checker.md`, `skills/review-doc/prompts/coder.md` and
+`skills/review-doc/prompts/verifier.md`. Both reviewers append "…and the one exception below" for
+the validator command. `skills/review-code/prompts/coder.md` names the `git add -u` / `git commit`
+its Procedure mandates, and `skills/review-code/prompts/self-review.md` inverts the phrasing
+outright: "Use Bash for `git diff`, `git log`, `git status`, and your one `git commit`". Those
+differences are real — the shapes track four genuinely different Bash surfaces — which is why the
+line is an addition rather than part of the core.
 
 ## Why these prompts keep their bullets instead of citing this file
 
@@ -79,6 +83,8 @@ maintainer does when this file changes.
 - `skills/review-doc/prompts/reviewer.md`, `skills/review-doc/prompts/coder.md`,
   `skills/review-doc/prompts/verifier.md`, `skills/review-doc/agents/codebase-fact-checker.md`
 
-No prose detector: the block is prose an agent obeys at runtime, and a detector keyed to its wording
-would fire on this rule file, which has to quote the bullets to define them. Checks A2 and C bind
-both skills; the six-bullet core above is what a reviewer diffs against.
+No prose detector: the block is prose an agent obeys at runtime, not a mechanical pattern a detector
+could tell apart from a legitimate mention of it. The reason is not that a detector would fire on
+this rule file — `scripts/check-shared-semantics.cjs` already exempts `references/shared-rules/`
+from every detector sweep, precisely so a rule file is free to quote what it governs. Checks A2 and
+C bind both skills; the six-bullet core above is what a reviewer diffs against.

@@ -23,11 +23,12 @@ makes the brainstorm document a dumping ground instead of a decision queue, and 
 thing an agent is reliably good at.
 
 There is no "report-only" mode and no scope small enough to skip fixing. A focused review, a
-single-file review, a `--max-iterations 1` review — none of them is exempt. What both loops do skip
-is a fix phase with nothing to act on: each gates the fixer on the critical count, never on scope, so
-a round that surfaces no criticals dispatches no fixer. What it surfaced instead goes to the triage
-phase, which is equally required. The narrower the scope, the *more* certain the agent should be
-about the obvious repairs in it.
+single-file review, a `--max-iterations 1` review — none of them is exempt. Neither loop gates the
+fixer on severity: each dispatches it whenever the round found any issue at all, and the only fix
+phase either one skips is a fix phase with nothing to act on. What the fixer could not settle goes
+to the triage phase, which is equally required. Whether to run *another* round is a separate
+decision, and that one is gated on the critical count. The narrower the scope, the *more* certain
+the agent should be about the obvious repairs in it.
 
 The test for handing something back is not difficulty and not size. It is: **can the agent name more
 than one defensible answer, or does the right answer depend on something the repository does not
