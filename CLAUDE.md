@@ -4,6 +4,11 @@ Source repo for the `ai-dev-tools` Claude Code plugin. The plugin is installed v
 `directory` marketplace pointing at `ai-dev-tools/`, so **this working tree _is_ the plugin** —
 edits go live after `/reload-plugins`. No `git push` is required for local use.
 
+That holds for every profile on this machine, whatever version its `plugins/installed_plugins.json`
+shows: that field is the record written at install time and goes stale. What a session loads is
+`readFromFolder` in `claude plugin list --json`. So an edit here is live for every profile's next
+session, finished or not — land a change to a skill's dispatch as one commit.
+
 ## Gate — manifest changes must pass strict validation
 
 Any change to `ai-dev-tools/.claude-plugin/plugin.json`, `ai-dev-tools/.claude-plugin/marketplace.json`
