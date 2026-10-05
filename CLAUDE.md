@@ -72,8 +72,8 @@ mechanical signature, because check D only runs for detector-bearing rules.
 
 `check-shared-semantics.cjs` enforces that each shared rule is single-sourced, stated (not merely cited) by every skill it governs, and unviolated. Check D — no skill
 outside a rule's `applies-to` quietly does the governed thing — runs only for a rule that declares a
-`detector`. Three of the seven registry rules do (`severity-is-consequence`, `agent-abort-contract`,
-`brainstorm-handoff`); for the other four, checks A2 and C are the whole binding — they prove the
+`detector`. Only `severity-is-consequence`, `agent-abort-contract` and `brainstorm-handoff` do; for
+every other registry rule, checks A2 and C are the whole binding — they prove the
 canonical sentence is *stated*, never that it is obeyed or even satisfiable.
 
 **These are manual gates — nothing invokes them automatically.** Severity-is-consequence forked

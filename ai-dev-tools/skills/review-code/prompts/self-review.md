@@ -16,7 +16,7 @@ Review the fixer's own commits, report every defect, and **fix each one, exactly
 - Diff range: `{{DIFF_RANGE}}` — the fixer's own commits, and the whole of your scope
 - Fix report: `{{FIX_REPORT_PATH}}` — what the fixer claims it did, and why
 - Review JSON: `{{OUTPUT_PATH}}` — the issues it was responding to, and the current issue order
-- The effort level, as a reasoning-depth directive
+- The effort level, as a depth directive — it words how far to take the analysis; the agent you were dispatched as is what pinned your reasoning effort
 
 ## Scope
 
