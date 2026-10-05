@@ -165,6 +165,16 @@ const DECISION_DOC =
 const CLAIMS_LAST_LINE =
   /\bis (?:always |deliberately )?the (?:last|final) line\b|\bas the (?:\w+'?s? )?(?:last|final) line\b/i;
 
+// ---- untyped-agent-dispatch vocabulary ----------------------------------------
+// The one agent type that carries a pin: `subagent_type: "ai-dev-tools:<level>-effort"`. Naming
+// any other agent is not enough -- `general-purpose` takes the dispatching session's effort
+// exactly as a call with no type does.
+const PINNED_TYPE = /subagent_type:\s*["'`]ai-dev-tools:[^"'`\n]*-effort["'`]/;
+// The text of each Agent call written on a line, from its `Agent(` up to the next one. Each call is
+// judged on its own text: testing the line as a whole lets a typed call vouch for an untyped
+// fallback written beside it.
+const agentCalls = (line) => line.split(/\bAgent\(/).slice(1);
+
 // Fenced blocks are where issue RECORDS live (schemas, worked examples). They are exempt from the
 // proximity detector only -- the linkage detectors still scan them, so a rule hidden in a fence is
 // still caught. What a fence buys is exemption from adjacency, never from linkage.
@@ -298,6 +308,37 @@ const DETECTORS = {
         report(i + 1, 'displaced-last-line',
           'claims something other than the brainstorm document\'s absolute path is the last ' +
           'line printed. One line survives the scrollback; it is that path.',
+          lines[i].trim().slice(0, 130));
+      }
+    },
+  },
+
+  // ---- untyped-agent-dispatch (agent-dispatch-pin) ----------------------------
+  //
+  // The rule shipped with no detector, so A2 and C were its whole binding: the canonical sentence
+  // was pasted into both review skills and nothing looked at a dispatch. One site rewritten to
+  // `Agent(prompt: ...)` put that agent back at the dispatching session's effort, with the gate
+  // green and the iteration log still printing the pinned agent's name.
+  //
+  // It sees a call that is written out. A dispatch described only in prose is invisible to it,
+  // which is why every governed site spells its call.
+  'untyped-agent-dispatch': {
+    describe: 'a dispatch of one of the plugin\'s effort-pinned agents',
+    // `implement` and `orchestrate` dispatch with a prompt and nothing else, by design: neither
+    // takes an effort for its agents. An untyped call is therefore a violation only inside a
+    // governed skill, and the F4 sweep, which runs every detector over every references/ tree,
+    // skips this one.
+    governedOnly: true,
+    governs: (text) =>
+      text.split('\n').some((l) => agentCalls(l).some((call) => PINNED_TYPE.test(call))),
+    scan(file, report) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      for (let i = 0; i < lines.length; i += 1) {
+        if (agentCalls(lines[i]).every((call) => PINNED_TYPE.test(call))) continue;
+        report(i + 1, 'untyped-dispatch',
+          'an Agent call that names no effort-pinned agent. The Agent tool has no effort ' +
+          'parameter, so this agent runs at the effort of the session that dispatched it, ' +
+          'whatever `--effort` says.',
           lines[i].trim().slice(0, 130));
       }
     },
@@ -534,6 +575,9 @@ for (const [, { detector, skills, rules: owners }] of detectorScope) {
 
 function sweepStrict(files, why) {
   for (const [key, detector] of Object.entries(DETECTORS)) {
+    // A detector that binds governed skills only has nothing to say about these trees: they
+    // belong to skills its rule does not cover, or to prose every skill reads.
+    if (detector.governedOnly) continue;
     for (const f of files) {
       filesChecked += 1;
       detector.scan(f, (line, kind, detail, snippet) => {

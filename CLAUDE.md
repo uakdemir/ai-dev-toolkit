@@ -77,9 +77,9 @@ mechanical signature, because check D only runs for detector-bearing rules.
 
 `check-shared-semantics.cjs` enforces that each shared rule is single-sourced, stated (not merely cited) by every skill it governs, and unviolated. Check D — no skill
 outside a rule's `applies-to` quietly does the governed thing — runs only for a rule that declares a
-`detector`. Only `severity-is-consequence`, `agent-abort-contract` and `brainstorm-handoff` do; for
-every other registry rule, checks A2 and C are the whole binding — they prove the
-canonical sentence is *stated*, never that it is obeyed or even satisfiable.
+`detector`. Only `severity-is-consequence`, `agent-abort-contract`, `brainstorm-handoff` and
+`agent-dispatch-pin` do; for every other registry rule, checks A2 and C are the whole binding —
+they prove the canonical sentence is *stated*, never that it is obeyed or even satisfiable.
 
 **These are manual gates — nothing invokes them automatically.** Severity-is-consequence forked
 because `6f22c6a` fixed it in `review-code` and verification was scoped to the files that fix
@@ -88,7 +88,7 @@ touched; the gate exists so the next such divergence fails loudly, but only if i
 If you change a gate, re-run its mutation suite and add a case for what you changed:
 
 ```bash
-./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 51 passed
+./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 57 passed
 ```
 
 A gate tested only against the bug it was written from proves the author can grep. That suite now

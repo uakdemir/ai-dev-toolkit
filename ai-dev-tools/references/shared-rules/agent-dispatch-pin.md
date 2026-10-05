@@ -1,6 +1,7 @@
 ---
 name: agent-dispatch-pin
 applies-to: [review-code, review-doc]
+detector: untyped-agent-dispatch
 canonical: Every dispatched agent is the plugin agent that matches `--effort`, and carries `--model` on its Agent call whenever the flag was passed.
 ---
 
@@ -118,6 +119,8 @@ printed by `/ai-dev-tools:help` and by each review skill's `--help`.
 or a model for the agents it dispatches: `implement`'s `--model` selects an execution topology.
 `orchestrate` reaches this rule only by invoking the two review skills.
 
-No detector. Checks A2 and C bind both skills to the sentence. Nothing mechanical stops a dispatch
-added later from leaving the agent type out, and such a dispatch fails silently, so whoever adds a
-dispatch to either skill writes it in the form above.
+Detector `untyped-agent-dispatch`. In a governed skill, check B fails on any `Agent(` call that does
+not name one of the agents above, and check D fails on a skill outside this rule that dispatches one
+of them. The detector sees a call that is written out. A dispatch described only in prose is
+invisible to it, and such a dispatch fails silently, so every site spells its call in the form
+above. A skill outside the rule stays free to dispatch with a prompt and nothing else.

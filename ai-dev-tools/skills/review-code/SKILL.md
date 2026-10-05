@@ -243,7 +243,7 @@ Single agent, dispatched as the `--effort` agent and on the `--model` model when
 
 `{{MUST_INSPECT}}` is not a reopening of that slot. It carries **paths, not findings** — a list of files the caller wants opened first, which tells the reviewer nothing about what a previous round concluded and cannot move a count. `{{MUST_INSPECT}}` is substituted to the literal `none` when `--must-inspect` is absent, on the same terms as the fixer's two conditional inputs below: an unsubstituted placeholder reaching the agent is a defect, and `none` is a value rather than a defect.
 
-Read `prompts/reviewer.md` from this skill's directory for dispatch instructions. The reviewer writes to the resolved `{{OUTPUT_PATH}}` (`tmp/_reviews_errors/[<run_id>-]review-code.json`) directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
+Read `prompts/reviewer.md` from this skill's directory and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <reviewer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The reviewer writes to the resolved `{{OUTPUT_PATH}}` (`tmp/_reviews_errors/[<run_id>-]review-code.json`) directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
 
 ## Context Budgets
 
@@ -265,7 +265,7 @@ Single agent, dispatched as the `--effort` agent and on the `--model` model when
 
 **The two conditional inputs are substituted to the literal `none` when they are absent** — `{{SPEC_CONTENT}}` on a run without `--against`, `{{VERIFICATION_REGRESSIONS}}` on a run with nothing to report (including one without `--verify`). Neither is ever left standing as a placeholder: `prompts/coder.md` stops on a placeholder that reaches it literally, so an empty slot left alone would abort the fix phase of every run that passes neither `--against` nor `--verify` — the commonest invocation there is. `review-doc` pins its own optional input the same way (`{{AGAINST_PATH}}` → the `--against` value or `none`).
 
-Read `prompts/coder.md` from this skill's directory for dispatch instructions. Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/_reviews_errors/review-code-fix-report.json`.
+Read `prompts/coder.md` from this skill's directory and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/_reviews_errors/review-code-fix-report.json`.
 
 ## Self-Review Agent
 
