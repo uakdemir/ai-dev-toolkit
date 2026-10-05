@@ -534,7 +534,7 @@ A missing line is indistinguishable from a skill that forgot.
 | Fact-checker aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, continue. Not an Error. |
 | Self-review pass aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: self-review aborted — <reason>. Fix results unverified.`, continue. Not an Error. |
 | Fix phase fails | Abort the run, status **Error**. Documents are left as the fixer left them; say so in the Artifact line. |
-| The Agent tool refuses the agent type or the model at dispatch | Abort the run, status **Error**, and name the phase. Never retry the call without `subagent_type`: see `references/shared-rules/agent-dispatch-pin.md`. |
+| The Agent tool refuses the agent type or the model at dispatch | Abort the run, status **Error**, and name the phase. This row wins over the two abort rows: a call the Agent tool refused started no agent, so nothing aborted under `references/shared-rules/agent-abort-contract.md`, and the run stops with **Error** at whichever phase it happens, the fact-checker and self-review dispatches included. Never retry the call without `subagent_type`: see `references/shared-rules/agent-dispatch-pin.md`. |
 | Max iterations exhausted | Not an Error — status follows the normal rules and the remaining issues are reported. |
 
 Both abort rows follow `references/shared-rules/agent-abort-contract.md`.
@@ -584,7 +584,7 @@ They used to be append-only across iterations, matched on a `(location, category
 
 First match wins:
 
-1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
+1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, the Agent tool refused a dispatch, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
 2. **Issues Found**: `critical_count > 0` OR (the fact-check **completed** AND `fact_check_accuracy < 75`)
 3. **Approved with suggestions**: (the fact-check **completed** AND `fact_check_accuracy < 90`) OR any high, medium, or low issue with `origin: "document"` remains
 4. **Approved**: all other cases

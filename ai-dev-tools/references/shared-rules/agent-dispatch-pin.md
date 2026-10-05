@@ -77,6 +77,17 @@ by Claude Code, an organisation's effort cap applies after the pin, and an expor
 `CLAUDE_CODE_EFFORT_LEVEL` overrides it. An exported `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` likewise
 discards the model a call names.
 
+Claude Code also caps how deeply agents may nest, with `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`. Read
+from the same binary and not measured: with the variable unset the cap is three unless a server-side
+feature flag sets another value, and an agent at or beyond the cap is given no Agent tool. Observed
+on 2026-10-05, in a session whose environment sets the variable to one: agents dispatched from the
+top-level session had no Agent tool. A review skill invoked inside a sub-agent can therefore
+dispatch its agents only where the cap is at least two. `orchestrate --auto` invokes `/review-doc`
+at stage i and `/review-code` at stage iii inside a sub-agent
+(`skills/orchestrate/references/auto/pipeline-overview.md`), so its review stages depend on the cap.
+That nested run is not measured under any cap: nobody has run a review skill inside a sub-agent
+since the plugin's agents were added.
+
 ## Naming the agents from a prompt
 
 The agents are not private to the review skills. A prompt that dispatches an agent of its own, such

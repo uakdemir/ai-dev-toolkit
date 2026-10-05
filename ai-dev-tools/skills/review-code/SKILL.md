@@ -591,7 +591,7 @@ If no `--verify` commands are configured, skip verification comparison and treat
 ## Status Logic
 
 First match wins:
-1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
+1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, the Agent tool refused a dispatch, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
 2. **Issues Found**: `critical_count > 0` OR verification regressions still present at the final post-fix verification run
 3. **Incomplete**: `coverage.not_inspected` is non-empty
 4. **Approved with suggestions**: any high, medium, or low issue with `origin: "document"` remains
@@ -695,7 +695,7 @@ Note: `medium_count` and a low count are not in the schema — both are derived 
 | Fix phase fails | Abort the run, status **Error**. Code is left as the fixer left it; say so in the Artifact line. |
 | Fixer returns `<name> not substituted` and stops | The skill's own substitution failed, so no fix was attempted. A fix phase failure: abort the run, status **Error**, and name the placeholder in the Reason line. Note that `none` is a substituted value, not a failure — see § Fixer Agent. |
 | Fix introduces new criticals | Normal loop — next iteration catches them. |
-| The Agent tool refuses the agent type or the model at dispatch | Abort the run, status **Error**, and name the phase. Never retry the call without `subagent_type`: see `references/shared-rules/agent-dispatch-pin.md`. |
+| The Agent tool refuses the agent type or the model at dispatch | Abort the run, status **Error**, and name the phase. This row wins over the self-review abort row: a call the Agent tool refused started no agent, so nothing aborted under `references/shared-rules/agent-abort-contract.md`, and the run stops with **Error** at whichever phase it happens, the self-review dispatch included. Never retry the call without `subagent_type`: see `references/shared-rules/agent-dispatch-pin.md`. |
 | Git operations fail | Abort with error. |
 | Verification command fails | Not an error — data for regression comparison. |
 | Max iterations exhausted | Not an Error — status follows the normal rules (Status Logic has no iteration-exhaustion trigger) and the remaining issues are reported. |

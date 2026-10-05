@@ -8,9 +8,9 @@ model is passed on the Agent call.
 
 ### Breaking Changes
 
-- **review-code, review-doc:** every agent runs at the `--effort` level, where it used to run at the effort of the session that dispatched it. A call that passes no `--effort` therefore moves to the default, `max`, whatever the session is at. That includes `orchestrate`'s review stages, which pass none. Pass `--effort` to choose (6cb0f55)
+- **review-code, review-doc:** every agent runs at the `--effort` level, where it used to run at the effort of the session that dispatched it. A call that passes no `--effort` therefore moves to the default, `max`, whatever the session is at. `orchestrate`'s review stages pass none and so select the `max` agent too, and whether a stage's sub-agent can dispatch it depends on Claude Code's spawn-depth cap, which no nested run has measured. Pass `--effort` to choose (6cb0f55)
 - **review-code, review-doc:** `--model` acts again. `3.0.0` accepted it with a warning and ignored it; a call that still passes it now gets that model on every agent (6cb0f55)
-- **review-code, review-doc:** the skills need the plugin's agents. A session that started before this version does not know them, and a run there stops with `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session.` until `/reload-plugins` (6cb0f55)
+- **review-code, review-doc:** the skills need the plugin's agents. A session that started before this version does not know them, and a run there stops with `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session.` until `/reload-plugins`. A review skill run inside a sub-agent that Claude Code gave no Agent tool meets the same error, and reloading plugins does not help there (6cb0f55)
 
 > As in 3.0.0, no commit carried a `BREAKING CHANGE:` footer. These are listed because the
 > same invocation now behaves differently.

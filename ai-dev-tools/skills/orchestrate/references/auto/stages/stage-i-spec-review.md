@@ -10,7 +10,7 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 /review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1
 ```
 
-- Model and effort: neither `--model` nor `--effort` is passed, so the review agents run at `review-doc`'s default effort, `max`, on the model Claude Code resolves for a call that names none
+- Model and effort: neither `--model` nor `--effort` is passed, so `review-doc` selects its default, the `max` agent, and names no model. Whether this stage's sub-agent can dispatch that agent is for Claude Code's spawn-depth cap to decide, and no nested run has measured it: `references/shared-rules/agent-dispatch-pin.md`
 - No fact-check
 - Up to 2 iterations with early-exit on 0 criticals
 
@@ -20,7 +20,7 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 /review-doc <spec> --fact-check true --max-iterations 2 --run-id <run_id>-phase2
 ```
 
-- Model and effort: neither `--model` nor `--effort` is passed, so the review agents run at `review-doc`'s default effort, `max`, on the model Claude Code resolves for a call that names none
+- Model and effort: neither `--model` nor `--effort` is passed, so `review-doc` selects its default, the `max` agent, and names no model. Whether this stage's sub-agent can dispatch that agent is for Claude Code's spawn-depth cap to decide, and no nested run has measured it: `references/shared-rules/agent-dispatch-pin.md`
 - Fact-check enabled
 - Up to 2 iterations
 
