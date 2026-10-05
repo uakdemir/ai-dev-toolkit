@@ -40,6 +40,7 @@ Still accepted with a warning and otherwise ignored: `--min-model` and `--max-mo
 
 - **review:** give `agent-dispatch-pin` a detector, `untyped-agent-dispatch`. An `Agent(` call in a review skill that names no effort-pinned agent now fails `check-shared-semantics.cjs`, and so does a skill outside the rule that dispatches one. Before it, a dispatch rewritten to `Agent(prompt: ...)` passed every gate. `review-code` spells out its reviewer and fixer calls so the detector can see them (02202c2)
 - **scripts:** the detector reads a call up to its closing bracket. Read to the end of the line, a pinned type quoted in prose after an untyped call vouched for it; the fact-check of the rule file found that by running the gate (75502cc)
+- **scripts:** a second `review-code` round, on the commits that followed the first, found three ways past the detector and closed each with a mutation case that failed first (the suite is at 64). Check D reads a file as a whole, so a pinned call written over several lines, unquoted, or with a bracket ahead of the type now counts. Check B requires the `<...>` placeholder where the level goes, so a review-skill call that names one fixed level fails where it used to run every `--effort` value at that level. The plugin-root `references/` tree is swept with this detector (874d9a0, 6d2a643)
 
 ### Other Changes
 
