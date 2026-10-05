@@ -64,6 +64,7 @@ Everything below is grounded in a specific `file:section`. Effort: S/M/L.
 - **[modernization]** `allowed-tools` frontmatter — no skill declares it. Scoping (e.g. review/fix agents to Read/Grep/Glob/Write + git-read) converts prose "NEVER run git push/reset --hard" prohibitions into STRUCTURAL constraints — defense-in-depth for the automated fix loops. **M** (must enumerate accurately)
 - **[efficiency]** Progressive-disclosure guidance is ~1,800-word SKILL.md cores + references/. Trim the heavy ones (scaffold ~550 lines, review-code ~418) into references/. **M**
 - **Explicitly NOT recommended:** (a) `model:` frontmatter on review-code/review-doc — would REVERSE the deliberate session-inheritance design (commits 45b6008/eda4d63). (b) `effort:` frontmatter — exists, but only affects the current turn, not dispatched sub-agents, so it can't replace the `--effort` flag. (c) plugin-level hooks/agents — that's new capability, out of scope.
+  - **Added 2026-10-05:** the session-inheritance design was retired in 4.0.0. The review skills dispatch effort-pinned plugin agents and pass `--model` on the Agent call. See `ai-dev-tools/references/shared-rules/agent-dispatch-pin.md`.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: review-doc
-argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] [--fact-check <true|false>] --max-iterations N [--run-id <id>]"
+argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] [--model <model>] [--fact-check <true|false>] --max-iterations N [--run-id <id>]"
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
@@ -16,7 +16,7 @@ Parse arguments after `/review-doc`:
 
 ```
 /review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
-            [--fact-check <true|false>]
+            [--model <model>] [--fact-check <true|false>]
             --max-iterations N [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
@@ -24,7 +24,8 @@ Parse arguments after `/review-doc`:
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
-| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, self-reviewer) |
+| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, self-reviewer): it selects the agent each one is dispatched as |
+| `--model <model>` | none | any model the Agent tool accepts | Model for all agents, passed as `model` on every Agent call. Absent: the calls name no model |
 | `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
 | `--max-iterations` | **required** | 0-10 | How many rounds to run (0 = skip). No default: the caller states it. Early exit when the round's criticals reach 0 — `total_criticals` with `--fact-check true`, `pre_fix_criticals` otherwise (see Review Loop property 3) |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
@@ -34,13 +35,32 @@ Parse arguments after `/review-doc`:
 
 It has no default because the number of rounds is the caller's budget decision, and a silent default hides it. It is also what makes the loop bounded by construction: with the cap always stated, a review cannot run away, which is why there is no loop-detection failure mode — see `../orchestrate/references/auto/failure-handling/unresolved-criticals.md`. A round that ends with criticals outstanding is a result to report, not a loop to diagnose.
 
-**Removed flags:** `--min-model`, `--max-model`, `--model` (clean break, no backward compat shim). The reviewer, fixer, fact-checker, and self-reviewer inherit the caller's session model; `--effort` pins the reasoning-effort level (default `max`).
+**Removed flags:** `--min-model`, `--max-model` (clean break, no backward compat shim). `--model` is not one of them: 3.0.0 ignored it with a warning, and it acts again.
 
-If any of the three is present, print `Warning: <flag> is no longer supported; all agents inherit the caller's session model. Ignoring.` — substituting the flag actually passed — and continue. Do not exit: the flag is inert, not invalid. Accepting it silently was the previous behaviour and gave the caller no signal that it had done nothing.
+If either is present, print `Warning: <flag> is no longer supported; use --model to set the model of every agent. Ignoring.` — substituting the flag actually passed — and continue. Do not exit: the flag is inert, not invalid. Accepting it silently was the previous behaviour and gave the caller no signal that it had done nothing.
 
 `--verify-fixes` is also removed. The self-review pass it used to gate is now unconditional — it runs after every fix phase, in every iteration where the fixer ran. If it is present, print `Warning: --verify-fixes is no longer supported; the self-review pass always runs. Ignoring.` and continue.
 
 If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
+
+**`--effort` and `--model` decide what each agent is dispatched as. Every dispatched agent is the plugin agent that matches `--effort`, and carries `--model` on its Agent call whenever the flag was passed.** Defined once, in `references/shared-rules/agent-dispatch-pin.md`, and shared with `review-code`. The reviewer, the fact-checker, the fixer and the self-reviewer are all dispatched in one of these two forms, and in no other:
+
+```
+Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>)                              # run without --model
+Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")   # run with --model
+```
+
+| `--effort` | Agent type |
+|---|---|
+| `high` | `ai-dev-tools:high-effort` |
+| `xhigh` | `ai-dev-tools:xhigh-effort` |
+| `max` | `ai-dev-tools:max-effort` |
+
+- **The agent type sets the reasoning effort.** The Agent tool has no effort parameter, and an agent dispatched without `subagent_type` runs at the effort of the session that dispatched it, whatever this flag says. The effort level written into each dispatch prompt is a depth directive: wording about how far to take the analysis. It sets nothing.
+- **`--model` is handed to the Agent tool unchanged.** Its accepted values are the ones that tool's `model` parameter accepts in the running session. On a value it does not accept, print `Error: --model must be a model the Agent tool accepts; got '<value>'.` and exit, during argument parsing and before Setup.
+- **With no `--model` the calls name no model**, and this skill makes no claim about which one runs. Claude Code resolves it: `CLAUDE_CODE_SUBAGENT_MODEL` when that variable is exported, the session's model otherwise.
+- **A session with no Agent tool cannot run this skill.** Claude Code gives no Agent tool to an agent at its spawn-depth cap, so a skill invoked inside a sub-agent may find none. If this session has none, print `Error: this session has no Agent tool, so the review agents cannot be dispatched. Run the skill from the top-level session, or raise CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH (at least 2 for a first-level sub-agent).` and exit, during argument parsing and before Setup. This is checked before the agent type and before the `--model` value: a session with no Agent tool offers no agent types and no `model` parameter to judge a value against, and reloading plugins does not help it. Never run the phases in this session instead: the reviewer, the fact-checker, the fixer and the self-reviewer would share one context, at this session's effort and on its model.
+- **A missing agent type is an error, never a fallback.** If the agent type for the chosen level is not among the ones the Agent tool offers in this session, print `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session. Run /reload-plugins, or restart the session, and re-run.` and exit, during argument parsing and before Setup. A call without `subagent_type` would run, and would report as though the flag had been honoured.
 
 ### `--help` Output
 
@@ -59,14 +79,20 @@ true is passed.
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
   --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
+  --model <model>         Model for every agent              (default: none)
   --fact-check <bool>     Run fact-checker each iteration    (default: false)
   --max-iterations N      Rounds to run, 0=skip              (REQUIRED)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
 
+Agents:
+  --effort picks the agent every phase is dispatched as:
+  ai-dev-tools:high-effort, ai-dev-tools:xhigh-effort, ai-dev-tools:max-effort.
+  The agent sets the reasoning effort. --model sets the model; without
+  it the Agent calls name none and Claude Code chooses.
+
 Removed:
-  --model, --min-model, --max-model   Ignored with a warning; all agents
-                                      inherit the caller's session model
+  --min-model, --max-model            Ignored with a warning; use --model
   --verify-fixes                      Ignored with a warning; the self-review
                                       pass always runs
 
@@ -75,6 +101,7 @@ Examples:
   /review-doc docs/spec.md --fact-check true                Rigorous review
   /review-doc docs/spec.md --max-iterations 3               Up to 3 rounds
   /review-doc docs/spec.md --run-id k3m9p2q7_a1b2c3d4      Scoped output
+  /review-doc docs/spec.md --max-iterations 1 --effort max --model opus    Opus at max
 ```
 
 ## Setup
@@ -127,9 +154,9 @@ Examples:
 **`--max-iterations >= 1`:** Run the simplified loop below. There is no separate single-pass mode — `--max-iterations 1` is just one iteration of the same loop.
 
 ```python
-# One invocation = one loop, one fact-check setting (model inherited from caller session; effort pinned by --effort)
+# One invocation = one loop, one fact-check setting (every agent is the --effort agent; --model on every call when passed)
 for iter in 1..max_iterations:
-    review()                            # reviewer agent (inherits session model; runs at --effort level)
+    review()                            # reviewer agent (the --effort agent; --model when passed)
     validate(json)                      # schema-check reviewer output; retry review once on failure, abort iteration on 2nd
     pre_fix_criticals = count(json)     # option Y: measured at review output, before fact-check
     if fact_check:
@@ -163,7 +190,7 @@ for iter in 1..max_iterations:
 
    The unresolved-criticals gate is a separate reader, not a different number. It is evaluated once, at the final round rather than at every round, and it takes `critical_count` off the artifact rather than the loop's own variable — but numerically that is the same pre-fix count the early exit tests: on a `--fact-check true` run the artifact field carries the fact-checker's recount over the full issues array (`agents/codebase-fact-checker.md` step 6), which is `total_criticals`; otherwise it is the reviewer's own count, which is `pre_fix_criticals`. Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
-5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — inherit the caller's session model and run at the `--effort` reasoning level (default `max`).
+5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — are the `--effort` agent (default `max`), which is what sets their reasoning effort, and carry `--model` on the call when it was passed. The two call forms are in Argument Parsing.
 6. `validate(json)` runs right after `review()`:
 
    ```bash
@@ -184,14 +211,14 @@ All `agents/` and `prompts/` paths in this section are relative to this skill's 
 
 ### Reviewer
 
-The orchestrator dispatches a single reviewer agent, inheriting the caller's session model and running at the `--effort` reasoning level.
+The orchestrator dispatches a single reviewer agent, as the `--effort` agent and on the `--model` model when one was passed.
 
-Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(prompt: <reviewer-prompt>)`. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <reviewer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
 
 **Each round's reviewer starts fresh.** It is not given the previous iteration's fix report and does not read the previous artifact. Round 2 re-reads the document as it now stands and reports what it finds; a defect round 1 fixed is absent from its findings rather than carried forward and excluded. That is what makes `critical_count` a per-round number by construction instead of by bookkeeping.
 
 The dispatch prompt must include:
-- The effort level (`--effort` value) as a reasoning-depth directive: `max` = exhaustive analysis; `xhigh`/`high` proportionally less. All severities stay in scope regardless.
+- The effort level (`--effort` value) as a depth directive: `max` = exhaustive analysis; `xhigh`/`high` proportionally less. All severities stay in scope regardless. The directive words the depth; the agent type is what sets the reasoning effort.
 - The document paths list:
   ```
   Documents to review:
@@ -216,7 +243,7 @@ Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json`
 
 **Abort detection contract:** the fact-checker signals a controlled abort (e.g., on malformed reviewer JSON) by leaving the JSON file unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, and proceeds to the fixer using the original reviewer output. Any other failure mode (agent crash, exception, no response) is treated identically: restore backup, print a generic warning, continue.
 
-Read `agents/codebase-fact-checker.md` and dispatch: `Agent(prompt: <fact-checker-prompt>)`. Include the effort level (`--effort` value) in the dispatch prompt. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
+Read `agents/codebase-fact-checker.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fact-checker-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. Include the effort level (`--effort` value) in the dispatch prompt as a depth directive (the agent type sets the reasoning effort). The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
 
 The fact-checker:
 1. Reads `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`)
@@ -230,10 +257,10 @@ The fact-checker:
 
 Dispatched whenever the round found **any** issue after review (and optional fact-check) — critical, high, medium or low. Not gated on severity: see Review Loop property 3.
 
-Read `prompts/coder.md` and dispatch: `Agent(prompt: <fixer-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{AGAINST_PATH}}` → the `--against` value or `none`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
+Read `prompts/coder.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{AGAINST_PATH}}` → the `--against` value or `none`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
 
 The dispatch prompt must include:
-- The effort level (`--effort` value) as a reasoning-depth directive
+- The effort level (`--effort` value) as a depth directive (the agent type sets the reasoning effort)
 - All issues grouped by severity
 - The document paths list
 - Reference document path (if `--against` provided)
@@ -263,10 +290,10 @@ Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json`
 
 **Abort detection contract:** **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-code`. Identical to the fact-checker's — the self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
 
-Read `prompts/verifier.md` and dispatch: `Agent(prompt: <self-review-prompt>)`. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
+Read `prompts/verifier.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <self-review-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
 
 The dispatch prompt must include:
-- The effort level (`--effort` value) as a reasoning-depth directive
+- The effort level (`--effort` value) as a depth directive (the agent type sets the reasoning effort)
 - The document paths list
 - The fix report path for this run
 - Whether `--fact-check` is true, so the pass knows whether the codebase is in scope for the accuracy half
@@ -508,6 +535,7 @@ A missing line is indistinguishable from a skill that forgot.
 | Fact-checker aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, continue. Not an Error. |
 | Self-review pass aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: self-review aborted — <reason>. Fix results unverified.`, continue. Not an Error. |
 | Fix phase fails | Abort the run, status **Error**. Documents are left as the fixer left them; say so in the Artifact line. |
+| The Agent tool refuses the agent type or the model at dispatch | Abort the run, status **Error**, and name the phase. This row wins over the two abort rows: a call the Agent tool refused started no agent, so nothing aborted under `references/shared-rules/agent-abort-contract.md`, and the run stops with **Error** at whichever phase it happens, the fact-checker and self-review dispatches included. Never retry the call without `subagent_type`: see `references/shared-rules/agent-dispatch-pin.md`. |
 | Max iterations exhausted | Not an Error — status follows the normal rules and the remaining issues are reported. |
 
 Both abort rows follow `references/shared-rules/agent-abort-contract.md`.
@@ -557,7 +585,7 @@ They used to be append-only across iterations, matched on a `(location, category
 
 First match wins:
 
-1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
+1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, the Agent tool refused a dispatch, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
 2. **Issues Found**: `critical_count > 0` OR (the fact-check **completed** AND `fact_check_accuracy < 75`)
 3. **Approved with suggestions**: (the fact-check **completed** AND `fact_check_accuracy < 90`) OR any high, medium, or low issue with `origin: "document"` remains
 4. **Approved**: all other cases
@@ -637,8 +665,8 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 ```markdown
 # Iteration N
 
-**Model:** inherited from caller session
-**Effort:** <--effort value>
+**Model:** <--model value> | not passed (the Agent calls named no model; Claude Code chose)
+**Effort:** <--effort value> (every agent dispatched as ai-dev-tools:<--effort value>-effort)
 **Agents:** 1 (merged reviewer), plus fact-checker (when --fact-check true), plus self-reviewer (whenever the fixer ran)
 **Issues found:** X critical, Y high, Z medium, W low
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "Fixed N issues (D deferred, P pushed back), 0 criticals, loop complete" | "0 criticals, early exit" | "0 criticals, loop complete" | "Fixed N issues (D deferred, P pushed back), max iterations reached" | "Fix phase failed: <error>" -- whenever the fixer ran, the outcome carries its counts as well as the reason the loop stopped; the bare "0 criticals" forms are for a round that found nothing to fix at any severity.

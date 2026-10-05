@@ -27,7 +27,8 @@
 //                  material rather than a finding producer (see isReferenceFile). Those
 //                  references/ trees, and the plugin-root references/ tree, are swept separately
 //                  with the strict scan() instead -- exempt from D's loose coverage predicate,
-//                  never from the rule.
+//                  never from the rule. A detector marked `governedOnly` is swept over the
+//                  plugin-root tree alone: its rule does not cover the other skills.
 //
 // D is the one that stops the next fork: a new sibling skill that starts assigning severities
 // without joining the contract is a violation the day it is written, not a year later.
@@ -165,6 +166,26 @@ const DECISION_DOC =
 const CLAIMS_LAST_LINE =
   /\bis (?:always |deliberately )?the (?:last|final) line\b|\bas the (?:\w+'?s? )?(?:last|final) line\b/i;
 
+// ---- untyped-agent-dispatch vocabulary ----------------------------------------
+// The one agent type that carries a pin: `subagent_type: "ai-dev-tools:<level>-effort"`. Naming
+// any other agent is not enough -- `general-purpose` takes the dispatching session's effort
+// exactly as a call with no type does. Nor is a literal level: the type has a definition, so
+// nothing is refused at dispatch, and every `--effort` value runs at that one level. Check B
+// therefore requires a `<...>` placeholder where the level goes.
+const PINNED_TYPE = /subagent_type:\s*["'`]ai-dev-tools:<[^<>"'`\n]+>-effort["'`]/;
+// What check D looks for: the agent type named at all, quoted or not, level literal or not. It is
+// tested over a whole file and never through agentCalls. For D a lost match is the quiet outcome,
+// and a call written over several lines, an unquoted value, or a bracket ahead of the type each
+// lost it.
+const NAMES_PINNED_TYPE = /subagent_type:\s*["'`]?ai-dev-tools:[^"'`\n,)]*-effort/;
+// The text of each Agent call written on a line, from its `Agent(` to its closing bracket. Each
+// call is judged on its own text: testing the line as a whole lets a typed call vouch for an
+// untyped fallback written beside it, and reading on past the bracket lets a pinned type quoted in
+// the prose after an untyped call do the same. A call whose arguments held a bracket of their own
+// would be cut short there. Only scan() reads it, never `governs`, and in scan() that fails loudly
+// rather than passing quietly.
+const agentCalls = (line) => line.split(/\bAgent\(/).slice(1).map((rest) => rest.split(')')[0]);
+
 // Fenced blocks are where issue RECORDS live (schemas, worked examples). They are exempt from the
 // proximity detector only -- the linkage detectors still scan them, so a rule hidden in a fence is
 // still caught. What a fence buys is exemption from adjacency, never from linkage.
@@ -298,6 +319,45 @@ const DETECTORS = {
         report(i + 1, 'displaced-last-line',
           'claims something other than the brainstorm document\'s absolute path is the last ' +
           'line printed. One line survives the scrollback; it is that path.',
+          lines[i].trim().slice(0, 130));
+      }
+    },
+  },
+
+  // ---- untyped-agent-dispatch (agent-dispatch-pin) ----------------------------
+  //
+  // The rule shipped with no detector, so A2 and C were its whole binding: the canonical sentence
+  // was pasted into both review skills and nothing looked at a dispatch. One site rewritten to
+  // `Agent(prompt: ...)` put that agent back at the dispatching session's effort, with the gate
+  // green and the iteration log still printing the pinned agent's name.
+  //
+  // It sees a call that is written out. A dispatch described only in prose is invisible to it,
+  // which is why every governed site spells its call.
+  'untyped-agent-dispatch': {
+    describe: 'a dispatch of one of the plugin\'s effort-pinned agents',
+    // `implement` and `orchestrate` dispatch with a prompt and nothing else, by design: neither
+    // takes an effort for its agents. An untyped call is therefore a violation only inside a
+    // governed skill, and the F4 sweep skips this detector in the references/ tree of a skill
+    // outside the rule. It still runs it over the plugin-root tree, which the governed skills read.
+    governedOnly: true,
+    governs: (text) => NAMES_PINNED_TYPE.test(text),
+    scan(file, report) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      for (let i = 0; i < lines.length; i += 1) {
+        const failing = agentCalls(lines[i]).filter((call) => !PINNED_TYPE.test(call));
+        if (failing.length === 0) continue;
+        if (failing.every((call) => NAMES_PINNED_TYPE.test(call))) {
+          report(i + 1, 'fixed-level-dispatch',
+            'an Agent call that names an effort-pinned agent, but not as the quoted ' +
+            '`ai-dev-tools:<--effort value>-effort`. A literal level runs every `--effort` ' +
+            'value at that one level.',
+            lines[i].trim().slice(0, 130));
+          continue;
+        }
+        report(i + 1, 'untyped-dispatch',
+          'an Agent call that names no effort-pinned agent. The Agent tool has no effort ' +
+          'parameter, so this agent runs at the effort of the session that dispatched it, ' +
+          'whatever `--effort` says.',
           lines[i].trim().slice(0, 130));
       }
     },
@@ -531,9 +591,15 @@ for (const [, { detector, skills, rules: owners }] of detectorScope) {
 // Both are swept here with the STRICT scan(), not `governs`. scan() is the same check B applies to
 // governed skills and produces zero hits across the real corpus, so this closes the hiding places
 // without reintroducing the three false positives that motivated narrowing D in the first place.
+// The one exception is a `governedOnly` detector, which is swept over the first tree only.
 
-function sweepStrict(files, why) {
+function sweepStrict(files, why, inSkill) {
   for (const [key, detector] of Object.entries(DETECTORS)) {
+    // A detector that binds governed skills only has nothing to say about a skill's own
+    // references/ tree: check B has read it already, or its rule does not cover the skill. The
+    // plugin-root tree belongs to no skill and the governed skills read it, so there it runs:
+    // skipping it reopened the hiding place this block closes.
+    if (detector.governedOnly && inSkill) continue;
     for (const f of files) {
       filesChecked += 1;
       detector.scan(f, (line, kind, detail, snippet) => {
@@ -562,7 +628,7 @@ if (fs.existsSync(rootRefsDir)) {
 for (const skill of allSkills) {
   const refFiles = (skillFiles(skill) || []).filter((f) => isReferenceFile(skill, f));
   if (refFiles.length) {
-    sweepStrict(refFiles, 'skills/' + skill + '/references/ is exempt from check D\'s coverage sweep, not from the rule itself');
+    sweepStrict(refFiles, 'skills/' + skill + '/references/ is exempt from check D\'s coverage sweep, not from the rule itself', true);
   }
 }
 

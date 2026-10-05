@@ -39,6 +39,13 @@ COMMANDS (INDEPENDENT QUALITY CHECKS)
 
   Run any command with --help for usage details.
 
+AGENTS (name one as subagent_type in a prompt, and pass model on the call)
+  ai-dev-tools:high-effort    Any role, pinned at high reasoning effort
+  ai-dev-tools:xhigh-effort   Any role, pinned at xhigh reasoning effort
+  ai-dev-tools:max-effort     Any role, pinned at max reasoning effort
+
+  /review-code and /review-doc choose among them with --effort.
+
 TIPS
   Start with /orchestrate — it handles the workflow for you.
   Re-invoke /orchestrate after each step completes to continue.

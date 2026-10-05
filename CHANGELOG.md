@@ -1,5 +1,53 @@
 # Changelog
 
+## 4.0.0 (2026-10-05)
+
+The release that makes `--effort` and `--model` do what the review skills say they do. Each
+dispatched agent is now an agent definition the plugin ships, pinned at the flag's level, and the
+model is passed on the Agent call.
+
+### Breaking Changes
+
+- **review-code, review-doc:** every agent runs at the `--effort` level, where it used to run at the effort of the session that dispatched it. A call that passes no `--effort` therefore moves to the default, `max`, whatever the session is at. `orchestrate`'s review stages pass none and so select the `max` agent too; the last item here says what they need in order to dispatch it. Pass `--effort` to choose (6cb0f55)
+- **review-code, review-doc:** `--model` acts again. `3.0.0` accepted it with a warning and ignored it; a call that still passes it now gets that model on every agent (6cb0f55)
+- **review-code, review-doc:** the skills need the plugin's agents. A session that started before this version does not know them, and a run there stops with `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session.` until `/reload-plugins` (6cb0f55)
+- **review-code, review-doc, orchestrate:** the review skills need a session that can dispatch agents. Where Claude Code gave the session no Agent tool, as it does inside a sub-agent at the spawn-depth cap, they stop with `Error: this session has no Agent tool, so the review agents cannot be dispatched.` and never run the phases in place. `orchestrate --auto` runs both review stages inside a sub-agent, so it needs `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` to be at least 2: a machine that sets it to 1 stops at stage i. With the variable unset, Claude Code 2.1.289 reads as a cap of 3. Not measured under any cap: a review skill run inside a sub-agent (6c2f721)
+
+> As in 3.0.0, no commit carried a `BREAKING CHANGE:` footer. These are listed because the
+> same invocation now behaves differently.
+
+### Deprecated
+
+Still accepted with a warning and otherwise ignored: `--min-model` and `--max-model`. The warning now points at `--model` (6cb0f55)
+
+### Features
+
+- **agents:** ship `ai-dev-tools:high-effort`, `ai-dev-tools:xhigh-effort` and `ai-dev-tools:max-effort` — role-neutral definitions that pin a reasoning effort and no model, usable by name from any prompt (918aab9)
+- **review:** dispatch every agent as the `--effort` agent, and pass `--model` as `model` on the call (6cb0f55)
+- **review:** register the dispatch rule in the shared-rules registry as `agent-dispatch-pin` (6cb0f55)
+
+### Fixes
+
+- **review-code, review-doc:** stop claiming every agent inherits the caller's session model. With no `--model` the call names none and Claude Code resolves it: `CLAUDE_CODE_SUBAGENT_MODEL` when that variable is exported, the session's model otherwise (6cb0f55)
+- **review-code, review-doc:** `{{EFFORT}}` and the effort level in a dispatch prompt are described as what they are, a depth directive; the agent type sets the reasoning effort (6cb0f55)
+- **orchestrate:** the same claim about the session model, in stage i and the profiling log (c47caa4)
+- **review-code, review-doc:** a dispatch the Agent tool refuses is an Error at every phase, the fact-checker and self-review dispatches included, and Status Logic rule 1 lists it. The row used to contradict the abort rows (61dc68a)
+- Applied the review round on this change: one finding fixed, and stage i and this entry no longer say that `orchestrate`'s review stages run at `max`, which had not been measured (61dc68a). The founder's decisions on what the round could not settle are 6c2f721, 02202c2 and b351bf2
+- **shared-rules:** applied a `review-doc` round, with fact-check, on `agent-dispatch-pin.md`: the rule now states the agent a run without `--effort` selects, every error with its text, what was measured and what was only read from Claude Code 2.1.289, and what the detector sees and misses (0f10263, 23b47c9). The founder's decision on the one finding the round could not settle, whether the skills look for `CLAUDE_CODE_EFFORT_LEVEL` and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` before they dispatch, is to disclose both and check neither (fc6b976)
+- **orchestrate:** stage iii states the spawn-depth cap it needs, as stage i does (23b47c9)
+
+### Tests
+
+- **review:** give `agent-dispatch-pin` a detector, `untyped-agent-dispatch`. An `Agent(` call in a review skill that names no effort-pinned agent now fails `check-shared-semantics.cjs`, and so does a skill outside the rule that dispatches one. Before it, a dispatch rewritten to `Agent(prompt: ...)` passed every gate. `review-code` spells out its reviewer and fixer calls so the detector can see them (02202c2)
+- **scripts:** the detector reads a call up to its closing bracket. Read to the end of the line, a pinned type quoted in prose after an untyped call vouched for it; the fact-check of the rule file found that by running the gate (75502cc)
+- **scripts:** a second `review-code` round, on the commits that followed the first, found three ways past the detector and closed each with a mutation case that failed first (the suite is at 64). Check D reads a file as a whole, so a pinned call written over several lines, unquoted, or with a bracket ahead of the type now counts. Check B requires the `<...>` placeholder where the level goes, so a review-skill call that names one fixed level fails where it used to run every `--effort` value at that level. The plugin-root `references/` tree is swept with this detector (874d9a0, 6d2a643)
+
+### Other Changes
+
+- **help:** list the effort-pinned agents (d17a45b)
+- **docs:** `CLAUDE.md` says what a profile loads, not what its install record shows (a013266)
+- **docs:** the July modernization audit notes that this release retired the session-inheritance design (b351bf2)
+
 ## 3.0.0 (2026-09-05)
 
 The release that made a review round mean one round. Counts, ids and artifacts are now

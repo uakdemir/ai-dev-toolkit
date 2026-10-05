@@ -4,6 +4,11 @@ Source repo for the `ai-dev-tools` Claude Code plugin. The plugin is installed v
 `directory` marketplace pointing at `ai-dev-tools/`, so **this working tree _is_ the plugin** —
 edits go live after `/reload-plugins`. No `git push` is required for local use.
 
+That holds for every profile on this machine, whatever version its `plugins/installed_plugins.json`
+shows: that field is the record written at install time and goes stale. What a session loads is
+`readFromFolder` in `claude plugin list --json`. So an edit here is live for every profile's next
+session, finished or not — land a change to a skill's dispatch as one commit.
+
 ## Gate — manifest changes must pass strict validation
 
 Any change to `ai-dev-tools/.claude-plugin/plugin.json`, `ai-dev-tools/.claude-plugin/marketplace.json`
@@ -72,9 +77,9 @@ mechanical signature, because check D only runs for detector-bearing rules.
 
 `check-shared-semantics.cjs` enforces that each shared rule is single-sourced, stated (not merely cited) by every skill it governs, and unviolated. Check D — no skill
 outside a rule's `applies-to` quietly does the governed thing — runs only for a rule that declares a
-`detector`. Three of the seven registry rules do (`severity-is-consequence`, `agent-abort-contract`,
-`brainstorm-handoff`); for the other four, checks A2 and C are the whole binding — they prove the
-canonical sentence is *stated*, never that it is obeyed or even satisfiable.
+`detector`. Only `severity-is-consequence`, `agent-abort-contract`, `brainstorm-handoff` and
+`agent-dispatch-pin` do; for every other registry rule, checks A2 and C are the whole binding —
+they prove the canonical sentence is *stated*, never that it is obeyed or even satisfiable.
 
 **These are manual gates — nothing invokes them automatically.** Severity-is-consequence forked
 because `6f22c6a` fixed it in `review-code` and verification was scoped to the files that fix
@@ -83,10 +88,10 @@ touched; the gate exists so the next such divergence fails loudly, but only if i
 If you change a gate, re-run its mutation suite and add a case for what you changed:
 
 ```bash
-./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 51 passed
+./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 64 passed
 ```
 
 A gate tested only against the bug it was written from proves the author can grep. That suite now
-pins nine defects in the gate itself, each of which survived a careful read of the gate's source —
-most recently a last-line pattern that matched `as the run's last line` but not `as the run last
-line`, so one missing apostrophe made the claim invisible.
+pins thirteen defects in the gate itself, each of which survived a careful read of the gate's
+source — most recently a check D that looked for a pinned dispatch one line and one call at a time,
+so the same dispatch written over several lines never counted as one.
