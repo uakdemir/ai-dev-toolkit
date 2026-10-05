@@ -1,5 +1,41 @@
 # Changelog
 
+## 4.0.0 (2026-10-05)
+
+The release that makes `--effort` and `--model` do what the review skills say they do. Each
+dispatched agent is now an agent definition the plugin ships, pinned at the flag's level, and the
+model is passed on the Agent call.
+
+### Breaking Changes
+
+- **review-code, review-doc:** every agent runs at the `--effort` level, where it used to run at the effort of the session that dispatched it. A call that passes no `--effort` therefore moves to the default, `max`, whatever the session is at. That includes `orchestrate`'s review stages, which pass none. Pass `--effort` to choose (6cb0f55)
+- **review-code, review-doc:** `--model` acts again. `3.0.0` accepted it with a warning and ignored it; a call that still passes it now gets that model on every agent (6cb0f55)
+- **review-code, review-doc:** the skills need the plugin's agents. A session that started before this version does not know them, and a run there stops with `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session.` until `/reload-plugins` (6cb0f55)
+
+> As in 3.0.0, no commit carried a `BREAKING CHANGE:` footer. These are listed because the
+> same invocation now behaves differently.
+
+### Deprecated
+
+Still accepted with a warning and otherwise ignored: `--min-model` and `--max-model`. The warning now points at `--model` (6cb0f55)
+
+### Features
+
+- **agents:** ship `ai-dev-tools:high-effort`, `ai-dev-tools:xhigh-effort` and `ai-dev-tools:max-effort` — role-neutral definitions that pin a reasoning effort and no model, usable by name from any prompt (918aab9)
+- **review:** dispatch every agent as the `--effort` agent, and pass `--model` as `model` on the call (6cb0f55)
+- **review:** register the dispatch rule in the shared-rules registry as `agent-dispatch-pin` (6cb0f55)
+
+### Fixes
+
+- **review-code, review-doc:** stop claiming every agent inherits the caller's session model. With no `--model` the call names none and Claude Code resolves it: `CLAUDE_CODE_SUBAGENT_MODEL` when that variable is exported, the session's model otherwise (6cb0f55)
+- **review-code, review-doc:** `{{EFFORT}}` and the effort level in a dispatch prompt are described as what they are, a depth directive; the agent type sets the reasoning effort (6cb0f55)
+- **orchestrate:** the same claim about the session model, in stage i and the profiling log (c47caa4)
+
+### Other Changes
+
+- **help:** list the effort-pinned agents (d17a45b)
+- **docs:** `CLAUDE.md` says what a profile loads, not what its install record shows (a013266)
+
 ## 3.0.0 (2026-09-05)
 
 The release that made a review round mean one round. Counts, ids and artifacts are now
