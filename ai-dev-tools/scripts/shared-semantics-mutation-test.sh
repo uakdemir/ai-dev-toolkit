@@ -629,6 +629,13 @@ printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<--effort valu
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T4  an untyped fallback beside a typed call on one line is caught"
 
+# The mirror of T4, found by the fact-check of the rule file: a call was read up to the end of its
+# line, so a pinned type quoted in prose AFTER an untyped call vouched for it.
+build_pin
+printf '\nDispatch the fixer: `Agent(prompt: <fixer-prompt>)`, never with `subagent_type: "ai-dev-tools:max-effort"`.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "T6  a pinned type quoted after an untyped call's closing bracket does not vouch for it"
+
 # Check D: a skill that dispatches a pinned agent correctly, but never joined the contract, so
 # nothing scans the dispatch it adds next.
 build_pin

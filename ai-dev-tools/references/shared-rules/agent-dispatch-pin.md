@@ -207,10 +207,9 @@ or a model for the agents it dispatches: `implement`'s `--model` selects an exec
 
 Detector `untyped-agent-dispatch`, in `scripts/check-shared-semantics.cjs`: a manual gate, run per
 the root CLAUDE.md, not an automatic one. In a governed skill, check B fails on any line where the
-text from an `Agent(` to the next one, or to the end of the line, carries no `subagent_type` whose
-value is a quoted or backticked `ai-dev-tools:...-effort` name. The level in that name is not
-compared with the table, so a name with no definition passes the gate and is refused only at
-dispatch, and a pinned type quoted in prose after an untyped call on the same line passes too.
+text from an `Agent(` to its closing bracket carries no `subagent_type` whose value is a quoted or
+backticked `ai-dev-tools:...-effort` name. The level in that name is not compared with the table,
+so a name with no definition passes the gate and is refused only at dispatch.
 
 Check D fails on a skill outside this rule that writes a call with a `subagent_type` of that shape
 outside its `references/` tree. Under that tree no check reads the call: check D skips the tree,

@@ -170,10 +170,12 @@ const CLAIMS_LAST_LINE =
 // any other agent is not enough -- `general-purpose` takes the dispatching session's effort
 // exactly as a call with no type does.
 const PINNED_TYPE = /subagent_type:\s*["'`]ai-dev-tools:[^"'`\n]*-effort["'`]/;
-// The text of each Agent call written on a line, from its `Agent(` up to the next one. Each call is
-// judged on its own text: testing the line as a whole lets a typed call vouch for an untyped
-// fallback written beside it.
-const agentCalls = (line) => line.split(/\bAgent\(/).slice(1);
+// The text of each Agent call written on a line, from its `Agent(` to its closing bracket. Each
+// call is judged on its own text: testing the line as a whole lets a typed call vouch for an
+// untyped fallback written beside it, and reading on past the bracket lets a pinned type quoted in
+// the prose after an untyped call do the same. A call whose arguments held a bracket of their own
+// would be cut short there, which fails loudly rather than passing quietly.
+const agentCalls = (line) => line.split(/\bAgent\(/).slice(1).map((rest) => rest.split(')')[0]);
 
 // Fenced blocks are where issue RECORDS live (schemas, worked examples). They are exempt from the
 // proximity detector only -- the linkage detectors still scan them, so a rule hidden in a fence is
