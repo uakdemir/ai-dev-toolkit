@@ -214,18 +214,30 @@ or a model for the agents it dispatches: `implement`'s `--model` selects an exec
 Detector `untyped-agent-dispatch`, in `scripts/check-shared-semantics.cjs`: a manual gate, run per
 the root CLAUDE.md, not an automatic one. In a governed skill, check B fails on any line where the
 text from an `Agent(` to its closing bracket carries no `subagent_type` whose value is a quoted or
-backticked `ai-dev-tools:...-effort` name. The level in that name is not compared with the table,
-so a name with no definition passes the gate and is refused only at dispatch.
+backticked `ai-dev-tools:<...>-effort` name, with a placeholder in angle brackets where the level
+goes. A literal level fails: the call would run every `--effort` value at that one level, and
+nothing would be refused at dispatch. The words inside the placeholder are not checked. Check B
+reads one line at a time, so a governed call written over several lines fails as well.
 
-Check D fails on a skill outside this rule that writes a call with a `subagent_type` of that shape
-outside its `references/` tree. Under that tree no check reads the call: check D skips the tree,
-and the sweep that reads it skips this detector. That tree is where `implement` and `orchestrate`
-describe the agents they dispatch (`skills/implement/references/implementation-step.md`,
+Check D fails on a skill outside this rule in which a file outside its `references/` tree holds
+`subagent_type:` followed by an `ai-dev-tools:...-effort` name, quoted or not, with a literal level
+or a placeholder. It reads the file as a whole and not call by call, so a call written over
+several lines counts, and so does that text outside any call. A skill that only lists the agents'
+names, as `skills/help/SKILL.md` does, is not one: no name there follows `subagent_type:`. Under a
+skill's `references/` tree no check reads the call: check D skips the tree, and the sweep that
+reads it skips this detector. That tree is where `implement` and `orchestrate` describe the agents
+they dispatch (`skills/implement/references/implementation-step.md`,
 `skills/orchestrate/references/auto/`).
+
+The plugin-root `references/` tree belongs to no skill, and the governed skills read it. The same
+sweep runs this detector there as check B runs it in a governed skill: an `Agent(` call under that
+tree fails unless it is in the form above, whichever skill it was written for.
+`references/shared-rules/` is outside the sweep, for this detector as for every other, so a call
+written in a rule file is read by no check.
 
 The detector sees a call that is written out. A dispatch described only in prose is invisible to
 it, and such a dispatch fails silently, so every dispatch site spells its call in the form above. A
-skill outside the rule stays free to dispatch with a prompt and nothing else.
+skill outside the rule stays free to dispatch with a prompt and nothing else, in its own files.
 
 The detector reads the agent type and nothing else. No check looks for `model` on a call, and each
 dispatch site gives the `--model` form in words beside its call, so a site that loses those words

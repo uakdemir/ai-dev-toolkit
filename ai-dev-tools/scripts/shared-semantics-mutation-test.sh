@@ -636,6 +636,13 @@ printf '\nDispatch the fixer: `Agent(prompt: <fixer-prompt>)`, never with `subag
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T6  a pinned type quoted after an untyped call's closing bracket does not vouch for it"
 
+# A governed call that names one fixed agent. The type is a pinned one, so nothing is refused at
+# dispatch, and every `--effort` value then runs at that level: the flag changes nothing again.
+build_pin
+printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:high-effort", prompt: <fixer-prompt>)`.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "T7  a governed dispatch naming one fixed level instead of the --effort placeholder is caught"
+
 # Check D: a skill that dispatches a pinned agent correctly, but never joined the contract, so
 # nothing scans the dispatch it adds next.
 build_pin
@@ -643,6 +650,34 @@ mkdir -p "$BASE/skills/plan-fake"
 printf '# Plan Fake\n\nDispatch the planner: `Agent(subagent_type: "ai-dev-tools:max-effort", prompt: <planner-prompt>)`.\n' \
   > "$BASE/skills/plan-fake/SKILL.md"
 expect red "$BASE" "T5  an unregistered skill dispatching a pinned agent is caught (check D)"
+
+# Check D read a dispatch through the per-line call text check B uses. There a lost match is the
+# quiet outcome: three ordinary spellings of the same dispatch left the skill outside the contract.
+build_pin
+mkdir -p "$BASE/skills/plan-fake"
+printf '# Plan Fake\n\nDispatch the planner:\n\n```\nAgent(\n  subagent_type: "ai-dev-tools:max-effort",\n  prompt: <planner-prompt>\n)\n```\n' \
+  > "$BASE/skills/plan-fake/SKILL.md"
+expect red "$BASE" "T8  an unregistered skill's pinned dispatch written over several lines is caught (check D)"
+
+build_pin
+mkdir -p "$BASE/skills/plan-fake"
+printf '# Plan Fake\n\nDispatch the checker: `Agent(subagent_type: ai-dev-tools:high-effort, model: opus, prompt: <checker-prompt>)`.\n' \
+  > "$BASE/skills/plan-fake/SKILL.md"
+expect red "$BASE" "T9  an unregistered skill's pinned dispatch with an unquoted type is caught (check D)"
+
+build_pin
+mkdir -p "$BASE/skills/plan-fake"
+printf '# Plan Fake\n\nDispatch the writer: `Agent(prompt: render(<writer-prompt>), subagent_type: "ai-dev-tools:max-effort")`.\n' \
+  > "$BASE/skills/plan-fake/SKILL.md"
+expect red "$BASE" "T10 an unregistered skill's pinned dispatch with a bracket before the type is caught (check D)"
+
+# The other side of that looser reading: `help` lists the agents' names for a prompt author and
+# dispatches nothing. Naming an agent is not dispatching one.
+build_pin
+mkdir -p "$BASE/skills/help-fake"
+printf '# Help Fake\n\nAGENTS (name one as subagent_type in a prompt, and pass model on the call)\n  ai-dev-tools:high-effort\n  ai-dev-tools:max-effort\n' \
+  > "$BASE/skills/help-fake/SKILL.md"
+expect green "$BASE" "N11 a skill that lists the pinned agents' names without dispatching one does NOT join the contract"
 
 # `implement` and `orchestrate` dispatch with a prompt and nothing else, by design: neither takes an
 # effort for its agents, and the rule says so. The F4 sweep runs every detector over every
@@ -655,6 +690,15 @@ printf '# Implement Fake\n\nDispatch the coder: `Agent(prompt: <coder-prompt>)`.
 printf '# Dispatch\n\nEach task agent is dispatched as `Agent(prompt: <task-prompt>)`.\n' \
   > "$BASE/skills/implement-fake/references/dispatch.md"
 expect green "$BASE" "N10 a skill outside the rule that dispatches with no agent type does NOT join the contract"
+
+# N10's exemption is for a tree that belongs to a skill outside the rule. The plugin-root
+# references/ tree belongs to no skill and the governed skills read it, so an untyped dispatch
+# moved there was read by no check: B stops at the skill's own files and the sweep skipped it.
+build_pin
+printf '# Dispatch\n\nThe review skills dispatch the fixer as `Agent(prompt: <fixer-prompt>)`.\n' \
+  > "$BASE/references/dispatch.md"
+printf '\nDispatch the fixer as `references/dispatch.md` says.\n' >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "T11 an untyped dispatch in the plugin-root references/ tree is caught"
 
 echo
 echo "-------- $pass passed, $fail failed --------"

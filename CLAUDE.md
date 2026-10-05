@@ -88,10 +88,10 @@ touched; the gate exists so the next such divergence fails loudly, but only if i
 If you change a gate, re-run its mutation suite and add a case for what you changed:
 
 ```bash
-./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 58 passed
+./ai-dev-tools/scripts/shared-semantics-mutation-test.sh ./ai-dev-tools  # 64 passed
 ```
 
 A gate tested only against the bug it was written from proves the author can grep. That suite now
-pins nine defects in the gate itself, each of which survived a careful read of the gate's source —
-most recently a last-line pattern that matched `as the run's last line` but not `as the run last
-line`, so one missing apostrophe made the claim invisible.
+pins thirteen defects in the gate itself, each of which survived a careful read of the gate's
+source — most recently a check D that looked for a pinned dispatch one line and one call at a time,
+so the same dispatch written over several lines never counted as one.
