@@ -182,8 +182,8 @@ const NAMES_PINNED_TYPE = /subagent_type:\s*["'`]?ai-dev-tools:[^"'`\n,)]*-effor
 // call is judged on its own text: testing the line as a whole lets a typed call vouch for an
 // untyped fallback written beside it, and reading on past the bracket lets a pinned type quoted in
 // the prose after an untyped call do the same. A call whose arguments held a bracket of their own
-// would be cut short there. Check B is the only reader, and there that fails loudly rather than
-// passing quietly.
+// would be cut short there. Only scan() reads it, never `governs`, and in scan() that fails loudly
+// rather than passing quietly.
 const agentCalls = (line) => line.split(/\bAgent\(/).slice(1).map((rest) => rest.split(')')[0]);
 
 // Fenced blocks are where issue RECORDS live (schemas, worked examples). They are exempt from the

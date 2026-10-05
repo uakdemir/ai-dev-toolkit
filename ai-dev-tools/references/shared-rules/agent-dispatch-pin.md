@@ -217,16 +217,17 @@ text from an `Agent(` to its closing bracket carries no `subagent_type` whose va
 backticked `ai-dev-tools:<...>-effort` name, with a placeholder in angle brackets where the level
 goes. A literal level fails: the call would run every `--effort` value at that one level, and
 nothing would be refused at dispatch. The words inside the placeholder are not checked. Check B
-reads one line at a time, so a governed call written over several lines fails as well.
+reads one line at a time, so a governed call written over several lines fails as well, unless its
+`subagent_type` is on the line that holds the `Agent(`.
 
 Check D fails on a skill outside this rule in which a file outside its `references/` tree holds
 `subagent_type:` followed by an `ai-dev-tools:...-effort` name, quoted or not, with a literal level
 or a placeholder. It reads the file as a whole and not call by call, so a call written over
 several lines counts, and so does that text outside any call. A skill that only lists the agents'
-names, as `skills/help/SKILL.md` does, is not one: no name there follows `subagent_type:`. Under a
-skill's `references/` tree no check reads the call: check D skips the tree, and the sweep that
-reads it skips this detector. That tree is where `implement` and `orchestrate` describe the agents
-they dispatch (`skills/implement/references/implementation-step.md`,
+names, as `skills/help/SKILL.md` does, is not one: no name there follows `subagent_type:`. Under the
+`references/` tree of a skill outside this rule no check reads the call: check D skips the tree,
+and the sweep that reads it skips this detector. That tree is where `implement` and `orchestrate`
+describe the agents they dispatch (`skills/implement/references/implementation-step.md`,
 `skills/orchestrate/references/auto/`).
 
 The plugin-root `references/` tree belongs to no skill, and the governed skills read it. The same
