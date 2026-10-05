@@ -33,7 +33,7 @@ Still accepted with a warning and otherwise ignored: `--min-model` and `--max-mo
 - **orchestrate:** the same claim about the session model, in stage i and the profiling log (c47caa4)
 - **review-code, review-doc:** a dispatch the Agent tool refuses is an Error at every phase, the fact-checker and self-review dispatches included, and Status Logic rule 1 lists it. The row used to contradict the abort rows (61dc68a)
 - Applied the review round on this change: one finding fixed, and stage i and this entry no longer say that `orchestrate`'s review stages run at `max`, which had not been measured (61dc68a). The founder's decisions on what the round could not settle are 6c2f721, 02202c2 and b351bf2
-- **shared-rules:** applied a `review-doc` round, with fact-check, on `agent-dispatch-pin.md`: the rule now states the agent a run without `--effort` selects, every error with its text, what was measured and what was only read from Claude Code 2.1.289, and what the detector sees and misses (0f10263, 23b47c9)
+- **shared-rules:** applied a `review-doc` round, with fact-check, on `agent-dispatch-pin.md`: the rule now states the agent a run without `--effort` selects, every error with its text, what was measured and what was only read from Claude Code 2.1.289, and what the detector sees and misses (0f10263, 23b47c9). The founder's decision on the one finding the round could not settle, whether the skills look for `CLAUDE_CODE_EFFORT_LEVEL` and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` before they dispatch, is to disclose both and check neither (fc6b976)
 - **orchestrate:** stage iii states the spawn-depth cap it needs, as stage i does (23b47c9)
 
 ### Tests
