@@ -17,6 +17,8 @@ Orchestrate owns the iteration loop. One dispatch is one iteration, up to 4:
 /review-code <spec_baseline> --against <spec_path> --run-id <run_id>-iter<N> --max-iterations 1 [--must-inspect <paths>]
 ```
 
+**Model and effort.** Neither `--model` nor `--effort` is passed, so `review-code` selects its default, the `max` agent, and names no model. This stage's sub-agent can dispatch that agent only where Claude Code's spawn-depth cap is at least two. Under a cap of one `review-code` stops with its no-Agent-tool error and writes no artifact, which `references/auto/failure-handling/retry-semantics.md` treats as a crash. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
+
 **`--max-iterations 1` is forced, not a preference.** Orchestrate's `N` is what the per-iteration commit, the `code-review-iter-{N}-complete` state and the profiling entry's `round=N` all key off. Any inner cap above 1 makes each of those name a different number of rounds than actually ran — at `--max-iterations 4` this stage's own header, "up to 4 iterations", would mean up to 16. Stage i takes the other shape for a reason this stage does not have: its outer loop runs over *phases* (`--fact-check` off, then on), a genuine second axis, so its inner cap of 2 still totals 4.
 
 **`-iter<N>` in the run-id is equally forced.** `review-code`'s Setup deletes `<run_id>-review-code*` on every run, so a bare `--run-id <run_id>` would have each dispatch erase the previous iteration's log and snapshots — the per-iteration record this stage names as its audit trail. Putting the iteration in the run-id is the device stage i already uses for the phase (`<run_id>-phase1`), and it gives every iteration a file no later dispatch can touch.

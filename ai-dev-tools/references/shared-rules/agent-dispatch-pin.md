@@ -52,8 +52,9 @@ flag and one name for long enough to be read as one mechanism.
 
 Measured on 2026-10-05 with Claude Code 2.1.289: an agent dispatched from a session at effort `max`
 as `ai-dev-tools:high-effort` ran at effort `high`. A `review-code` round the same day ran its
-reviewer, fixer and self-reviewer at `high` on Opus under a session at `max`. Not measured: the
-`xhigh` agent, and a pinned agent dispatched from inside a sub-agent.
+reviewer, fixer and self-reviewer at `high` on Opus under a session at `max`, and a `review-doc`
+round ran its reviewer, fact-checker, fixer and self-reviewer at `max` on Opus under a session at
+`high`. Not measured: the `xhigh` agent, and a pinned agent dispatched from inside a sub-agent.
 
 ## When `--effort` is absent
 
@@ -115,9 +116,8 @@ Never a fallback to running the phases in the session the skill is in. The agent
 have dispatched then share one context, at that session's effort and on its model, and the run
 reports as a review by separate agents.
 
-Neither skill says whether this check also comes before the one on the `--model` value. That value
-is judged against the Agent tool's `model` parameter, which a session with no Agent tool does not
-have.
+It comes before the check on the `--model` value too. That value is judged against the Agent
+tool's `model` parameter, which a session with no Agent tool does not have.
 
 Claude Code caps how deeply agents may nest, with `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`. Read from
 Claude Code 2.1.289 and not measured: with the variable unset the cap is three unless a server-side
@@ -196,8 +196,9 @@ skill's call: a run without `--model` still dispatches in the first form.
 Restatements outside the two skills, to be kept in step with this file:
 
 - `skills/orchestrate/references/auto/stages/stage-i-spec-review.md`: the default agent and the
-  spawn-depth cap, at both phases. Stage iii needs the same cap, and
-  `skills/orchestrate/references/auto/stages/stage-iii-code-review.md` has no such note
+  spawn-depth cap, at both phases
+- `skills/orchestrate/references/auto/stages/stage-iii-code-review.md`: the same, for its
+  per-iteration dispatch
 - `skills/orchestrate/references/auto/profiling-log.md`: how a call that names no model is resolved
 - `skills/help/SKILL.md`: the agent names
 
