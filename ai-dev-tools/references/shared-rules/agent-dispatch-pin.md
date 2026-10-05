@@ -165,6 +165,11 @@ Neither skill looks for any of these. Under the three effort limits a run dispat
 agent as usual, the iteration log prints the flag's value, and nothing reports the difference. What
 a run with `--model` does under `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, neither skill says.
 
+That is a decision, taken on 2026-10-05, and not an omission. A session can read both variables
+before it dispatches, and the skills still do not. A warning or a stop would rest on a reading of
+Claude Code 2.1.289 that nobody measured, and it would leave the other two limits, the model's
+step-down and the organisation's cap, as invisible as they are now.
+
 Nor does either skill test that the pin took effect. Their checks ask whether the session has an
 Agent tool and whether that tool offers the agent type, so a Claude Code that offers the type and
 does not apply its `effort:` passes both, and the agents run at whatever effort that Claude Code
