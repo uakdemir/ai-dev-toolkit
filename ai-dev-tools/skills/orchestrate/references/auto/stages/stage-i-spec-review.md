@@ -10,7 +10,7 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 /review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1
 ```
 
-- Model: inherited from caller session
+- Model and effort: neither `--model` nor `--effort` is passed, so the review agents run at `review-doc`'s default effort, `max`, on the model Claude Code resolves for a call that names none
 - No fact-check
 - Up to 2 iterations with early-exit on 0 criticals
 
@@ -20,7 +20,7 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 /review-doc <spec> --fact-check true --max-iterations 2 --run-id <run_id>-phase2
 ```
 
-- Model: inherited from caller session
+- Model and effort: neither `--model` nor `--effort` is passed, so the review agents run at `review-doc`'s default effort, `max`, on the model Claude Code resolves for a call that names none
 - Fact-check enabled
 - Up to 2 iterations
 
