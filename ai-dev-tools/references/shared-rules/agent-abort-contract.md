@@ -58,7 +58,7 @@ The orchestrator cannot distinguish them from the outside, so it must not try.
 ## Why both halves are required
 
 The sentinel without the untouched artifact leaves a half-written JSON that the backup restore then
-silently discards (for the fact-checker, which has no backup, the merge rejects it instead), hiding
+silently discards (for the fact-checker, which has no backup, the skipped merge leaves it unread instead), hiding
 whatever the pass had already appended. The untouched artifact without the
 sentinel is indistinguishable from a pass that ran and found nothing — which is the failure mode that
 matters most, because "found nothing" is the answer that lets the loop proceed.
