@@ -1,5 +1,33 @@
 # Changelog
 
+## 5.0.0 (2026-10-08)
+
+The release that makes a review round cheaper and shorter by default. Measured on the founder's
+review runs, an agent at `max` costs about twice one at `high` and takes about 2.5 times as long,
+and review-doc's fact-checker waited for a reviewer whose output it never reads.
+
+### Breaking Changes
+
+- **review-code, review-doc:** `--effort` defaults to `high`, where it was `max`. A call that passes no `--effort` drops from max to high; `orchestrate`'s review stages pass none, so they drop too (a59cf22)
+- **review-code, review-doc:** the fixer and the self-reviewer follow the new `--fix-effort`, default `high`, not `--effort`. A `--effort max` run now fixes at high unless it also passes `--fix-effort max` (a59cf22)
+- **review-doc:** `--fact-check` defaults to `true`. A call that passes no `--fact-check` now runs the fact-checker every round, and its self-review checks the fixer's text against the codebase too. That includes `orchestrate` standard mode's spec and plan reviews, which pass none (`skills/orchestrate/references/standard/steps/step-1.md` to `step-4.md`) (a59cf22)
+
+> As in 4.0.0, no commit carried a `BREAKING CHANGE:` footer. These are listed because the
+> same invocation now behaves differently.
+
+**Note:** with no `--model`, review agents run on `CLAUDE_CODE_SUBAGENT_MODEL` when it is exported
+(Sonnet on some machines), and on the session's model otherwise. Pass `--model opus` for review runs.
+
+### Features
+
+- **review-code, review-doc:** `--fix-effort high|xhigh|max` selects the agent the fixer and the self-reviewer are dispatched as (a59cf22)
+- **review-doc:** the reviewer and the fact-checker run concurrently. The fact-checker writes its own artifact, `tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json`, and `scripts/merge-fact-check.cjs` merges it before the fixer; any merge exit but 0 is a failed fact-check (a59cf22)
+- **scripts:** `merge-fact-check.cjs`, which appends, renumbers, recounts and validates before it replaces the review JSON (d893900)
+
+### Tests
+
+- **scripts:** `merge-fact-check-test.sh`, 7 cases on fixtures in `tests/fixtures/fact-check-merge/`, added to the root CLAUDE.md gate block (d893900)
+
 ## 4.0.0 (2026-10-05)
 
 The release that makes `--effort` and `--model` do what the review skills say they do. Each
