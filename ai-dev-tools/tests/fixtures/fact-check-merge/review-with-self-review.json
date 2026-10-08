@@ -1,0 +1,10 @@
+{
+  "critical_count": 1,
+  "high_count": 0,
+  "fact_check_accuracy": 100,
+  "fact_check_claims": [],
+  "issues": [
+    { "id": "ISSUE-001", "severity": "critical", "category": "completeness", "location": "§ 1", "confidence": 85, "problem": "p1", "suggested_fix": "f1", "origin": "document" },
+    { "id": "ISSUE-002", "severity": "critical", "category": "verify", "location": "§ 2", "confidence": 80, "problem": "p2", "suggested_fix": "f2", "origin": "self-review" }
+  ]
+}

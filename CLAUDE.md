@@ -48,6 +48,7 @@ node ./ai-dev-tools/scripts/check-doc-links.cjs ./ai-dev-tools          # exit 0
 node ./ai-dev-tools/scripts/check-schema-drift.cjs ./ai-dev-tools       # exit 0
 ./ai-dev-tools/scripts/check-detector-coverage.sh ./ai-dev-tools        # PASS
 ./ai-dev-tools/scripts/check-fixtures.sh ./ai-dev-tools                 # PASS
+./ai-dev-tools/scripts/merge-fact-check-test.sh ./ai-dev-tools          # 7 passed
 ```
 
 | gate | what it stops |
@@ -58,6 +59,7 @@ node ./ai-dev-tools/scripts/check-schema-drift.cjs ./ai-dev-tools       # exit 0
 | `check-schema-drift.cjs` | a SKILL.md publishing a schema its validator does not enforce |
 | `check-detector-coverage.sh` | the severity detector silently gaining or losing a file |
 | `check-fixtures.sh` | a review round editing the read-only eval oracle |
+| `merge-fact-check-test.sh` | a fact-check merge that renumbers, recounts or writes wrongly |
 
 And one reporter, which never fails a build:
 

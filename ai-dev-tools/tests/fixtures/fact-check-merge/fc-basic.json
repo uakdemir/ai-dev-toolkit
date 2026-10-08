@@ -1,0 +1,12 @@
+{
+  "fact_check_accuracy": 80,
+  "fact_check_claims": [
+    { "claim": "c1", "verdict": "ACCURATE" },
+    { "claim": "c2", "verdict": "INACCURATE" },
+    { "claim": "c3", "verdict": "STALE" }
+  ],
+  "issues": [
+    { "severity": "critical", "category": "fact-check", "location": "§ 4", "confidence": 90, "problem": "fc1", "suggested_fix": "ffc1", "origin": "document" },
+    { "severity": "medium", "category": "fact-check", "location": "§ 5", "confidence": 75, "problem": "fc2", "suggested_fix": "ffc2" }
+  ]
+}

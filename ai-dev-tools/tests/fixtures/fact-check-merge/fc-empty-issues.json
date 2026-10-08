@@ -1,0 +1,8 @@
+{
+  "fact_check_accuracy": 75,
+  "fact_check_claims": [
+    { "claim": "c1", "verdict": "ACCURATE" },
+    { "claim": "c2", "verdict": "PARTIALLY ACCURATE" }
+  ],
+  "issues": []
+}
