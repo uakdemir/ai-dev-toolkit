@@ -313,7 +313,7 @@ The dispatch prompt must include:
 - The effort level (`--fix-effort` value) as a depth directive (the agent type sets the reasoning effort)
 - The document paths list
 - The fix report path for this run
-- Whether `--fact-check` is true, so the pass knows whether the codebase is in scope for the accuracy half
+- The resolved fact-check setting, written literally as `--fact-check true` or `--fact-check false` (`--fact-check true` when the flag was not passed), so the pass knows whether the codebase is in scope for the accuracy half
 
 It appends every defect to the `issues` array with `origin: "self-review"` and either `category: "verify"` (a fidelity defect) or `category: "fact-check"` (a defect in the accuracy of the new text), minting ids from `max + 1` as the merge script does for the fact-check findings.
 

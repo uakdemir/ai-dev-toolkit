@@ -15,7 +15,15 @@
 // run. On 1 and 2 the review JSON is byte-identical to what the reviewer wrote and no temp file is
 // left behind; the caller treats any exit but 0 as a failed fact-check.
 //
+// --check is the fact-checker's self-check, run before it finishes, because one invalid issue makes
+// the merge discard every finding it wrote that round. It runs the same shape check, merges the
+// artifact into an in-memory empty review, and validates that through a temp file beside the
+// artifact, so issues[N] in an error is the artifact's own index N. It reads and writes no review
+// JSON, never writes the artifact, and leaves no temp file. Exit 0 = valid, and the validator's
+// recount is printed. Exit 1 = invalid. Exit 2 = cannot run.
+//
 // Usage:  node merge-fact-check.cjs <review.json> <fact-check.json>
+//         node merge-fact-check.cjs --check <fact-check.json>
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -26,21 +34,26 @@ function fail(code, message) {
   process.exit(code);
 }
 
-const [reviewPath, factPath] = process.argv.slice(2);
-if (!reviewPath || !factPath) {
-  fail(2, 'usage: node merge-fact-check.cjs <review.json> <fact-check.json>');
+const args = process.argv.slice(2);
+const check = args[0] === '--check';
+const [reviewPath, factPath] = check ? [null, args[1]] : args;
+if (!factPath || (!check && !reviewPath)) {
+  fail(2, 'usage: node merge-fact-check.cjs <review.json> <fact-check.json>\n' +
+          '       node merge-fact-check.cjs --check <fact-check.json>');
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-let review;
-try {
-  review = JSON.parse(fs.readFileSync(reviewPath, 'utf8'));
-} catch (e) {
-  fail(2, 'cannot read the review JSON ' + reviewPath + ': ' + e.message);
-}
-if (!isObj(review) || !Array.isArray(review.issues)) {
-  fail(2, 'review JSON ' + reviewPath + ': expected an object with an issues array');
+let review = { critical_count: 0, high_count: 0, fact_check_accuracy: 100, fact_check_claims: [], issues: [] };
+if (!check) {
+  try {
+    review = JSON.parse(fs.readFileSync(reviewPath, 'utf8'));
+  } catch (e) {
+    fail(2, 'cannot read the review JSON ' + reviewPath + ': ' + e.message);
+  }
+  if (!isObj(review) || !Array.isArray(review.issues)) {
+    fail(2, 'review JSON ' + reviewPath + ': expected an object with an issues array');
+  }
 }
 
 let fact;
@@ -102,9 +115,11 @@ merged.critical_count = counted.filter((it) => isObj(it) && it.severity === 'cri
 merged.high_count = counted.filter((it) => isObj(it) && it.severity === 'high').length;
 
 // Steps 5-6: validate a temp copy beside the review JSON (one filesystem, so the rename is atomic),
-// and replace the review JSON only when the validator accepts it.
-const dir = path.dirname(path.resolve(reviewPath));
-const tmp = path.join(dir, '.' + path.basename(reviewPath) + '.merge-' + process.pid + '.tmp');
+// and replace the review JSON only when the validator accepts it. --check validates beside the
+// artifact instead and always discards the temp copy.
+const besidePath = check ? factPath : reviewPath;
+const dir = path.dirname(path.resolve(besidePath));
+const tmp = path.join(dir, '.' + path.basename(besidePath) + '.merge-' + process.pid + '.tmp');
 const discard = () => { try { fs.unlinkSync(tmp); } catch (_) { /* nothing to remove */ } };
 
 try {
@@ -119,6 +134,11 @@ const res = spawnSync(process.execPath, [validator, '--schema', 'doc', tmp], { e
 if (res.status !== 0) {
   discard();
   fail(res.status === 1 ? 1 : 2, 'the merged result fails validation:\n' + (res.stderr || String(res.error || '')));
+}
+if (check) {
+  discard();
+  process.stdout.write(res.stdout);
+  process.exit(0);
 }
 
 try {

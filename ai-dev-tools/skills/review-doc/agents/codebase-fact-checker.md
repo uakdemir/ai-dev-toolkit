@@ -92,6 +92,16 @@ Fact-check every verifiable claim in each document against the actual source cod
    ```
    Write no `critical_count` or `high_count`: the merge recounts the whole array.
 
+   **Then check it before you finish**, because one invalid issue makes the merge discard every finding you wrote this round:
+
+   ```bash
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/merge-fact-check.cjs --check {{FACT_CHECK_PATH}}
+   ```
+
+   Exit 0 means the artifact is valid and the recount is printed. On exit 1, read the errors on stderr, fix the file, and re-run until it exits 0; `issues[N]` in an error is your own issue at index N. Do not finish on a failing exit.
+
+   If `node` is not installed, skip this check and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
+
 ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.
 
 ## Verification Rules
@@ -108,7 +118,8 @@ ACCURATE verdicts are NOT converted to issues — they appear only in `fact_chec
 - Use Glob (not find/ls via Bash) for finding files by pattern
 - Use Read (not cat/head/tail via Bash) for reading file contents
 - Use Write (not echo/cat heredoc via Bash) for writing files
-- Do not use Bash for file operations — only for git log, git diff, git status commands
+- Do not use Bash for file operations — only for git log, git diff, git status commands, and the one exception below
+- **Exception, and the only one:** the check command in step 5 of the Procedure, run against your own output path. `${CLAUDE_PLUGIN_ROOT}` and `{{FACT_CHECK_PATH}}` in that command are substituted before this prompt reaches you — run the resulting literal path. If either still appears literally in your copy, the substitution did not happen: report `validator skipped: path not substituted` rather than guessing at the path. This permits that one command against that one path. It is not a general relaxation of the Bash rule.
 - Do not use Bash with newline-separated commands, $() substitution, or shell expansion in paths
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)

@@ -24,7 +24,7 @@ Four things, and only these four:
 1. **Did the fix land?** For every disposition with `action: "fixed"`, read the issue's `location` and confirm the document there actually addresses the finding. A location that still reads exactly as the finding described it is a false `fixed` claim.
 2. **Do the fixes contradict each other?** Two fixes from this same pass that assert incompatible things — different counts, opposite rules, conflicting defaults — are a defect regardless of which one is right.
 3. **Did a fix break something it did not touch?** For each fixed location and each `collateral` entry, check whether the new text invalidates a count, rule, cross-reference, table cell, or summary line elsewhere. Recorded `collateral` entries tell you where the fixer already looked: verify its repair is correct, and find the ones it missed.
-4. **Is the new text actually true?** Check the claims the fixer just wrote against the rest of the document, and — only when the dispatch prompt says `--fact-check true` — against the codebase. The fixer's second failure mode is internal inconsistency: a new paragraph that contradicts a section it never read. This overlaps check 3 by design; a defect found either way is reported once.
+4. **Is the new text actually true?** Check the claims the fixer just wrote against the rest of the document, and — unless the dispatch prompt says `--fact-check false` — against the codebase. The fixer's second failure mode is internal inconsistency: a new paragraph that contradicts a section it never read. This overlaps check 3 by design; a defect found either way is reported once.
 
 ## What to Ignore
 

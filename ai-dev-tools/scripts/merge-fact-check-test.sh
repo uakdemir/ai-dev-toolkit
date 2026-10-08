@@ -101,6 +101,21 @@ if [ "$rc" -eq 1 ] && cmp -s "$WORK/low-conf/review.json" "$FIX/review-basic.jso
   ok "confidence 30 passes the shape check, fails validation: exit 1, review JSON byte-identical, no temp file"
 else bad "rejected after merging (exit $rc, directory holds: $left)"; fi
 
+c8=ok
+for fc in fc-basic.json fc-low-confidence.json fc-with-id.json; do
+  want=1; [ "$fc" = fc-basic.json ] && want=0
+  mkdir -p "$WORK/check-$fc"; cp "$FIX/$fc" "$WORK/check-$fc/fact-check.json"
+  node "$MERGE" --check "$WORK/check-$fc/fact-check.json" >/dev/null 2>&1; rc=$?
+  left="$(ls -A "$WORK/check-$fc" | tr '\n' ' ')"
+  if [ "$rc" -ne "$want" ] || ! cmp -s "$WORK/check-$fc/fact-check.json" "$FIX/$fc" ||
+     [ "$left" != "fact-check.json " ]; then
+    c8="$fc (exit $rc, directory holds: $left)"
+  fi
+done
+if [ "$c8" = ok ]; then
+  ok "--check: fc-basic exits 0; low-confidence and id-carrying exit 1; artifact byte-identical, no temp file"
+else bad "--check: $c8"; fi
+
 echo
 echo "-------- $pass passed, $fail failed --------"
 [ "$fail" -eq 0 ] || exit 1

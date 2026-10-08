@@ -13,8 +13,9 @@ Two passes append to a review JSON that another pass already wrote: `review-doc`
 and `review-code`'s self-review pass. A third, `review-doc`'s fact-checker, writes an artifact of its
 own, which a script merges into the review JSON after it returns. Each can find itself unable to
 proceed — a missing fix report, an unparseable review JSON, a document it cannot read, a diff range
-that resolves to nothing. Each therefore
-needs the same three things, and the same three things were written out separately for each, in
+that resolves to nothing. All three need the same abort: the sentinel, the untouched artifact, and
+a warning followed by continuing. The two that append to the review JSON also need a backup taken
+before dispatch and restored on abort. These were once written out separately for each pass, in
 different amounts of detail, until one of them ended up specified in the prompt and nowhere in the
 SKILL.md that drives it.
 
@@ -57,7 +58,8 @@ The orchestrator cannot distinguish them from the outside, so it must not try.
 ## Why both halves are required
 
 The sentinel without the untouched artifact leaves a half-written JSON that the backup restore then
-silently discards, hiding whatever the pass had already appended. The untouched artifact without the
+silently discards (for the fact-checker, which has no backup, the merge rejects it instead), hiding
+whatever the pass had already appended. The untouched artifact without the
 sentinel is indistinguishable from a pass that ran and found nothing — which is the failure mode that
 matters most, because "found nothing" is the answer that lets the loop proceed.
 

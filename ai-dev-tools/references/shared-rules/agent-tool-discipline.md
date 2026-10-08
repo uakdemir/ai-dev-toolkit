@@ -40,7 +40,7 @@ differs by design:
 |---|---|---|
 | `Use Edit …— targeted edits only` | `skills/review-code/prompts/self-review.md`, `skills/review-doc/prompts/verifier.md`; and — stated in their `## Rules` section rather than in the block — `skills/review-code/prompts/coder.md`, `skills/review-doc/prompts/coder.md` | Only the four repair passes may edit: the two fixers and the two self-review passes. A reviewer that could edit would fix instead of report. |
 | A `git commit` allowance | `skills/review-code/prompts/self-review.md`, `skills/review-code/prompts/coder.md` | Each commits its own pass. The fixer's commit is load-bearing — `fixer_sha`, the self-review pass's `before_sha..fixer_sha` scope, and `after_sha` all read from it. `review-doc`'s fixer never commits; its skill leaves the edits in the working tree. |
-| A validator-command exception | `skills/review-code/prompts/reviewer.md`, `skills/review-doc/prompts/reviewer.md` | One named command against one named path, so the agent can check its own artifact. Both reviewers are required to validate their own output before finishing. |
+| A validator-command exception | `skills/review-code/prompts/reviewer.md`, `skills/review-doc/prompts/reviewer.md`, `skills/review-doc/agents/codebase-fact-checker.md` | One named command against one named path, so the agent can check its own artifact. Both reviewers and the fact-checker are required to validate their own output before finishing. |
 | A Grep/Glob unavailability fallback | `skills/review-code/prompts/reviewer.md` | Its Verification Gap section requires search evidence; a search it cannot run is a finding it must drop. |
 
 **The test is whether the difference is stated, not which direction it goes.** A per-agent
@@ -63,9 +63,9 @@ now carry it and all seven agree.
 
 The same goes for the Bash-scope line, which takes four shapes across the seven prompts. The bare
 form — "only for git log, git diff, git status commands" — is carried by
-`skills/review-doc/agents/codebase-fact-checker.md`, `skills/review-doc/prompts/coder.md` and
-`skills/review-doc/prompts/verifier.md`. Both reviewers append "…and the one exception below" for
-the validator command. `skills/review-code/prompts/coder.md` names the `git add -u` / `git commit`
+`skills/review-doc/prompts/coder.md` and `skills/review-doc/prompts/verifier.md` only. The two
+reviewers and `skills/review-doc/agents/codebase-fact-checker.md` append "…and the one exception
+below" for their validator command. `skills/review-code/prompts/coder.md` names the `git add -u` / `git commit`
 its Procedure mandates, and `skills/review-code/prompts/self-review.md` inverts the phrasing
 outright: "Use Bash for `git diff`, `git log`, `git status`, and your one `git commit`". Those
 differences are real — the shapes track four genuinely different Bash surfaces — which is why the
