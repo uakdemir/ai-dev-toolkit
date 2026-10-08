@@ -21,7 +21,7 @@ number can be trusted and the tolerance is unnecessary.
 ## Measurement
 
 `critical_count` as it stands immediately before the final iteration's fix phase — after the
-reviewer and, on a `--fact-check true` run, after the fact-checker's recount. The fix phase runs
+reviewer and, on a fact-checked run, after the recount `scripts/merge-fact-check.cjs` makes when it merges the fact-check findings. The fix phase runs
 regardless.
 
 Fact-check-added criticals reach this gate, and are meant to: the fact-checker runs against the
@@ -33,7 +33,7 @@ At stage iii there is no third pre-fix writer. `review-code`'s stop check runs w
 is zero and writes **nothing** to the artifact: a verification regression reaches that round's fixer
 through `{{VERIFICATION_REGRESSIONS}}` and reaches the reported status through a disjunct of
 `review-code`'s own Status Logic, never through this count. The measured value is the reviewer's,
-plus the fact-checker's recount on a `--fact-check true` run, and nothing else.
+and nothing else: `review-code` runs no fact-check.
 
 The stop check used to inject synthetic critical issues here, bump `critical_count` and rewrite the
 artifact before falling through to the fix phase, which put the loop's own regressions inside the

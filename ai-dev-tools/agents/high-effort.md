@@ -1,6 +1,6 @@
 ---
 name: high-effort
-description: "Role-neutral agent pinned at `high` reasoning effort, whatever effort the dispatching session is at. Use it only when a skill or a prompt names it: /review-code and /review-doc dispatch it for `--effort high`. It pins no model, so pass `model` on the Agent call."
+description: "Role-neutral agent pinned at `high` reasoning effort, whatever effort the dispatching session is at. Use it only when a skill or a prompt names it: /review-code and /review-doc dispatch it for `--effort high` or `--fix-effort high`. It pins no model, so pass `model` on the Agent call."
 effort: high
 ---
 

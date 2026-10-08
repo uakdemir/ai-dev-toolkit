@@ -9,20 +9,25 @@ canonical: An agent that cannot do its job aborts by leaving the artifact untouc
 
 **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".**
 
-Three passes append to a review JSON that another pass already wrote: the fact-checker, `review-doc`'s
-self-review pass, and `review-code`'s self-review pass. Each can find itself unable to proceed — a
-missing fix report, an unparseable review JSON, a diff range that resolves to nothing. Each therefore
+Two passes append to a review JSON that another pass already wrote: `review-doc`'s self-review pass
+and `review-code`'s self-review pass. A third, `review-doc`'s fact-checker, writes an artifact of its
+own, which a script merges into the review JSON after it returns. Each can find itself unable to
+proceed — a missing fix report, an unparseable review JSON, a document it cannot read, a diff range
+that resolves to nothing. Each therefore
 needs the same three things, and the same three things were written out separately for each, in
 different amounts of detail, until one of them ended up specified in the prompt and nowhere in the
 SKILL.md that drives it.
 
 ## The contract
 
-**Before dispatch**, the orchestrator backs up the review JSON to `<path>.bak`.
+**Before dispatch** of a pass that appends to the review JSON, which is either self-review pass, the
+orchestrator backs the review JSON up to `<path>.bak`. The fact-checker writes only its own file, so
+it gets no backup: there is nothing of another pass's for it to damage.
 
 **To abort**, the agent does both of these, not one:
 
-1. Leaves the review JSON **unchanged** — does not write it, does not partially write it.
+1. Leaves its artifact **untouched**, which is the review JSON for a self-review pass and its own file
+   for the fact-checker: does not write it, does not partially write it.
 2. Returns a text response whose **first line begins with the literal prefix `ABORT: `**, followed
    by a one-line reason.
 
@@ -30,8 +35,9 @@ SKILL.md that drives it.
 ABORT: fix report not found at tmp/_reviews_errors/review-doc-fix-report.json
 ```
 
-**On detection**, the orchestrator restores the backup, prints a warning naming the phase, the
-reason, and what the run proceeds with, and **continues** — an abort is not a run failure:
+**On detection**, the orchestrator restores the backup where it took one, skips the merge where there
+is one to skip, prints a warning naming the phase, the reason, and what the run proceeds with, and
+**continues** — an abort is not a run failure:
 
 ```
 Warning: <phase> aborted — <reason>. <what the run proceeds with>
@@ -42,8 +48,8 @@ happened. Both instances:
 
 - **After the fixer** — `Fix results unverified.` Used by both skills' self-review pass.
 - **Before the fixer** — `Falling back to reviewer output.` Used by `review-doc`'s fact-checker,
-  which runs between the reviewer and the fixer; "fix results" do not exist yet, so the other tail
-  would be a false statement.
+  which runs alongside the reviewer and is merged before the fixer; "fix results" do not exist yet,
+  so the other tail would be a false statement.
 
 **Any other failure mode** — agent crash, exception, no response at all — is treated identically.
 The orchestrator cannot distinguish them from the outside, so it must not try.
@@ -58,8 +64,9 @@ matters most, because "found nothing" is the answer that lets the loop proceed.
 ## What each governed skill must carry
 
 A skill that dispatches one of these passes states, in its own SKILL.md and not only in the prompt:
-the backup step, the sentinel, the warning text, the continue-on-abort behaviour, a row in its Error
-Handling table, and the `.bak` paths in its Setup deletion list. A prompt that describes an
+the sentinel, the warning text, the continue-on-abort behaviour and a row in its Error Handling
+table, and, for a pass that appends to the review JSON, the backup step and the `.bak` paths in its
+Setup deletion list. A prompt that describes an
 orchestrator behaviour its SKILL.md never establishes is a contract with one party.
 
 ## Governed sites

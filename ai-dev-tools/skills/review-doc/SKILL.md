@@ -1,12 +1,12 @@
 ---
 name: review-doc
-argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] [--model <model>] [--fact-check <true|false>] --max-iterations N [--run-id <id>]"
+argument-hint: "<path...> [--against <ref>] [--effort high|xhigh|max] [--fix-effort high|xhigh|max] [--model <model>] [--fact-check <true|false>] --max-iterations N [--run-id <id>]"
 description: "Use when reviewing analysis specs, design documents, or implementation plans for completeness, accuracy, and implementability. Supports single-pass review (--max-iterations 1) and iterative review-fix cycles. Invoke with /review-doc <path1> [path2 ...] or /review-doc <directory/>."
 ---
 
 # Review Doc
 
-Iterative document review. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. When `--fact-check true` is passed, a sequential fact-checker verifies claims against the codebase within each iteration (before the fixer, so fact-check findings get fixed in the same pass). A self-review pass always follows the fixer: it checks the fixer's own edits, corrects what it finds once, and reports those findings outside the round's gate counts. Produces a curated human-readable summary.
+Iterative document review. Dispatches a single merged reviewer to check completeness, consistency, implementability, and more. Fixes issues automatically between rounds. Unless `--fact-check false` is passed, a fact-checker runs alongside the reviewer and verifies the document's claims against the codebase; `scripts/merge-fact-check.cjs` merges its findings into the round's review JSON before the fixer, so fact-check findings get fixed in the same pass. A self-review pass always follows the fixer: it checks the fixer's own edits, corrects what it finds once, and reports those findings outside the round's gate counts. Produces a curated human-readable summary.
 
 **Output:** `tmp/_reviews_errors/review-doc.json` (structured, machine-readable) + `tmp/_reviews_errors/review-doc-summary.md` (curated human summary, max 10 items + aggregates). When `--run-id` is provided, files are prefixed: `tmp/_reviews_errors/<run_id>-review-doc.json`.
 
@@ -16,7 +16,7 @@ Parse arguments after `/review-doc`:
 
 ```
 /review-doc <path1> [path2 ...] [--against <ref-path>] [--effort <level>]
-            [--model <model>] [--fact-check <true|false>]
+            [--fix-effort <level>] [--model <model>] [--fact-check <true|false>]
             --max-iterations N [--run-id <id>] [--help]
 /review-doc <directory/>       [--against <ref-path>] [...]
 ```
@@ -24,9 +24,10 @@ Parse arguments after `/review-doc`:
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <ref-path>` | none | any file path | Reference document for cross-checking |
-| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, fact-checker, self-reviewer): it selects the agent each one is dispatched as |
+| `--effort` | high | high, xhigh, max | Reasoning-effort level of the reviewer and the fact-checker: it selects the agent each one is dispatched as |
+| `--fix-effort` | high | high, xhigh, max | Reasoning-effort level of the fixer and the self-reviewer: it selects the agent each one is dispatched as |
 | `--model <model>` | none | any model the Agent tool accepts | Model for all agents, passed as `model` on every Agent call. Absent: the calls name no model |
-| `--fact-check` | false | true, false | When true, runs fact-checker within each iteration before fixer |
+| `--fact-check` | true | true, false | When true, runs the fact-checker alongside the reviewer in each iteration; its findings are merged before the fixer |
 | `--max-iterations` | **required** | 0-10 | How many rounds to run (0 = skip). No default: the caller states it. Early exit when the round's criticals reach 0 — `total_criticals` with `--fact-check true`, `pre_fix_criticals` otherwise (see Review Loop property 3) |
 | `--run-id` | none | string | Prefixes output files for run scoping; optional (backward compatible) |
 | `--help` | --- | --- | Print usage and exit |
@@ -41,16 +42,20 @@ If either is present, print `Warning: <flag> is no longer supported; use --model
 
 `--verify-fixes` is also removed. The self-review pass it used to gate is now unconditional — it runs after every fix phase, in every iteration where the fixer ran. If it is present, print `Warning: --verify-fixes is no longer supported; the self-review pass always runs. Ignoring.` and continue.
 
-If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
+If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `high`.
 
-**`--effort` and `--model` decide what each agent is dispatched as. Every dispatched agent is the plugin agent that matches `--effort`, and carries `--model` on its Agent call whenever the flag was passed.** Defined once, in `references/shared-rules/agent-dispatch-pin.md`, and shared with `review-code`. The reviewer, the fact-checker, the fixer and the self-reviewer are all dispatched in one of these two forms, and in no other:
+If `--fix-effort` is present, validate its value against the same set; on an out-of-set value print `Error: --fix-effort must be one of: high, xhigh, max.` and exit. When `--fix-effort` is not passed, default to `high`. No combination of the two flags is rejected: `--effort high --fix-effort max` is legal.
+
+**`--effort`, `--fix-effort` and `--model` decide what each agent is dispatched as. Every dispatched agent is the plugin agent that matches its phase's effort flag, `--effort` for the reviewer and the fact-checker and `--fix-effort` for the fixer and the self-reviewer, and carries `--model` on its Agent call whenever the flag was passed.** Defined once, in `references/shared-rules/agent-dispatch-pin.md`, and shared with `review-code`. The reviewer and the fact-checker are dispatched in one of the first two of these forms, the fixer and the self-reviewer in one of the last two, and none in any other:
 
 ```
-Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>)                              # run without --model
-Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")   # run with --model
+Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>)                                  # reviewer, fact-checker; no --model
+Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")       # reviewer, fact-checker; --model
+Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <substituted prompt>)                              # fixer, self-reviewer; no --model
+Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")   # fixer, self-reviewer; --model
 ```
 
-| `--effort` | Agent type |
+| `--effort` or `--fix-effort` | Agent type |
 |---|---|
 | `high` | `ai-dev-tools:high-effort` |
 | `xhigh` | `ai-dev-tools:xhigh-effort` |
@@ -73,20 +78,22 @@ Usage: /review-doc <path1> [path2 ...] [flags]
 Iterative document review. Dispatches a single merged reviewer for
 completeness, consistency, and implementability. Fixes issues automatically
 between rounds. A self-review pass always follows the fixer, checking and
-correcting the fixer's own edits once. Fact-checker runs when --fact-check
-true is passed.
+correcting the fixer's own edits once. A fact-checker runs alongside the
+reviewer unless --fact-check false is passed.
 
 Flags:
   --against <ref-path>    Reference document for cross-checking (default: none)
-  --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
+  --effort <level>        Reviewer, fact-checker: high, xhigh, max (default: high)
+  --fix-effort <level>    Fixer, self-review: high, xhigh, max     (default: high)
   --model <model>         Model for every agent              (default: none)
-  --fact-check <bool>     Run fact-checker each iteration    (default: false)
+  --fact-check <bool>     Run fact-checker each iteration    (default: true)
   --max-iterations N      Rounds to run, 0=skip              (REQUIRED)
   --run-id <id>           Prefix for output files            (default: none)
   --help                  Print this help and exit
 
 Agents:
-  --effort picks the agent every phase is dispatched as:
+  --effort picks the agent the reviewer and the fact-checker are dispatched
+  as, --fix-effort the agent of the fixer and the self-review:
   ai-dev-tools:high-effort, ai-dev-tools:xhigh-effort, ai-dev-tools:max-effort.
   The agent sets the reasoning effort. --model sets the model; without
   it the Agent calls name none and Claude Code chooses.
@@ -98,22 +105,23 @@ Removed:
 
 Examples:
   /review-doc docs/spec.md                                  Default review
-  /review-doc docs/spec.md --fact-check true                Rigorous review
+  /review-doc docs/spec.md --fact-check false               Skip the fact-check
   /review-doc docs/spec.md --max-iterations 3               Up to 3 rounds
   /review-doc docs/spec.md --run-id k3m9p2q7_a1b2c3d4      Scoped output
-  /review-doc docs/spec.md --max-iterations 1 --effort max --model opus    Opus at max
+  /review-doc docs/spec.md --max-iterations 1 --effort max --model opus    Review at max, fixes at high
+  /review-doc docs/spec.md --max-iterations 1 --effort max --fix-effort max --model opus    Every agent at max
 ```
 
 ## Setup
 
 1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
 2. Delete stale files from prior runs:
-   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-brainstorm.md`, `./tmp/_reviews_errors/review-doc-iteration-*.md`, `./tmp/_reviews_errors/review-doc-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fix-report-iteration-*.json`
+   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-brainstorm.md`, `./tmp/_reviews_errors/review-doc-iteration-*.md`, `./tmp/_reviews_errors/review-doc-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fix-report-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fact-check.json`, `./tmp/_reviews_errors/review-doc-fact-check-iteration-*.json`
    - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
 
-   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's fact-check or self-review phase would otherwise survive into the next run.
+   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's self-review phase would otherwise survive into the next run.
 
-   The two per-round snapshot globs matter for the same reason: the exact filenames beside them name only the live artifacts, so without the globs a four-round run followed by a two-round run leaves the earlier run's `-iteration-3` and `-iteration-4` snapshots sitting beside the new run's rounds with nothing to tell them apart — and those files are the durable per-round record every cross-round aggregate is checked against. The `--run-id` branch needs no addition: `<run_id>-review-doc*.json` already matches both.
+   The three per-round snapshot globs matter for the same reason: the exact filenames beside them name only the live artifacts, so without the globs a four-round run followed by a two-round run leaves the earlier run's `-iteration-3` and `-iteration-4` snapshots sitting beside the new run's rounds with nothing to tell them apart — and those files are the durable per-round record every cross-round aggregate is checked against. The `--run-id` branch needs no addition: `<run_id>-review-doc*.json` already matches all three.
 
 ## Pre-Flight Checks
 
@@ -154,18 +162,25 @@ Examples:
 **`--max-iterations >= 1`:** Run the simplified loop below. There is no separate single-pass mode — `--max-iterations 1` is just one iteration of the same loop.
 
 ```python
-# One invocation = one loop, one fact-check setting (every agent is the --effort agent; --model on every call when passed)
+# One invocation = one loop, one fact-check setting (the reviewer and the fact-checker are the
+# --effort agent, the fixer and the self-reviewer the --fix-effort agent; --model on every call when passed)
 for iter in 1..max_iterations:
-    review()                            # reviewer agent (the --effort agent; --model when passed)
-    validate(json)                      # schema-check reviewer output; retry review once on failure, abort iteration on 2nd
-    pre_fix_criticals = count(json)     # option Y: measured at review output, before fact-check
     if fact_check:
-        fact_check()                    # appends fact-check issues to json
-    total_criticals = count(json)       # re-count after fact-check (includes fact-check-added criticals)
+        delete(fact_check_json)         # so the merge can only ever read this round's file
+        review() + fact_check()         # dispatched in ONE message, so they run concurrently;
+                                        # the fact-checker writes only its own fact-check JSON
+    else:
+        review()                        # reviewer agent (the --effort agent; --model when passed)
+    validate(json)                      # schema-check reviewer output; retry review() alone once on failure, abort iteration on 2nd
+    pre_fix_criticals = count(json)     # option Y: measured at review output, before the merge
+    if fact_check and fact_check_returned_ok:
+        merge_fact_check()              # scripts/merge-fact-check.cjs appends, renumbers, recounts and
+                                        # validates; any exit but 0 is a failed fact-check, json stays the reviewer's
+    total_criticals = count(json)       # re-count after the merge (includes fact-check-added criticals)
     total_issues = count_issues(json)   # the round's own array only — self-review
                                         # entries are appended after this point
     if total_issues > 0:
-        fix()                           # EVERY severity, every iteration — not only criticals
+        fix()                           # EVERY severity, every iteration — not only criticals (the --fix-effort agent)
         self_review()                   # always: checks the fixer's own edits, fixes what it
                                         # finds ONCE, appends its findings with
                                         # origin: "self-review" (never counted this round)
@@ -173,24 +188,26 @@ for iter in 1..max_iterations:
                                         # copy this round's artifacts to …-iteration-N.json
                                         # before the next round's reviewer overwrites them —
                                         # the review JSON always, the fix report ONLY if fix()
-                                        # ran this round (see Cross-Iteration Tracking)
+                                        # ran this round, the fact-check JSON ONLY if this
+                                        # round's fact-check failed (see Cross-Iteration Tracking)
     exit_gate = total_criticals if fact_check else pre_fix_criticals
     if exit_gate == 0:
         break                           # no criticals left -> this was the last round
 ```
 
+
 **Key behavioral properties:**
 1. No phase logic, no tier promotion, no hidden final gate.
-2. Fact-checker runs BEFORE fixer in each iter (so fact-check criticals get resolved in the same iter).
+2. The fact-checker runs alongside the reviewer and is merged before the fixer in each iter (so fact-check criticals get resolved in the same iter).
 3. **Fixing and iterating are separate decisions.** The fixer runs whenever the round found anything at all — critical, high, medium or low. Only the decision to run *another* round is gated on criticals: `total_criticals == 0` when `--fact-check true`, and `pre_fix_criticals == 0` otherwise.
 
    Gating the fix phase on criticals meant a round that found eleven highs and ten mediums and no criticals fixed **nothing** and handed all twenty-one to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run and the document to receive only what has more than one defensible answer. It also silently disabled the self-review pass, which runs only after a fix phase: on the zero-critical path the triage phase then applied edits with nothing reviewing them. A minor finding the agent can fix is still worth fixing; whether it justifies another *round* is a different question, and that one is still severity-gated.
 
    Option Y is unchanged where it is defined: `pre_fix_criticals` is still measured at review output, before fact-check. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the unresolved-criticals gate as "any critical remaining" and the run stops — for criticals the loop itself declined to fix.
 
-   The unresolved-criticals gate is a separate reader, not a different number. It is evaluated once, at the final round rather than at every round, and it takes `critical_count` off the artifact rather than the loop's own variable — but numerically that is the same pre-fix count the early exit tests: on a `--fact-check true` run the artifact field carries the fact-checker's recount over the full issues array (`agents/codebase-fact-checker.md` step 6), which is `total_criticals`; otherwise it is the reviewer's own count, which is `pre_fix_criticals`. Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
+   The unresolved-criticals gate is a separate reader, not a different number. It is evaluated once, at the final round rather than at every round, and it takes `critical_count` off the artifact rather than the loop's own variable — but numerically that is the same pre-fix count the early exit tests: on a fact-checked run the artifact field carries the recount `scripts/merge-fact-check.cjs` makes over the full issues array when it merges the fact-check findings, which is `total_criticals`; otherwise it is the reviewer's own count, which is `pre_fix_criticals`. Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
-5. All dispatches in that invocation — reviewer, fixer, fact-checker, and self-reviewer — are the `--effort` agent (default `max`), which is what sets their reasoning effort, and carry `--model` on the call when it was passed. The two call forms are in Argument Parsing.
+5. The reviewer and the fact-checker are the `--effort` agent and the fixer and the self-reviewer the `--fix-effort` agent (both default `high`), which is what sets their reasoning effort, and every dispatch carries `--model` on the call when it was passed. The call forms are in Argument Parsing.
 6. `validate(json)` runs right after `review()`:
 
    ```bash
@@ -199,7 +216,7 @@ for iter in 1..max_iterations:
 
    Exit 0 → use the printed recount as the authoritative severity counts. Exit 1 or 2 → retry the reviewer once, and abort the iteration on a second failure — status **Error**, per `references/shared-rules/run-failure-disclosure.md`. If node is unavailable, fall back to reading the file and record `schema validation not run: node unavailable` in the iteration log.
 
-   **This call checks the reviewer's own output and nothing else.** Two later phases rewrite the same file — the fact-checker recomputes `critical_count`, and the self-review pass appends without recomputing — and neither is covered here. A wrong count written here is not carried anywhere — the next round writes a fresh artifact over this one rather than recounting it — but it is not corrected either, and this round still acts on it: property 3's early exit reads this round's `total_criticals`, so a fact-checker that miscomputes it to 0 ends the loop and there is no successor at all. The closing validation in the Final Report is the only check on the fact-checker's recount and the self-review pass's appends.
+   **This call checks the reviewer's own output and nothing else.** Two later phases rewrite the same file — the fact-check merge appends and recomputes `critical_count`, and the self-review pass appends without recomputing. The merge checks itself: `scripts/merge-fact-check.cjs` validates the merged artifact before it renames it over the review JSON, and leaves the reviewer's file untouched when that fails, so property 3's early exit never reads a recount nothing verified. The self-review pass's appends are not covered here; a wrong entry there is not carried anywhere — the next round writes a fresh artifact over this one rather than recounting it — and the closing validation in the Final Report is the only check on them.
 7. `self_review()` runs after `fix()`, in every iteration where the fixer ran. It is **always on** — there is no flag. It reads the fix report, re-reads only the regions that report names, and both **reports and fixes** what it finds, exactly once (depth 1). It never rewrites `critical_count` or `high_count`, and everything it appends carries `origin: "self-review"` (see the Self-Review dispatch section).
 8. **Depth 1, and the tail is disclosed rather than carried.** The text the self-review pass itself writes is not re-reviewed within the same round — unbounded self-review is the same loop with more steps. If another round runs, its reviewer covers those lines as ordinary document text, because every round re-reads the whole document. The tail is only a real gap on the **final** round, and the summary states how many lines the final self-review pass wrote unreviewed. There is no cross-round carry mechanism: the next round's full re-read already is one.
 
@@ -207,13 +224,13 @@ for iter in 1..max_iterations:
 
 All `agents/` and `prompts/` paths in this section are relative to this skill's root directory (e.g., `${CLAUDE_SKILL_DIR}/`).
 
-**Every dispatched prompt receives its output path by substitution, never by description.** `{{OUTPUT_PATH}}` and `{{FIX_REPORT_PATH}}` are resolved by the skill — which is the only party that knows whether `--run-id` is active — before the prompt reaches the agent. Each prompt states what to do if the placeholder arrives unsubstituted: report and stop, never fall back to the unprefixed default, which would clobber another run's artifact.
+**Every dispatched prompt receives its output path by substitution, never by description.** `{{OUTPUT_PATH}}`, `{{FACT_CHECK_PATH}}` and `{{FIX_REPORT_PATH}}` are resolved by the skill — which is the only party that knows whether `--run-id` is active — before the prompt reaches the agent. Each prompt states what to do if the placeholder arrives unsubstituted: report and stop, never fall back to the unprefixed default, which would clobber another run's artifact.
 
 ### Reviewer
 
 The orchestrator dispatches a single reviewer agent, as the `--effort` agent and on the `--model` model when one was passed.
 
-Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <reviewer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
+Read `prompts/reviewer.md` and dispatch it as the reviewer agent prompt using the Agent tool: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <reviewer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`. Unless `--fact-check false` was passed, this call goes in the same message as the fact-checker's (below), so the two agents run concurrently.
 
 **Each round's reviewer starts fresh.** It is not given the previous iteration's fix report and does not read the previous artifact. Round 2 re-reads the document as it now stands and reports what it finds; a defect round 1 fixed is absent from its findings rather than carried forward and excluded. That is what makes `critical_count` a per-round number by construction instead of by bookkeeping.
 
@@ -235,32 +252,32 @@ The dispatch prompt must include:
 
 The reviewer writes `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_errors/<run_id>-review-doc.json` when `--run-id` is active).
 
-### Fact-Checker (when `--fact-check true`)
+### Fact-Checker (unless `--fact-check false`)
 
-Runs **after the reviewer, before the fixer** in each iteration. It is not terminal — the fixer follows to resolve any fact-check-added criticals.
+Runs **alongside the reviewer**: the orchestrator dispatches the two in the same message, so neither waits for the other. It verifies the document's claims against the codebase and never reads the reviewer's output, so nothing it does depends on the reviewer finishing first. It is not terminal — its findings are merged into the review JSON before the fixer, which resolves any fact-check-added criticals in the same round.
 
-Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants). If the fact-checker fails, the orchestrator restores the backup and prints a warning.
+Before the dispatch, in every round, the orchestrator deletes `tmp/_reviews_errors/review-doc-fact-check.json` (or the run-id-prefixed variant). The merge treats a missing file as a failed fact-check, and that holds in every round only because no earlier round's file can still be there: without the deletion, a fact-checker that returned without writing would leave the previous round's findings to be merged, at locations that round's fixer already changed.
 
-**Abort detection contract:** the fact-checker signals a controlled abort (e.g., on malformed reviewer JSON) by leaving the JSON file unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, and proceeds to the fixer using the original reviewer output. Any other failure mode (agent crash, exception, no response) is treated identically: restore backup, print a generic warning, continue.
+Read `agents/codebase-fact-checker.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fact-checker-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. Include the effort level (`--effort` value) in the dispatch prompt as a depth directive (the agent type sets the reasoning effort). The skill substitutes `{{FACT_CHECK_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json`.
 
-Read `agents/codebase-fact-checker.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fact-checker-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. Include the effort level (`--effort` value) in the dispatch prompt as a depth directive (the agent type sets the reasoning effort). The skill substitutes `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`.
+The fact-checker writes that file and touches nothing else, so the orchestrator takes no backup before dispatching it. Once the reviewer's output has passed `validate(json)`, the orchestrator merges the two:
 
-The fact-checker:
-1. Reads `tmp/_reviews_errors/review-doc.json` (or `<run_id>-review-doc.json`)
-2. Verifies claims against the codebase using Read/Grep/Glob tools
-3. Appends fact-check issues to the `issues` array with `category: "fact-check"`
-4. Populates `fact_check_claims` and computes `fact_check_accuracy`
-5. Recomputes `critical_count` and `high_count` from the full issues array
-6. Rewrites the JSON file
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/merge-fact-check.cjs <review-json-path> <fact-check-json-path>
+```
+
+The script validates the fact-check artifact, appends its issues to the review JSON's `issues` array numbered from the reviewer's highest id + 1 (from `ISSUE-001` when the reviewer found nothing), copies `fact_check_claims` and `fact_check_accuracy`, recounts `critical_count` and `high_count` over the full array (`origin: "self-review"` excluded, per `references/shared-rules/counts-exclude-self-review.md`), and validates the merged result with `validate-review-json.cjs --schema doc` before renaming it over the review JSON. Exit 0 → use the recount it prints as the round's counts. Any other result — 1 for a missing or invalid artifact or a merged result that fails validation, 2 when it cannot run, 127 when `node` is absent — is a failed fact-check, and the review JSON is still exactly what the reviewer wrote. If the reviewer's output fails validation twice, the iteration aborts as it always has, and a completed fact-check file is not merged.
+
+**Abort and failure.** The fact-check fails when the fact-checker returns a first line beginning with the literal prefix `ABORT: `, when it crashes or returns nothing, or when the merge exits with anything but 0. On a failure the orchestrator does not merge (or the merge has already left the review JSON untouched), prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.` — for a failed merge `<reason>` gives the exit code and its cause, e.g. `merge exited 127: node unavailable` — and proceeds to the fixer with the reviewer's output. The pass counts as not completed (Status Logic). A dispatch the Agent tool refuses is not one of these: it is status **Error** (Error Handling).
 
 ### Fixer
 
 Dispatched whenever the round found **any** issue after review (and optional fact-check) — critical, high, medium or low. Not gated on severity: see Review Loop property 3.
 
-Read `prompts/coder.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{AGAINST_PATH}}` → the `--against` value or `none`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
+Read `prompts/coder.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <fixer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{AGAINST_PATH}}` → the `--against` value or `none`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
 
 The dispatch prompt must include:
-- The effort level (`--effort` value) as a depth directive (the agent type sets the reasoning effort)
+- The effort level (`--fix-effort` value) as a depth directive (the agent type sets the reasoning effort)
 - All issues grouped by severity
 - The document paths list
 - Reference document path (if `--against` provided)
@@ -286,19 +303,19 @@ Runs **after the fixer**, in every iteration where the fixer ran. Always on — 
 
 **It fixes what it finds, exactly once.** Depth 1 — it edits the documents to correct the defects it reports, and the text it writes is not re-reviewed in the same round. Unbounded self-review is the same loop with more steps.
 
-Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants), exactly as it does for the fact-checker. If the pass fails, the orchestrator restores the backup and prints a warning.
+Before dispatch, the orchestrator backs up `tmp/_reviews_errors/review-doc.json` to `tmp/_reviews_errors/review-doc.json.bak` (or the run-id-prefixed variants). If the pass fails, the orchestrator restores the backup and prints a warning.
 
-**Abort detection contract:** **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-code`. Identical to the fact-checker's — the self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
+**Abort detection contract:** **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-code`. The self-review pass signals a controlled abort (e.g. a missing or unparseable fix report) by leaving the JSON unchanged AND returning a text response whose first line begins with the literal prefix `ABORT: ` followed by a one-line reason. On detection, the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues. Any other failure mode (agent crash, exception, no response) is treated identically.
 
-Read `prompts/verifier.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <self-review-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
+Read `prompts/verifier.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <self-review-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes `{{DOC_PATHS}}` → the newline-separated document path list, `{{OUTPUT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc.json`, and `{{FIX_REPORT_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json`.
 
 The dispatch prompt must include:
-- The effort level (`--effort` value) as a depth directive (the agent type sets the reasoning effort)
+- The effort level (`--fix-effort` value) as a depth directive (the agent type sets the reasoning effort)
 - The document paths list
 - The fix report path for this run
 - Whether `--fact-check` is true, so the pass knows whether the codebase is in scope for the accuracy half
 
-It appends every defect to the `issues` array with `origin: "self-review"` and either `category: "verify"` (a fidelity defect) or `category: "fact-check"` (a defect in the accuracy of the new text), minting ids from `max + 1` exactly as the fact-checker does.
+It appends every defect to the `issues` array with `origin: "self-review"` and either `category: "verify"` (a fidelity defect) or `category: "fact-check"` (a defect in the accuracy of the new text), minting ids from `max + 1` as the merge script does for the fact-check findings.
 
 **Count invariant: Counts measure the artefact under review, never the review loop's own edits.** The self-review pass does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i unresolved-criticals gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 0 → Q2 failure"). Its findings carry `origin: "self-review"` and are excluded from this round's counts: the round that wrote those lines both authored and reviewed them, so counting them here would report the loop's own churn as evidence against the authored document — and via the unresolved-criticals gate, that churn could fail the whole auto-pipeline. Self-review issues are folded into the counts by the NEXT iteration's reviewer, which re-reads the whole document, emits anything still wrong in those lines as `origin: "document"`, and recomputes both fields from the full issues array.
 
@@ -325,6 +342,8 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.json` | That round's findings, snapshotted before the next round overwrites them | Post-hoc audit; the Final Report's aggregates are accumulated in flight |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report-iteration-N.json` | That round's dispositions, same reason | Post-hoc audit; the Final Report's aggregates are accumulated in flight |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json` | The fact-checker's own findings, claims and accuracy for the round, before the merge | `scripts/merge-fact-check.cjs` |
+| `tmp/_reviews_errors/[<run_id>-]review-doc-fact-check-iteration-N.json` | That round's fact-check artifact, kept only when its fact-check failed | Post-hoc audit of the failure |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-brainstorm.md` | Items needing a human decision; its absolute path is the run's last line | Humans |
 
 **Run-id prefixing (applies throughout):** every `tmp/_reviews_errors/review-doc*` path referenced anywhere in this document (Review Loop, Agent Dispatch, Hash Verification, Terminal, Final Report, Respond, Cross-Iteration, Iteration Log, Brainstorm, Schema) is prefixed to `tmp/_reviews_errors/<run_id>-review-doc*` when `--run-id` is active — matching the run-id-aware paths the reviewer, fact-checker and self-review prompts write to. The `[<run_id>-]` prefix is elided inline for brevity and shown explicitly only in the Output Artifacts table above.
@@ -401,13 +420,13 @@ Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-doc-brai
 
 `Unreviewed tail:` names the one gap the depth-1 rule leaves: the lines the final iteration's self-review pass wrote itself, which no review pass read. Omit the line entirely when the count is 0. Earlier iterations need no such line — the next round re-reads the whole document.
 
-When `--fact-check false` (default), the self-review pass still runs; only the accuracy-against-the-codebase half of its remit is out of scope.
+When `--fact-check false`, the self-review pass still runs; only the accuracy-against-the-codebase half of its remit is out of scope.
 
 The `Recommended next:` block and its command line are described in Next-Round Recommendation below. Under rule 3 the command line is omitted and only the `Recommended next:` line prints.
 
-When `--fact-check false` (default), replace the `Fact-check:` line — in both this terminal output and the summary's `## Fact-Check Accuracy` section — with `Fact-check: not run`.
+When `--fact-check false`, replace the `Fact-check:` line — in both this terminal output and the summary's `## Fact-Check Accuracy` section — with `Fact-check: not run`.
 
-When `--fact-check true` was passed but the pass aborted, print `Fact-check: aborted — <reason>` in both places. Never print `100%` for a pass that did not run: that number is the reviewer's default, restored from the backup, and printing it as a result reports the absence of checking as the absence of error.
+When the fact-check failed — the fact-checker aborted, crashed or returned nothing, or the merge exited with anything but 0 — print `Fact-check: aborted — <reason>` in both places. Never print `100%` for a pass that did not run: that number is the reviewer's default, which a failed fact-check leaves in place, and printing it as a result reports the absence of checking as the absence of error.
 
 The `Reviewed:` line supports three formats:
 - Single file: `Reviewed: <doc-path>` (unchanged)
@@ -424,8 +443,8 @@ When the loop completes (final gate passes or max iterations exhausted):
    node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>
    ```
 
-   This is the only point at which the fact-checker's recount and the self-review pass's appends are
-   checked. No earlier iteration is covered either — the next round overwrites the artifact rather
+   This is the only point at which the self-review pass's appends are checked (the fact-check merge validated its own result before writing it); this check is still
+   the last word on the finished artifact. No earlier iteration is covered either — the next round overwrites the artifact rather
    than recounting it — so without this the last thing written to the artifact is the one thing
    nothing verifies, and it is what the summary reports and what a human reads. One invocation per run.
 
@@ -532,7 +551,7 @@ A missing line is indistinguishable from a skill that forgot.
 | Failure mode | Behavior |
 |---|---|
 | Reviewer returns invalid JSON or schema validation fails | Retry the reviewer once. Second failure: abort the iteration, status **Error**. |
-| Fact-checker aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, continue. Not an Error. |
+| Fact-check fails (`ABORT: `, crash, no response, or a merge exit other than 0, `127` when `node` is absent included) | Nothing to restore: the review JSON is still the reviewer's. Print `Warning: fact-check aborted — <reason>. Falling back to reviewer output.`, continue. Not an Error; the pass counts as not completed. |
 | Self-review pass aborts (`ABORT: `, crash, or no response) | Restore the `.bak`, print `Warning: self-review aborted — <reason>. Fix results unverified.`, continue. Not an Error. |
 | Fix phase fails | Abort the run, status **Error**. Documents are left as the fixer left them; say so in the Artifact line. |
 | The Agent tool refuses the agent type or the model at dispatch | Abort the run, status **Error**, and name the phase. This row wins over the two abort rows: a call the Agent tool refused started no agent, so nothing aborted under `references/shared-rules/agent-abort-contract.md`, and the run stops with **Error** at whichever phase it happens, the fact-checker and self-review dispatches included. Never retry the call without `subagent_type`: see `references/shared-rules/agent-dispatch-pin.md`. |
@@ -569,15 +588,16 @@ After each fix phase, **before dispatching the next iteration's reviewer** (whic
 ```bash
 cp tmp/_reviews_errors/[<run_id>-]review-doc.json            tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.json
 cp tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json tmp/_reviews_errors/[<run_id>-]review-doc-fix-report-iteration-N.json
+cp tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json tmp/_reviews_errors/[<run_id>-]review-doc-fact-check-iteration-N.json
 ```
 
-**The first `cp` runs unconditionally; the second runs only when this round's fix phase ran.** The loop guards both `fix()` and `self_review()` behind `total_issues > 0`, and the round that finds nothing is the round a converged run ends on — so a trigger keyed to the self-review pass would leave the final round's findings with no durable copy at all. Such a round has no fix report of its own either: whatever sits at `review-doc-fix-report.json` belongs to an earlier round, and copying it would file that round's dispositions as this one's. When the self-review pass aborted under `references/shared-rules/agent-abort-contract.md`, snapshot the artifact the orchestrator restored from `.bak` — that is what the round ended with.
+**The first `cp` runs unconditionally; the second runs only when this round's fix phase ran; the third only when this round's fact-check failed and left a file behind.** A merged fact-check needs no copy: the review JSON snapshot already carries its findings, claims and accuracy. The loop guards both `fix()` and `self_review()` behind `total_issues > 0`, and the round that finds nothing is the round a converged run ends on — so a trigger keyed to the self-review pass would leave the final round's findings with no durable copy at all. Such a round has no fix report of its own either: whatever sits at `review-doc-fix-report.json` belongs to an earlier round, and copying it would file that round's dispositions as this one's. When the self-review pass aborted under `references/shared-rules/agent-abort-contract.md`, snapshot the artifact the orchestrator restored from `.bak` — that is what the round ended with.
 
 Rounds start fresh, so round N+1's reviewer **overwrites** both files rather than appending to them. Every cross-round number the Final Report prints — `Aggregate`, `Deferred`, `Pushed back`, `collateral_count` — is accumulated in flight, as each round's fix report is parsed before the next round overwrites it, and without these snapshots the only copy of round N's data is orchestrator state in a context window. That is not a durable source, and a run that reports an aggregate it cannot reconstruct from disk is reporting a number nobody can check.
 
 This is the cost of removing carry-forward, paid deliberately: the accumulating array used to be the record. Two `cp` calls per iteration replace it, and they make each round independently auditable — which the accumulating array never was.
 
-**IDs are per-round.** Every round's reviewer numbers from `ISSUE-001`; the fact-checker and the self-review pass continue from `max + 1` within that same round. Ids identify a finding while a round is in flight — the fix report and `tmp/[<run_id>-]response_analysis.md` both reference them — and nothing needs one to outlive its round.
+**IDs are per-round.** Every round's reviewer numbers from `ISSUE-001`; the fact-check merge and the self-review pass continue from `max + 1` within that same round. Ids identify a finding while a round is in flight — the fix report and `tmp/[<run_id>-]response_analysis.md` both reference them — and nothing needs one to outlive its round.
 
 They used to be append-only across iterations, matched on a `(location, category)` tuple and exempt from the reviewer's cap, so that round N+1 could re-use round N's numbering. That machinery is gone with carry-forward, and so is the counting contradiction it caused: carried entries sat in the new round's array, so the count could not tell a finding made now from one made earlier and already fixed.
 
@@ -585,12 +605,12 @@ They used to be append-only across iterations, matched on a `(location, category
 
 First match wins:
 
-1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, the Agent tool refused a dispatch, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract restores the backup, warns, and continues by design.
+1. **Error**: the loop aborted — reviewer output failed schema validation twice, the fix phase failed, the Agent tool refused a dispatch, or a required git operation failed. A dispatched pass that aborts under `references/shared-rules/agent-abort-contract.md` is NOT an Error: that contract warns and continues by design, restoring the backup where it took one; a failed fact-check leaves the reviewer's artifact in place.
 2. **Issues Found**: `critical_count > 0` OR (the fact-check **completed** AND `fact_check_accuracy < 75`)
 3. **Approved with suggestions**: (the fact-check **completed** AND `fact_check_accuracy < 90`) OR any high, medium, or low issue with `origin: "document"` remains
 4. **Approved**: all other cases
 
-**An aborted fact-check is not a perfect one.** `fact_check_accuracy` is `100` by default — the reviewer writes it, and an abort restores exactly that artifact. Read naively, a fact-check that never ran clears both thresholds and contributes an implicit "100% accurate" to the status. Rules 2 and 3 therefore read the number only when the pass completed. An aborted fact-check leaves the status to be decided by the remaining issues alone, which is the same position a run with `--fact-check false` is in.
+**A failed fact-check is not a perfect one.** `fact_check_accuracy` is `100` by default — the reviewer writes it, and a failed fact-check leaves exactly that artifact. Read naively, a fact-check that never ran clears both thresholds and contributes an implicit "100% accurate" to the status. Rules 2 and 3 therefore read the number only when the pass completed, which is when its merge exited 0. A failed fact-check leaves the status to be decided by the remaining issues alone, which is the same position a run with `--fact-check false` is in.
 
 Error is rule 1 so that nothing which aborted can reach a rule that would call it clean. Before this rule existed, review-doc's Status Logic ended at "all other cases" and a run whose reviewer failed validation twice reported **Approved**.
 
@@ -666,8 +686,8 @@ Write to `tmp/_reviews_errors/review-doc-iteration-N.md` after each iteration:
 # Iteration N
 
 **Model:** <--model value> | not passed (the Agent calls named no model; Claude Code chose)
-**Effort:** <--effort value> (every agent dispatched as ai-dev-tools:<--effort value>-effort)
-**Agents:** 1 (merged reviewer), plus fact-checker (when --fact-check true), plus self-reviewer (whenever the fixer ran)
+**Effort:** <--effort value> for the reviewer and the fact-checker, <--fix-effort value> for the fixer and the self-reviewer (each dispatched as ai-dev-tools:<level>-effort)
+**Agents:** 1 (merged reviewer), plus fact-checker (unless --fact-check false), plus self-reviewer (whenever the fixer ran)
 **Issues found:** X critical, Y high, Z medium, W low
 **Outcome:** "Fixed N issues (D deferred, P pushed back), continuing" | "Fixed N issues (D deferred, P pushed back), 0 criticals, loop complete" | "0 criticals, early exit" | "0 criticals, loop complete" | "Fixed N issues (D deferred, P pushed back), max iterations reached" | "Fix phase failed: <error>" -- whenever the fixer ran, the outcome carries its counts as well as the reason the loop stopped; the bare "0 criticals" forms are for a round that found nothing to fix at any severity.
 **Issues fixed:** [ISSUE-NNN] [category] [severity] at [location]
@@ -728,7 +748,7 @@ The review-doc schema for `tmp/_reviews_errors/review-doc.json` validation refer
 }
 ```
 
-Note: `fact_check_claims` is only populated when `--fact-check true` is passed. When `--fact-check false` (default), set `fact_check_claims: []` and `fact_check_accuracy: 100`.
+Note: `fact_check_claims` is populated only by the fact-check merge. The reviewer always writes `fact_check_claims: []` and `fact_check_accuracy: 100`, and that is what a run with `--fact-check false`, or a round whose fact-check failed, keeps.
 
 Note: `origin` is the only optional per-issue key and the only one permitted beyond the seven required — `additionalProperties: false` rejects everything else, including `phase`. It defaults to `"document"`; an issue without it counts as document-origin. The reviewer and the fact-checker emit `"document"`; the self-review pass emits `"self-review"` for what it raises against the fixer's own edits, and those are excluded from the round's `critical_count` and `high_count`. See `references/shared-rules/counts-exclude-self-review.md`.
 

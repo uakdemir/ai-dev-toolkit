@@ -108,7 +108,7 @@ jq '.critical_count' tmp/_reviews_errors/<run_id>-iter<N>-review-code.json
 **The gates read this value in flight, not off disk.** Every consuming gate is specified against the
 iteration's REVIEW output, before that iteration's fix phase, and the orchestrator holds that number
 in its own state. What the file lacks is freshness, not correctness. Every write to the counts happens
-*before* the fix phase — the reviewer's, and the fact-checker's recount after appending its findings —
+*before* the fix phase — the reviewer's, and, in `review-doc`, the recount `scripts/merge-fact-check.cjs` makes after appending the fact-check findings —
 and nothing after the fix phase recomputes them: the fixer writes only its fix report, and both
 self-review passes are forbidden to recount and instead append findings carrying
 `origin: "self-review"`. At stage iii there is no third writer: `review-code`'s stop check writes

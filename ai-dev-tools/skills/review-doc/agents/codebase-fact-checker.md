@@ -50,21 +50,17 @@ Fact-check every verifiable claim in each document against the actual source cod
 
 ## Output Format
 
-**Do NOT write markdown findings.** Instead, write structured JSON directly to `{{OUTPUT_PATH}}`.
+**Do NOT write markdown findings.** Instead, write structured JSON directly to `{{FACT_CHECK_PATH}}`, your own file. You never read or write the review JSON: you run alongside the reviewer, and `scripts/merge-fact-check.cjs` merges your file into the round's review JSON after you both finish.
 
 ### Procedure
 
-1. Read `{{OUTPUT_PATH}}` (already written by the reviewer in this round).
-   - **Validate the artifact first:** the file must exist, be readable, and parse as JSON, and every issue in the array must have an `id` matching `^ISSUE-\d{3,}$`. If the review JSON is missing, unreadable, or not valid JSON, or if any issue is missing the `id` field or has a malformed value, abort the fact-check by:
-     1. Leaving `{{OUTPUT_PATH}}` UNCHANGED — do not write or modify it.
-     2. Returning a text response whose **first line begins with the literal sentinel `ABORT: `** followed by a one-line reason, e.g. `ABORT: Reviewer output is malformed — id field invalid or missing on issue at index N`.
-     The orchestrator detects the `ABORT:` prefix, restores the backup it took before dispatching you, prints a warning, and proceeds to the fixer using the original reviewer output.
-   - Compute `next_id_seed = max(numeric suffix of every well-formed id) + 1`. Filter out malformed entries from this calculation so a single bad entry cannot poison the max. If the issues array is empty, set `next_id_seed = 1`.
-2. For each claim you verify, record the verdict.
-3. For each non-ACCURATE verdict, append an issue object to the `issues` array:
-   - `"id"`: the next sequential ID — `ISSUE-NNN` where NNN is the decimal value of `next_id_seed` zero-padded to **at least** 3 digits (use more digits when `next_id_seed >= 1000`, e.g. `ISSUE-1024`); then increment `next_id_seed`. **Never reuse or renumber existing IDs from the reviewer's output** — your fact-check issues are appended after them.
+1. Read each document and verify its claims (What to Verify), recording a verdict for each claim. If a listed document cannot be read, or `{{FACT_CHECK_PATH}}` cannot be written, abort by:
+   1. Leaving `{{FACT_CHECK_PATH}}` UNWRITTEN — do not create it, do not partially write it.
+   2. Returning a text response whose **first line begins with the literal sentinel `ABORT: `** followed by a one-line reason, e.g. `ABORT: cannot read docs/spec.md`.
+   The orchestrator detects the `ABORT:` prefix, skips the merge, prints a warning, and proceeds to the fixer with the reviewer's output alone.
+2. For each non-ACCURATE verdict, add an issue object to your `issues` array:
    - `"category": "fact-check"`
-   - `"origin": "document"` — you run before the fixer, against the document as authored, so your findings are document-origin and count normally. (The self-review pass, which runs after the fixer, is the only producer of `"self-review"`.)
+   - `"origin": "document"` — you check the document as authored, before the fixer, so your findings are document-origin and count normally. (The self-review pass, which runs after the fixer, is the only producer of `"self-review"`, and the merge rejects that value from you.)
    - `"location"`: the document section where the claim appears
    - `"problem"`: the claim text + your evidence
    - `"suggested_fix"`: the correction
@@ -78,18 +74,23 @@ Fact-check every verifiable claim in each document against the actual source cod
      verdict class does carry weight: INACCURATE against code you read directly is near-certain,
      PARTIALLY ACCURATE is by nature less so.
 
+   Give no issue an `id`: `scripts/merge-fact-check.cjs` numbers your issues after the reviewer's when it merges them, and it rejects an artifact whose issues already carry one.
+
    Severity semantics are shared with `review-code` and defined once, in
    `references/shared-rules/severity-is-consequence.md`.
 
    Report findings with `confidence` >= 40. A high-severity finding below that threshold should be
    investigated until it can be grounded or dropped — not silently discarded.
-4. Populate the `fact_check_claims` array with ALL claims checked (including ACCURATE):
+3. Populate the `fact_check_claims` array with ALL claims checked (including ACCURATE):
    ```json
    {"claim": "description of claim", "verdict": "ACCURATE"}
    ```
-5. Compute `fact_check_accuracy`: if `total_claims == 0`, set it to `100` (no verifiable claims → nothing inaccurate); otherwise `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
-6. Recompute `critical_count` and `high_count` from the full `issues` array (including your appended fact-check issues), **counting only issues whose `origin` is not `"self-review"`** — an issue with no `origin` counts as `"document"`. Only the self-review pass sets `"self-review"`, and it runs after you, so at your point in the round every issue is document-origin; the filter is stated anyway because the recount rule is the same wherever it is applied — `references/shared-rules/counts-exclude-self-review.md`.
-7. Rewrite `{{OUTPUT_PATH}}` with the updated content using the Write tool.
+4. Compute `fact_check_accuracy`: if `total_claims == 0`, set it to `100` (no verifiable claims → nothing inaccurate); otherwise `(accurate_count + 0.5 * partially_accurate_count) / total_claims * 100`, rounded to nearest integer.
+5. Write `{{FACT_CHECK_PATH}}` with the Write tool. It holds exactly three keys:
+   ```json
+   {"fact_check_accuracy": 93, "fact_check_claims": [], "issues": []}
+   ```
+   Write no `critical_count` or `high_count`: the merge recounts the whole array.
 
 ACCURATE verdicts are NOT converted to issues — they appear only in `fact_check_claims`.
 
@@ -112,7 +113,7 @@ ACCURATE verdicts are NOT converted to issues — they appear only in `fact_chec
 - NEVER run git push, git checkout, git switch, git branch -d/-D, or any command that modifies or switches branches
 - NEVER run destructive git commands (reset --hard, clean -f)
 
-`{{OUTPUT_PATH}}` is substituted by the skill before this prompt reaches you, to the run-id-aware
-`tmp/_reviews_errors/[<run_id>-]review-doc.json`. If it still appears literally in your copy, the
+`{{FACT_CHECK_PATH}}` is substituted by the skill before this prompt reaches you, to the run-id-aware
+`tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json`. If it still appears literally in your copy, the
 substitution did not happen: report `output path not substituted` and stop rather than guessing at
 the path — writing to the unprefixed default would silently clobber another run's artifact.

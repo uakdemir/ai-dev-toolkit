@@ -1,6 +1,6 @@
 ---
 name: max-effort
-description: "Role-neutral agent pinned at `max` reasoning effort, whatever effort the dispatching session is at. Use it only when a skill or a prompt names it: /review-code and /review-doc dispatch it for `--effort max`. It pins no model, so pass `model` on the Agent call."
+description: "Role-neutral agent pinned at `max` reasoning effort, whatever effort the dispatching session is at. Use it only when a skill or a prompt names it: /review-code and /review-doc dispatch it for `--effort max` or `--fix-effort max`. It pins no model, so pass `model` on the Agent call."
 effort: max
 ---
 

@@ -1,23 +1,24 @@
 ---
 name: review-code
-argument-hint: '<commit-count|git-ref> [--against <spec>] [--effort high|xhigh|max] [--model <model>] --max-iterations N [--verify "<cmd>"] [--must-inspect <paths>] [--run-id <id>]'
+argument-hint: '<commit-count|git-ref> [--against <spec>] [--effort high|xhigh|max] [--fix-effort high|xhigh|max] [--model <model>] --max-iterations N [--verify "<cmd>"] [--must-inspect <paths>] [--run-id <id>]'
 description: "Use when reviewing recent commits for bugs, architecture violations, spec drift, security issues, and verification gaps. Supports single-pass review and iterative review-fix-verify cycles. Invoke with /review-code <commit-count|git-ref>."
 ---
 
 # Review Code
 
-Iterative code review with automatic fix cycles. Reviews the last N commits, finds issues, fixes them, and verifies. Repeats until zero criticals, no verification regressions, and no uninspected files, or max iterations reached. A single agent (pinned at the `--effort` reasoning level, on the `--model` model when one is passed) handles both review and fix phases. Tracks verification command regressions and maintains an append-only backlog of all issues found.
+Iterative code review with automatic fix cycles. Reviews the last N commits, finds issues, fixes them, and verifies. Repeats until zero criticals, no verification regressions, and no uninspected files, or max iterations reached. The reviewer is pinned at the `--effort` reasoning level and the fixer and the self-reviewer at the `--fix-effort` level, all on the `--model` model when one is passed. Tracks verification command regressions and maintains an append-only backlog of all issues found.
 
 ## Argument Parsing
 
 ```
-/review-code <commit-count|git-ref> [--against <spec-path>] [--effort <level>] [--model <model>] [--max-iterations N] [--verify "<cmd>"] [--must-inspect <paths>] [--run-id <id>] [--help]
+/review-code <commit-count|git-ref> [--against <spec-path>] [--effort <level>] [--fix-effort <level>] [--model <model>] [--max-iterations N] [--verify "<cmd>"] [--must-inspect <paths>] [--run-id <id>] [--help]
 ```
 
 | Flag | Default | Values | Purpose |
 |---|---|---|---|
 | `--against <spec-path>` | none | any file path | Spec as implementation contract |
-| `--effort` | max | high, xhigh, max | Reasoning-effort level for all agents (reviewer, fixer, self-reviewer): it selects the agent each one is dispatched as |
+| `--effort` | high | high, xhigh, max | Reasoning-effort level of the reviewer: it selects the agent it is dispatched as |
+| `--fix-effort` | high | high, xhigh, max | Reasoning-effort level of the fixer and the self-reviewer: it selects the agent each one is dispatched as |
 | `--model <model>` | none | any model the Agent tool accepts | Model for all agents, passed as `model` on every Agent call. Absent: the calls name no model |
 | `--max-iterations` | **required** | 0-10 | How many rounds to run (0 = skip, 1 = single-pass). No default: the caller states it |
 | `--verify "<cmd>"` | none | any shell command | Repeatable — verification commands run after each fix |
@@ -33,16 +34,20 @@ It has no default because the number of rounds is the caller's budget decision, 
 
 **Removed flags:** `--min-model`, `--max-model` (clean break, no backward-compat shim). `--model` is not one of them: 3.0.0 ignored it with a warning, and it acts again.
 
-If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `max`.
+If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. When `--effort` is not passed, default to `high`.
 
-**`--effort` and `--model` decide what each agent is dispatched as. Every dispatched agent is the plugin agent that matches `--effort`, and carries `--model` on its Agent call whenever the flag was passed.** Defined once, in `references/shared-rules/agent-dispatch-pin.md`, and shared with `review-doc`. The reviewer, the fixer and the self-reviewer are all dispatched in one of these two forms, and in no other:
+If `--fix-effort` is present, validate its value against the same set; on an out-of-set value print `Error: --fix-effort must be one of: high, xhigh, max.` and exit. When `--fix-effort` is not passed, default to `high`. No combination of the two flags is rejected: `--effort high --fix-effort max` is legal.
+
+**`--effort`, `--fix-effort` and `--model` decide what each agent is dispatched as. Every dispatched agent is the plugin agent that matches its phase's effort flag, `--effort` for the reviewer and the fact-checker and `--fix-effort` for the fixer and the self-reviewer, and carries `--model` on its Agent call whenever the flag was passed.** Defined once, in `references/shared-rules/agent-dispatch-pin.md`, and shared with `review-doc`; this skill has no fact-checker. The reviewer is dispatched in one of the first two of these forms, the fixer and the self-reviewer in one of the last two, and none in any other:
 
 ```
-Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>)                              # run without --model
-Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")   # run with --model
+Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>)                                  # reviewer; no --model
+Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")       # reviewer; --model
+Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <substituted prompt>)                              # fixer, self-reviewer; no --model
+Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")   # fixer, self-reviewer; --model
 ```
 
-| `--effort` | Agent type |
+| `--effort` or `--fix-effort` | Agent type |
 |---|---|
 | `high` | `ai-dev-tools:high-effort` |
 | `xhigh` | `ai-dev-tools:xhigh-effort` |
@@ -94,7 +99,8 @@ zero criticals with clean verification and coverage, or cap.
 
 Flags:
   --against <spec-path>   Spec as implementation contract    (default: none)
-  --effort <level>        Reasoning effort: high, xhigh, max  (default: max)
+  --effort <level>        Reviewer: high, xhigh, max           (default: high)
+  --fix-effort <level>    Fixer, self-review: high, xhigh, max (default: high)
   --model <model>         Model for every agent              (default: none)
   --max-iterations N      Rounds to run, 0=skip, 1=single    (REQUIRED)
   --verify "<cmd>"        Verification command (repeatable)  (default: none)
@@ -103,7 +109,8 @@ Flags:
   --help                  Print this help and exit
 
 Agents:
-  --effort picks the agent every phase is dispatched as:
+  --effort picks the agent the reviewer is dispatched as, --fix-effort the
+  agent of the fixer and the self-review:
   ai-dev-tools:high-effort, ai-dev-tools:xhigh-effort, ai-dev-tools:max-effort.
   The agent sets the reasoning effort. --model sets the model; without
   it the Agent calls name none and Claude Code chooses.
@@ -114,6 +121,7 @@ Examples:
   /review-code 5 --against docs/spec.md              Review against spec
   /review-code a1b2c3d --against docs/spec.md --run-id k3m9_e5f6  Scoped
   /review-code 3 --max-iterations 1 --effort high --model opus    Opus at high
+  /review-code 3 --max-iterations 1 --effort high --fix-effort max --model opus    Fixes at max
 ```
 
 ## Setup
@@ -195,12 +203,12 @@ For iteration 1 to max_iterations:
     NOTHING is written to review-code.json here. The artifact is the reviewer's.
 
   FIX PHASE (whenever the round found ANY issue — critical, high, medium or low):
-    Dispatch fixer agent (the --effort agent; --model on the call when passed)
+    Dispatch fixer agent (the --fix-effort agent; --model on the call when passed)
     Fixer commits: "fix(review-code): resolve N issues from iteration M"
 
   SELF-REVIEW (always, whenever the fix phase ran):
     Scope = the fixer's own commits: git diff $before_sha..$fixer_sha
-    Dispatch self-review agent (prompts/self-review.md; same agent type and model)
+    Dispatch self-review agent (prompts/self-review.md; the --fix-effort agent, same model)
     Reports defects in the fixer's own changes AND fixes them, exactly once (depth 1)
     Appends issues with origin: "self-review" — excluded from THIS iteration's
       critical_count and high_count, printed on their own line either way
@@ -226,13 +234,13 @@ This skill is the party that knows its own coverage, so the condition lives here
 
 **Owning the condition is not owning the loop, and the difference decides who can close a hole.** On a run with `--max-iterations > 1` this skill runs the rounds and can reach the condition itself. At `--max-iterations 1` — every stage-iii dispatch — it evaluates the condition once and reports; the caller runs the loop. That caller is also the only party able to *act* on a coverage hole, because a fresh-read round cannot be told by its successor what it missed. `--must-inspect` is the channel: stage iii reads `coverage.not_inspected` off one dispatch's artifact and hands it to the next. Without a looping caller, a standalone single-iteration run reports the hole and stops, which is the right outcome for a run with no round left to spend on it.
 
-No final-gate pattern for review-code. Since all rounds use the same single agent, a redundant review-only round on unchanged code adds no value. Verification commands serve as the quality gate instead.
+No final-gate pattern for review-code. Since every round's reviewer is the same agent reading the same scope, a redundant review-only round on unchanged code adds no value. Verification commands serve as the quality gate instead.
 
 **Fixing and iterating are separate decisions.** The fix phase runs whenever the round found anything, at any severity. Only whether to run *another* iteration is gated on criticals. Gating the fixer on criticals meant a round that found only highs and mediums fixed nothing and handed the whole list to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run. It also disabled the self-review pass, which runs only after a fix phase. A minor finding the agent can fix is still worth fixing; whether it justifies another round is a different question, and that one is still severity-gated.
 
 ## Reviewer Agent
 
-Single agent, dispatched as the `--effort` agent and on the `--model` model when one is passed — the two call forms are in Argument Parsing (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}`, which is the depth directive and not what sets the reasoning effort, `{{ITERATION_NUM}}`, `{{MUST_INSPECT}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{GIT_DIFF}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
+Single agent, dispatched as the `--effort` agent and on the `--model` model when one is passed — the first two call forms in Argument Parsing are its own (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/reviewer.md` — `{{EFFORT}}` → the `--effort` value, which is the depth directive and not what sets the reasoning effort, `{{ITERATION_NUM}}`, `{{MUST_INSPECT}}`, `{{SPEC_CONTENT}}`, `{{CLAUDE_MD}}`, `{{ADRS}}`, `{{GIT_DIFF}}`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`). Receives:
 - Git diff (up to 3000 lines, strategically trimmed)
 - Must-inspect paths (the `--must-inspect` value, or `none`)
 - Spec content (if `--against` provided)
@@ -258,14 +266,14 @@ Read `prompts/reviewer.md` from this skill's directory and dispatch: `Agent(suba
 
 ## Fixer Agent
 
-Single agent, dispatched as the `--effort` agent and on the `--model` model when one is passed — the two call forms are in Argument Parsing (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/coder.md` — `{{EFFORT}}`, which is the depth directive and not what sets the reasoning effort, `{{ALL_ISSUES}}`, `{{VERIFICATION_REGRESSIONS}}`, `{{SPEC_CONTENT}}`, and `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json`). Receives:
+Single agent, dispatched as the `--fix-effort` agent and on the `--model` model when one is passed — the last two call forms in Argument Parsing are its own (the skill substitutes every `{{PLACEHOLDER}}` in `prompts/coder.md` — `{{EFFORT}}` → the `--fix-effort` value, which is the depth directive and not what sets the reasoning effort, `{{ALL_ISSUES}}`, `{{VERIFICATION_REGRESSIONS}}`, `{{SPEC_CONTENT}}`, and `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json`). Receives:
 - All issues grouped by severity
 - Verification regressions (if any)
 - Spec content (if `--against` provided)
 
 **The two conditional inputs are substituted to the literal `none` when they are absent** — `{{SPEC_CONTENT}}` on a run without `--against`, `{{VERIFICATION_REGRESSIONS}}` on a run with nothing to report (including one without `--verify`). Neither is ever left standing as a placeholder: `prompts/coder.md` stops on a placeholder that reaches it literally, so an empty slot left alone would abort the fix phase of every run that passes neither `--against` nor `--verify` — the commonest invocation there is. `review-doc` pins its own optional input the same way (`{{AGAINST_PATH}}` → the `--against` value or `none`).
 
-Read `prompts/coder.md` from this skill's directory and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/_reviews_errors/review-code-fix-report.json`.
+Read `prompts/coder.md` from this skill's directory and dispatch: `Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <fixer-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. Edits code, commits with message `fix(review-code): resolve N issues from iteration M`, produces `tmp/_reviews_errors/review-code-fix-report.json`.
 
 ## Self-Review Agent
 
@@ -279,7 +287,7 @@ Runs **after the fixer**, in every iteration where the fixer ran. Always on — 
 
 Before dispatch, the orchestrator backs up `tmp/_reviews_errors/[<run_id>-]review-code.json` to `<path>.bak`. **An agent that cannot do its job aborts by leaving the artifact untouched and returning a first line beginning with the literal prefix "ABORT: ".** On detection the orchestrator restores the backup, prints `Warning: self-review aborted — <reason>. Fix results unverified.`, and continues; any other failure mode (crash, exception, no response) is treated identically. Defined once, in `references/shared-rules/agent-abort-contract.md`, and shared with `review-doc`.
 
-Read `prompts/self-review.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <self-review-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes every `{{PLACEHOLDER}}` in that prompt, exactly as it does for `prompts/reviewer.md` and `prompts/coder.md` — `{{DIFF_RANGE}}` → the fixer's diff range `$before_sha..$fixer_sha`, `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`. A path described in prose instead of substituted is a path the agent has to guess at, and the prompt stops rather than guessing: it reports the placeholder as unsubstituted. The effort level is not a placeholder in this prompt — it goes in the dispatch prompt as a depth directive, and like `{{EFFORT}}` it sets nothing: the agent type sets the reasoning effort.
+Read `prompts/self-review.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <self-review-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. The skill substitutes every `{{PLACEHOLDER}}` in that prompt, exactly as it does for `prompts/reviewer.md` and `prompts/coder.md` — `{{DIFF_RANGE}}` → the fixer's diff range `$before_sha..$fixer_sha`, `{{FIX_REPORT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code-fix-report.json`, and `{{OUTPUT_PATH}}` → `tmp/_reviews_errors/[<run_id>-]review-code.json`. A path described in prose instead of substituted is a path the agent has to guess at, and the prompt stops rather than guessing: it reports the placeholder as unsubstituted. The effort level, the `--fix-effort` value, is not a placeholder in this prompt — it goes in the dispatch prompt as a depth directive, and like `{{EFFORT}}` it sets nothing: the agent type sets the reasoning effort.
 
 It appends every defect to the `issues` array with `origin: "self-review"` and all six schema-required fields, and commits with `fix(review-code): self-review of iteration M's fixes`.
 
@@ -626,7 +634,7 @@ Write to `tmp/_reviews_errors/review-code-iteration-N.md`:
 # Iteration N
 
 **Model:** <--model value> | not passed (the Agent calls named no model; Claude Code chose)
-**Effort:** <--effort value> (every agent dispatched as ai-dev-tools:<--effort value>-effort)
+**Effort:** <--effort value> for the reviewer, <--fix-effort value> for the fixer and the self-reviewer (each dispatched as ai-dev-tools:<level>-effort)
 **Scope:** last N commits | commits original_base..after_sha | commits <ref>..after_sha (`after_sha` = HEAD after the self-review pass)
 **Issues found:** X critical, Y high, Z medium, W low
 **Outcome:** "Fixed N issues (P pushed back), continuing" | "Fixed N issues (P pushed back), 0 criticals + verification pass + full coverage, loop complete" | "0 criticals + verification pass + full coverage, loop complete" | "Fixed N issues (P pushed back), max iterations reached" | "Fix phase failed: <error>" — whenever the fixer ran, the outcome carries its counts as well as the reason the loop stopped; the bare form is for a round that found nothing to fix at any severity.

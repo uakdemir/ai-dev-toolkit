@@ -2,12 +2,12 @@
 name: agent-dispatch-pin
 applies-to: [review-code, review-doc]
 detector: untyped-agent-dispatch
-canonical: Every dispatched agent is the plugin agent that matches `--effort`, and carries `--model` on its Agent call whenever the flag was passed.
+canonical: Every dispatched agent is the plugin agent that matches its phase's effort flag, `--effort` for the reviewer and the fact-checker and `--fix-effort` for the fixer and the self-reviewer, and carries `--model` on its Agent call whenever the flag was passed.
 ---
 
 # What decides the effort and the model a dispatched agent runs at
 
-**Every dispatched agent is the plugin agent that matches `--effort`, and carries `--model` on its Agent call whenever the flag was passed.**
+**Every dispatched agent is the plugin agent that matches its phase's effort flag, `--effort` for the reviewer and the fact-checker and `--fix-effort` for the fixer and the self-reviewer, and carries `--model` on its Agent call whenever the flag was passed.**
 
 Both review skills documented `--effort` as the reasoning-effort level of their agents, and for as
 long as they dispatched with a prompt and nothing else, it was not. The Agent tool has no effort
@@ -25,13 +25,15 @@ exported that variable decides, not the session.
 ```
 Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>)
 Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")
+Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <substituted prompt>)
+Agent(subagent_type: "ai-dev-tools:<--fix-effort value>-effort", prompt: <substituted prompt>, model: "<--model value>")
 ```
 
-The first form is for a run without `--model`, the second for a run with it. There is no third.
+The first two forms are for the reviewer and the fact-checker, the last two for the fixer and the self-reviewer; in each pair the first is for a run without `--model`, the second for a run with it. There is no fifth.
 The forms show the parameters this rule fixes. Whatever else the Agent tool takes or requires, such
 as `description`, is written as usual.
 
-| `--effort` | Agent type | Definition |
+| `--effort` or `--fix-effort` | Agent type | Definition |
 |---|---|---|
 | `high` | `ai-dev-tools:high-effort` | `agents/high-effort.md` |
 | `xhigh` | `ai-dev-tools:xhigh-effort` | `agents/xhigh-effort.md` |
@@ -50,20 +52,25 @@ dispatch prompt, and the effort level `review-doc` writes into each dispatch pro
 already running at. Every place that describes the directive says so, because the two shared one
 flag and one name for long enough to be read as one mechanism.
 
+Each phase's directive carries the value of its own flag: `--effort` for the reviewer and the
+fact-checker, `--fix-effort` for the fixer and the self-reviewer.
+
 Measured on 2026-10-05 with Claude Code 2.1.289: an agent dispatched from a session at effort `max`
 as `ai-dev-tools:high-effort` ran at effort `high`. A `review-code` round the same day ran its
 reviewer, fixer and self-reviewer at `high` on Opus under a session at `max`, and a `review-doc`
 round ran its reviewer, fact-checker, fixer and self-reviewer at `max` on Opus under a session at
 `high`. Not measured: the `xhigh` agent, and a pinned agent dispatched from inside a sub-agent.
 
-## When `--effort` is absent
+## When an effort flag is absent
 
-The level is `max` and the agent is `ai-dev-tools:max-effort`: both skills default to it.
-`orchestrate` passes no `--effort`, so its review stages select that agent. A value outside the
-table is an argument error, never a fallback to another level:
+Both flags default to `high`. A run that passes neither dispatches every agent as
+`ai-dev-tools:high-effort`, and a run that passes one keeps the other flag's agents at that level.
+`orchestrate` passes neither, so its review stages select that agent for every phase. A value
+outside the table is an argument error, never a fallback to another level:
 
 ```
 Error: --effort must be one of: high, xhigh, max.
+Error: --fix-effort must be one of: high, xhigh, max.
 ```
 
 ## When `--model` is absent
@@ -161,8 +168,8 @@ by Claude Code, an organisation's effort cap applies after the pin, and an expor
 `CLAUDE_CODE_EFFORT_LEVEL` overrides it. An exported `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` likewise
 discards the model a call names, and the model is then resolved as for a call that names none.
 
-Neither skill looks for any of these. Under the three effort limits a run dispatches the `--effort`
-agent as usual, the iteration log prints the flag's value, and nothing reports the difference. What
+Neither skill looks for any of these. Under the three effort limits a run dispatches the agents its
+effort flags name as usual, the iteration log prints the flags' values, and nothing reports the difference. What
 a run with `--model` does under `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, neither skill says.
 
 That is a decision, taken on 2026-10-05, and not an omission. A session can read both variables
@@ -192,8 +199,10 @@ skill's call: a run without `--model` still dispatches in the first form.
 
 ## Governed sites
 
-- `skills/review-code/SKILL.md`: the reviewer, the fixer and the self-reviewer
-- `skills/review-doc/SKILL.md`: the reviewer, the fact-checker, the fixer and the self-reviewer
+- `skills/review-code/SKILL.md`: the reviewer (`--effort`), the fixer and the self-reviewer
+  (`--fix-effort`)
+- `skills/review-doc/SKILL.md`: the reviewer and the fact-checker (`--effort`), the fixer and the
+  self-reviewer (`--fix-effort`)
 - `agents/high-effort.md`, `agents/xhigh-effort.md`, `agents/max-effort.md`: the three definitions
 - `skills/review-code/prompts/reviewer.md`, `skills/review-code/prompts/coder.md`,
   `skills/review-code/prompts/self-review.md`: the depth-directive wording
@@ -215,7 +224,7 @@ Detector `untyped-agent-dispatch`, in `scripts/check-shared-semantics.cjs`: a ma
 the root CLAUDE.md, not an automatic one. In a governed skill, check B fails on any line where the
 text from an `Agent(` to its closing bracket carries no `subagent_type` whose value is a quoted or
 backticked `ai-dev-tools:<...>-effort` name, with a placeholder in angle brackets where the level
-goes. A literal level fails: the call would run every `--effort` value at that one level, and
+goes. A literal level fails: the call would run every value of its effort flag at that one level, and
 nothing would be refused at dispatch. The words inside the placeholder are not checked. Check B
 reads one line at a time, so a governed call written over several lines fails as well, unless its
 `subagent_type` is on the line that holds the `Agent(`.
