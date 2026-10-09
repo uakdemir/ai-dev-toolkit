@@ -210,7 +210,7 @@ for iter in 1..max_iterations:
    The unresolved-criticals gate is a separate reader, not a different number. It is evaluated once, at the final round rather than at every round, and it takes `critical_count` off the artifact rather than the loop's own variable — but numerically that is the same pre-fix count the early exit tests: on a fact-checked run the artifact field carries the recount `scripts/merge-fact-check.cjs` makes over the full issues array when it merges the fact-check findings, which is `total_criticals`; otherwise it is the reviewer's own count, which is `pre_fix_criticals`. Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
 4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
 5. The reviewer and the fact-checker are the `--effort` agent and the fixer and the self-reviewer the `--fix-effort` agent (both default `high`), which is what sets their reasoning effort, and every dispatch carries `--model` on the call when it was passed. The call forms are in Argument Parsing.
-6. `validate(json)` runs right after `review()`:
+6. `validate(json)` runs right after `review()` returns — after `join()` when the fact-checker runs:
 
    ```bash
    node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>

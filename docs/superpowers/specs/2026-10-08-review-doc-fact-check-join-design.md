@@ -59,6 +59,7 @@ One missing barrier allows all of these:
 - **Version skew in already-open sessions.** Such a session holds 4.0.0 skill text but reads 5.0.0 prompt files. It is a one-time transition, fixed by `/reload-plugins`. An `ABORT:`-prefixed "placeholder not substituted" stop was considered and left out: it would diverge from the convention the other prompts follow, where an unsubstituted placeholder is reported, not aborted.
 - **Timeouts and polling.** None, as for every agent this skill dispatches.
 - **Early validation.** The reviewer's `validate(json)` could start before the join, but it waits too. That is simpler to state, and it costs time only on the rare reviewer retry.
+- **A gate for the join.** No gate in the repo CLAUDE.md checks for it, and the sweep below is a one-off check of this change, so deleting the join later would pass every gate. It is left unpinned: `check-shared-semantics` registers rules that govern more than one skill, and the join governs review-doc alone. Pinning it would take a new check in the gate block.
 
 ## Verification
 
