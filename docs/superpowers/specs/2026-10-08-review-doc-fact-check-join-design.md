@@ -51,6 +51,9 @@ One missing barrier allows all of these:
    - Before: "The fact-checker runs alongside the reviewer and is merged before the fixer in each iter (so fact-check criticals get resolved in the same iter)."
    - After: "The fact-checker runs alongside the reviewer; the round waits for both to return (the join), then merges before the fixer in each iter (so fact-check criticals get resolved in the same iter)."
 5. **Abort and failure.** After the sentence listing the triggers ("…when it crashes or returns nothing, or when the merge exits with anything but 0."), add: "A fact-checker that has not returned yet is none of these: the join waits for it, with no timeout, as for the reviewer."
+6. **Key behavioral property 6.**
+   - Before: "`validate(json)` runs right after `review()`:"
+   - After: "`validate(json)` runs right after `review()` returns — after `join()` when the fact-checker runs:"
 
 **CHANGELOG.** The 5.0.0 Features bullet for review-doc's concurrent reviewer and fact-checker gains the clause "and nothing in the round starts until both agents have returned". Its commit list gains this change's SHA. This lands as a separate `docs(changelog)` commit, because a commit cannot cite its own SHA, following `13cee89` and `ae60a50`.
 
