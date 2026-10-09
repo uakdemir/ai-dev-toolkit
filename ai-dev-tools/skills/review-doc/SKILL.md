@@ -169,6 +169,8 @@ for iter in 1..max_iterations:
         delete(fact_check_json)         # so the merge can only ever read this round's file
         review() + fact_check()         # dispatched in ONE message, so they run concurrently;
                                         # the fact-checker writes only its own fact-check JSON
+        join()                          # wait until BOTH have returned — nothing below starts
+                                        # before, not even the reviewer's validation (Fact-Checker)
     else:
         review()                        # reviewer agent (the --effort agent; --model when passed)
     validate(json)                      # schema-check reviewer output; retry review() alone once on failure, abort iteration on 2nd
@@ -198,7 +200,7 @@ for iter in 1..max_iterations:
 
 **Key behavioral properties:**
 1. No phase logic, no tier promotion, no hidden final gate.
-2. The fact-checker runs alongside the reviewer and is merged before the fixer in each iter (so fact-check criticals get resolved in the same iter).
+2. The fact-checker runs alongside the reviewer; the round waits for both to return (the join), then merges before the fixer in each iter (so fact-check criticals get resolved in the same iter).
 3. **Fixing and iterating are separate decisions.** The fixer runs whenever the round found anything at all — critical, high, medium or low. Only the decision to run *another* round is gated on criticals: `total_criticals == 0` when `--fact-check true`, and `pre_fix_criticals == 0` otherwise.
 
    Gating the fix phase on criticals meant a round that found eleven highs and ten mediums and no criticals fixed **nothing** and handed all twenty-one to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run and the document to receive only what has more than one defensible answer. It also silently disabled the self-review pass, which runs only after a fix phase: on the zero-critical path the triage phase then applied edits with nothing reviewing them. A minor finding the agent can fix is still worth fixing; whether it justifies another *round* is a different question, and that one is still severity-gated.
@@ -256,11 +258,13 @@ The reviewer writes `tmp/_reviews_errors/review-doc.json` (or `tmp/_reviews_erro
 
 Runs **alongside the reviewer**: the orchestrator dispatches the two in the same message, so neither waits for the other. It verifies the document's claims against the codebase and never reads the reviewer's output, so nothing it does depends on the reviewer finishing first. It is not terminal — its findings are merged into the review JSON before the fixer, which resolves any fact-check-added criticals in the same round.
 
+**The join.** Nothing else in the round starts until both agents have returned — not the reviewer's validation or its retry, not the merge, not the fixer. An agent has returned when its Agent call has delivered its result; in a session where agents run in the background, that is when its completion notification arrives, and the two can arrive in either order. A fact-checker that is still running has neither succeeded nor failed: wait for it, exactly as the sequential flow waited. Never infer its state from its file — the file can exist before the fact-checker has finished its own `--check` loop. The join is what makes the rest of this section hold: the merge reads a finished file, the fixer edits a document no agent is still reading, and no round's fact-checker can write after the next round's deletion.
+
 Before the dispatch, in every round, the orchestrator deletes `tmp/_reviews_errors/review-doc-fact-check.json` (or the run-id-prefixed variant). The merge treats a missing file as a failed fact-check, and that holds in every round only because no earlier round's file can still be there: without the deletion, a fact-checker that returned without writing would leave the previous round's findings to be merged, at locations that round's fixer already changed.
 
 Read `agents/codebase-fact-checker.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fact-checker-prompt>)`, adding `model: "<--model value>"` when `--model` was passed. Include the effort level (`--effort` value) in the dispatch prompt as a depth directive (the agent type sets the reasoning effort). The skill substitutes `{{FACT_CHECK_PATH}}` → the resolved `tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json`.
 
-The fact-checker writes that file and touches nothing else, so the orchestrator takes no backup before dispatching it. Once the reviewer's output has passed `validate(json)`, the orchestrator merges the two:
+The fact-checker writes that file and touches nothing else, so the orchestrator takes no backup before dispatching it. Once both agents have returned and the reviewer's output has passed `validate(json)`, the orchestrator merges the two:
 
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/scripts/merge-fact-check.cjs <review-json-path> <fact-check-json-path>
@@ -268,7 +272,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/merge-fact-check.cjs <review-json-path> <fact
 
 The script validates the fact-check artifact, appends its issues to the review JSON's `issues` array numbered from the reviewer's highest id + 1 (from `ISSUE-001` when the reviewer found nothing), copies `fact_check_claims` and `fact_check_accuracy`, recounts `critical_count` and `high_count` over the full array (`origin: "self-review"` excluded, per `references/shared-rules/counts-exclude-self-review.md`), and validates the merged result with `validate-review-json.cjs --schema doc` before renaming it over the review JSON. Exit 0 → use the recount it prints as the round's counts. Any other result — 1 for a missing or invalid artifact or a merged result that fails validation, 2 when it cannot run, 127 when `node` is absent — is a failed fact-check, and the review JSON is still exactly what the reviewer wrote. If the reviewer's output fails validation twice, the iteration aborts as it always has, and a completed fact-check file is not merged.
 
-**Abort and failure.** The fact-check fails when the fact-checker returns a first line beginning with the literal prefix `ABORT: `, when it crashes or returns nothing, or when the merge exits with anything but 0. On a failure the orchestrator does not merge (or the merge has already left the review JSON untouched), prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.` — for a failed merge `<reason>` gives the exit code and its cause, e.g. `merge exited 127: node unavailable` — and proceeds to the fixer with the reviewer's output. The pass counts as not completed (Status Logic). A dispatch the Agent tool refuses is not one of these: it is status **Error** (Error Handling).
+**Abort and failure.** The fact-check fails when the fact-checker returns a first line beginning with the literal prefix `ABORT: `, when it crashes or returns nothing, or when the merge exits with anything but 0. A fact-checker that has not returned yet is none of these: the join waits for it, with no timeout, as for the reviewer. On a failure the orchestrator does not merge (or the merge has already left the review JSON untouched), prints `Warning: fact-check aborted — <reason>. Falling back to reviewer output.` — for a failed merge `<reason>` gives the exit code and its cause, e.g. `merge exited 127: node unavailable` — and proceeds to the fixer with the reviewer's output. The pass counts as not completed (Status Logic). A dispatch the Agent tool refuses is not one of these: it is status **Error** (Error Handling).
 
 ### Fixer
 
