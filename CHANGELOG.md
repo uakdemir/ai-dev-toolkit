@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.0.1 (2026-10-09)
+
+### Features
+
+- **prompts:** ship the team's seven working prompts in `ai-dev-tools/prompts/`, so they are maintained here instead of sent around as copies. They follow 5.0.0's flags: a FULL-tier `review-code` or `review-doc` round runs `--effort max --fix-effort max --model opus`, with `review-code`'s fact-check agent dispatched as `ai-dev-tools:max-effort`, and a LIGHT-tier round runs `--effort high --fix-effort high --model opus`. Code is written by `ai-dev-tools:high-effort` agents with `model: sonnet`, and spec writing runs on Opus · high (4cbb4b7)
+
 ## 5.0.0 (2026-10-08)
 
 The release that makes a review round cheaper and shorter by default. Measured on the founder's
