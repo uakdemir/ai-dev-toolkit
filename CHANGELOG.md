@@ -21,7 +21,7 @@ and review-doc's fact-checker waited for a reviewer whose output it never reads.
 ### Features
 
 - **review-code, review-doc:** `--fix-effort high|xhigh|max` selects the agent the fixer and the self-reviewer are dispatched as (a59cf22)
-- **review-doc:** the reviewer and the fact-checker run concurrently. The fact-checker writes its own artifact, `tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json`, and `scripts/merge-fact-check.cjs` merges it before the fixer; any merge exit but 0 is a failed fact-check, and nothing in the round starts until both agents have returned (a59cf22, e7870dd)
+- **review-doc:** the reviewer and the fact-checker run concurrently. The fact-checker writes its own artifact, `tmp/_reviews_errors/[<run_id>-]review-doc-fact-check.json`, and `scripts/merge-fact-check.cjs` merges it before the fixer; any merge exit but 0 is a failed fact-check, and nothing in the round starts until both agents have returned (a59cf22, e7870dd, 0c1085b)
 - **scripts:** `merge-fact-check.cjs`, which appends, renumbers, recounts and validates before it replaces the review JSON (d893900), and its `--check` mode, which the fact-checker runs on its own artifact before it returns, so one malformed finding cannot discard the round's whole fact-check (377781c)
 
 ### Tests
