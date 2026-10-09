@@ -1,0 +1,11 @@
+Before this branch closes, merge the important decisions and deviations from the plan back into the
+specs. Use monorepo/docs/prompts/merge-plan-changes-to-spec.md as your spec for how.
+
+This is spec writing, which runs on Opus · high. State this session's effort in one line before you
+start; if it is not high, stop and tell me.
+
+Do it for every repo you modified and wrote a plan in — monorepo, studio, or both.
+
+A decision belongs in the spec; a task does not. If you cannot tell, ask rather than guessing: a plan
+copied into a spec rots into a misleading document that grep still surfaces.
+

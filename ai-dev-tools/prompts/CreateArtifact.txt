@@ -1,0 +1,28 @@
+Create the artifact we just discussed. It is built on Opus · high, whatever model and effort this
+session is at, so this session does not write it.
+
+Dispatch ONE agent as `subagent_type: ai-dev-tools:high-effort` with `model: opus` and have it write
+the artifact. If that agent type is missing, or this session has no Agent tool, stop and tell me.
+Never fall back to writing the page in this session, and never dispatch a fork: a fork runs on this
+session's model and at its effort.
+
+The agent has not seen this conversation. Its prompt carries everything it needs:
+- what the artifact is about, who will read it, and what they should be able to do with it
+- every fact, number, decision and name we settled on, written out in full, never as "as discussed"
+- the absolute path of each file it should read, and what is in it
+- any guidance the Artifact tool gave you before the page is written (a type to start from, a
+  design system)
+- where to write the page: one .html file in this session's scratchpad directory, by its full path
+- the instruction to load the `artifact-design` skill before it writes a line, and
+  `artifact-capabilities` as well if the page has to remember or share anything
+- what to return: the file's path, a five-line summary of what it built, and anything it could not
+  find or was unsure of
+
+This session does only what cannot be handed over: the brief, the Artifact tool's own calls, and
+reading the finished file in full before it publishes. Do not restyle, rewrite or extend the page
+yourself. If it needs a change, send the change to the same agent and publish what comes back.
+
+If something about the artifact is still open after our discussion (the audience, the scope, a
+number you would have to guess), ask me before you dispatch, not after.
+
+Finish with the artifact's link and one line naming the agent type and the model that built it.

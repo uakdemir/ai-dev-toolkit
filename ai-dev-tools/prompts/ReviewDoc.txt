@@ -1,0 +1,28 @@
+Document review runs on Opus · max in FULL and on Opus · high in LIGHT. The flags below pin that for
+every review agent, whatever model and effort this session is at.
+
+Tier first, one line with a reason. If I wrote "Tier: X", use X.
+- FULL if ANY: the document will drive FULL-tier work (see the main prompt), carries legal, policy
+  or consent content, or makes claims about existing code that need checking against it.
+- MECHANICAL if ALL: wording, formatting or link changes, runbook steps or notes with no decision
+  content.
+- LIGHT: everything else.
+When unsure, take the higher tier.
+
+- FULL: run a /ai-dev-tools:review-doc round — --max-iterations 1 --fact-check true --effort max
+  --fix-effort max --model opus, no agents beyond the skill's own.
+- LIGHT: the same review-doc round with --effort high --fix-effort high in place of the max flags.
+  Keep --model opus, and keep --fact-check true — the fact-checker is where the criticals come from.
+- MECHANICAL: no review-doc round. For each factual sentence you changed, show the grep or command
+  that confirms it.
+
+FULL and LIGHT: fix issues that have an obvious correct solution. For anything ambiguous or needing
+my input: group by similarity and write a brainstorming prompt covering each group clearly and
+concisely, with alternatives, pros/cons, and a recommendation. Record my answers in the
+brainstorming session, then fix those too.
+
+Every tier: where a document exists in more than one location, read both and surface the conflict —
+do not silently prefer one copy.
+
+Tell me the Critical / High / Medium counts for THIS round, not cumulative.
+

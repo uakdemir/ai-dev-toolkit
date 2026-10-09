@@ -1,0 +1,77 @@
+Model routing for this whole prompt: this session is Opus · high — it plans, orchestrates, runs the
+gates and reviews. The production code in step 2 is written by Sonnet · high subagents. The review
+agents in step 4 run on Opus · max for FULL and on Opus · high for LIGHT: the flags there pin both,
+whatever model and effort this session is at. Never run more than 3 subagents at once.
+
+0. Tier. Before anything else, classify this work and state the tier with a one-line reason. If I
+   wrote "Tier: FULL|LIGHT|MECHANICAL", use that.
+   - FULL if ANY: it touches deletion/erasure/retention, authentication/sessions/identity,
+     billing/entitlements, a database migration or schema, a security boundary (IAM, moat, access,
+     network), terraform, legal or consent-bearing copy, or a cross-package public surface (contracts,
+     exports doors); OR it will change more than ~400 production lines; OR it is hard to reverse once
+     shipped (a new stored-data shape, a mobile release, messages sent to members).
+   - MECHANICAL if ALL: no behaviour change — docs or comments only, renames/moves proven by an
+     instrument, formatting, generated files, or internal scripts off the production path.
+   - LIGHT: everything else — reversible product code, roughly under 400 production lines.
+   When unsure between two tiers, take the higher. If the work outgrows its tier midway (the diff
+   grows, or it reaches a FULL area), say so and move up.
+
+1. Plan, then stop and wait for my approval — do not begin implementing on the assumption it is fine.
+   - FULL: /superpowers:writing-plans.
+   - LIGHT: no plan document. Post a plan of at most ~15 lines here: the files, the change, and the
+     tests that will prove it.
+   - MECHANICAL: post the change and the instrument that will prove it (the grep that must return
+     zero, the build / typecheck / test command).
+
+2. Once I approve, implement.
+   - FULL: implement it with /ai-dev-tools:implement <plan-path>.
+
+     Dispatch every implementer and per-task reviewer as `subagent_type: ai-dev-tools:high-effort` with
+     `model: sonnet`. If that agent type is missing, stop and tell me — never fall back to writing the
+     code in this session.
+
+     Use its execution-model picker and answer sincerely rather than defaulting. The code is written on
+     Sonnet either way, so the real question is the split, given THIS task's shape — how independent
+     the units are, how much shared context each needs, how much rework a wrong split costs:
+     - [2] subagent-per-task: one Sonnet agent per task, when tasks are independent enough that each
+       needs only its own slice.
+     - [1] single-agent: run it as ONE such Sonnet agent carrying the whole plan, when tasks
+       share context. Never [1] in this session, and never [3] or [4] — both write the code here.
+     Say which you chose and why in one sentence before dispatching.
+
+     Skip subagent-driven-development's final whole-branch review — step 4 replaces it.
+     Do not paraphrase the plan into your own task list. If the plan is wrong, say so before starting.
+   - LIGHT: ONE `ai-dev-tools:high-effort` agent with `model: sonnet`, carrying the approved chat
+     plan. No per-task reviewers.
+   - MECHANICAL: ONE `ai-dev-tools:high-effort` agent with `model: sonnet`, or a scripted exact-once
+     edit.
+
+   Every tier: a task that fails the same gate twice on Sonnet gets one fresh attempt with
+   `model: opus`. If it still fails, mark it BLOCKED and continue.
+
+3. When implementation finishes, report: commits, the exact gate commands you ran and their output,
+   checks you SKIPPED and why, and residual risk. Run the gates yourself in this session — a
+   subagent's report is not evidence. "Tests pass" is not evidence unless you ran it in this session
+   and can quote it.
+
+4. Review, by tier.
+   - FULL: code review with /ai-dev-tools:review-code --max-iterations 1 --effort max --fix-effort max
+     --model opus — one round. Scope it to the commits from step 2, including any mechanical sweeps.
+     review-code has no fact-checker, so run ONE fact-check agent between the reviewer and the fixer,
+     dispatched as `subagent_type: ai-dev-tools:max-effort` with `model: opus`: per finding, a verdict
+     (confirmed / partial / refuted / unverifiable), a correction, and a fix class (unambiguous /
+     needs-decision). Reviewer, fact-checker, fixer — no other agents.
+   - LIGHT: /ai-dev-tools:review-code --max-iterations 1 --effort high --fix-effort high --model opus
+     — one round, scoped to the step-2 commits. No fact-check agent: before fixing any Critical or
+     High finding, verify it yourself against the code and quote the line.
+   - MECHANICAL: no review agents. Re-run the step-1 instrument and quote its output — that is the
+     review.
+
+   FULL and LIGHT: fix the unambiguous wins yourself first. For anything ambiguous or needing my
+   input: group issues by similarity, and write a brainstorming prompt laying out each group clearly
+   and concisely with alternatives, pros/cons, and your recommendation. Record my answers in the
+   brainstorming session. Then fix those too.
+
+   Finish by telling me the number of Critical / High / Medium issues found in THIS round — not
+   cumulative. For MECHANICAL, say "no review round" and quote the instrument result.
+
