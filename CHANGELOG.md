@@ -30,7 +30,7 @@ flag sets them. The tier rules and the routing table live in `references/shared-
 
 ### Fixes
 
-- Applied a FULL `review-code` round on this release, one round on Opus at max: 11 of its 14 findings fixed, and three corrections by its self-review (c4e07e5, e99ef26). This entry also no longer says that `orchestrate` reads a MECHANICAL review as a pass throughout standard mode: Step 2 does not. Three findings wait for the founder: two follow from this release's settled decisions, and one is the wiki page
+- Applied a FULL `review-code` round on this release, one round on Opus at max: 11 of its 14 findings fixed, and three corrections by its self-review (c4e07e5, e99ef26). This entry also no longer says that `orchestrate` reads a MECHANICAL review as a pass throughout standard mode: Step 2 does not. The founder's decisions on the three findings the round could not settle, recorded as decision 12 of the spec: a document nobody has reviewed may still classify MECHANICAL, with `--tier light` as the remedy; agents that write run one at a time (e629dde); and the wiki page is updated
 - **scripts:** check B of `check-shared-semantics.cjs` fails a governed Agent call whose `model:` is missing or a literal, as it already did for the agent type. Every call form carries `model: "<...>"`, and a call that lost it would run on `CLAUDE_CODE_SUBAGENT_MODEL`, where that is exported, with every gate green (c4e07e5)
 - **review-code:** a rename or move classifies MECHANICAL only once its instrument has proved it at classification: `git grep -n` for the old name or path returns nothing, and the tier reason quotes the command and its result. Otherwise the change is LIGHT (c4e07e5)
 - **implement:** `--auto` suppresses Step C's write-a-plan prompt. That prompt used to end `orchestrate --auto`'s stage ii with no commit, on a spec that fires one of its hard signals (c4e07e5)
@@ -39,11 +39,16 @@ flag sets them. The tier rules and the routing table live in `references/shared-
 - **orchestrate:** in auto mode a review on the MECHANICAL tier is no crash when it ends `Issues Found`: stage i takes the unresolved-criticals path and appends the `✗ UNCONFIRMED` sentences to the spec. The profiling log records `model` as `none` for a run that dispatched no agent (c4e07e5)
 - **review-doc:** the MECHANICAL path runs the Duplicate locations check before it confirms sentences (c4e07e5)
 - **shared-rules:** `risk-tier` lists the files that restate its routing table, where it called the table the only place the pairing is written. The nested measurement `agent-dispatch-pin` prescribes passes `--tier light`, without which it classifies MECHANICAL and dispatches nothing (c4e07e5)
+- **implement:** in `per-task` mode the agents that write run one at a time: implementers, fix-round implementers and escalations share one working tree and its index. The cap of 3 agents stays, as a ceiling for the agents that only read (e629dde)
+- **review-code, review-doc:** the Pre-Flight Checks run before Setup. A run stopped at the branch guard, or on a dirty tree, used to have deleted the previous run's artifacts already (07f7e1f)
+- **review-code, review-doc:** each skill tells the session to substitute the plugin-root variable its reviewer prompt carries. Nothing expanded it in a prompt the session reads, and the reviewer then skipped its validator (25279ad)
+- **review-code:** a MECHANICAL run prints its `Verification:` line once (2b242b0)
+- **shared-rules:** a run that carries the floor's tier writes the stored reason, setter and time back as it read them, so every later run prints the same `carried from` line (5997d51)
 
 ### Tests
 
 - **scripts:** `tests/detector-coverage.txt` gains one line, `skills/implement/SKILL.md` under `untyped-agent-dispatch`. That file now names a pinned agent type, and `--print-coverage` does not read `applies-to`. The listing skips every `references/` tree, so `implementation-step.md` does not appear (1d86fff)
-- **scripts:** `shared-semantics-mutation-test.sh` has 66 cases, up from 64: T12, a governed call that drops its model, and T13, one that names a fixed model. T4 and T12 each write the failing call beside a compliant one, so a gate that judges the line as a whole fails them (c4e07e5, e99ef26)
+- **scripts:** `shared-semantics-mutation-test.sh` has 66 cases, up from 64: T12, a governed call that drops its model, and T13, one that names a fixed model. T4 and T12 each write the failing call beside a compliant one, so a gate that judges the line as a whole fails them (c4e07e5, e99ef26). T6 pins its defect again: a gate that reads past a call's closing bracket had passed all 66 cases (fdf9af8)
 
 ## 5.0.1 (2026-10-09)
 
