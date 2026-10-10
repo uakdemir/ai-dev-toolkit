@@ -164,13 +164,14 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    prints `none stated`. Never omit a bullet. Commands run by an
    implementer subagent count only if you can quote their output.
 
-7. CONCURRENCY AND CALL FORM: implementers run one at a time, fix-round
-   implementers included. They share this working tree and its index,
-   so start one only after the one before it has returned. At most 3
-   agents run at once, or fewer when CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS
-   is lower; that cap bounds the agents that only read, such as a task
-   reviewer. Dispatch every implementer and every task reviewer in this
-   one form:
+7. CONCURRENCY AND CALL FORM: one agent runs at a time. Implementers,
+   fix-round implementers included, write in this working tree and its
+   index, and a task reviewer or a verification run beside one of them
+   would read half-written edits. Start a task's implementer only after
+   the task before it is closed: its task reviewer has returned, its
+   fix rounds have ended and its verification gate (override 2) has
+   run, or it is marked BLOCKED (override 4). Dispatch every
+   implementer and every task reviewer in this one form:
    Agent(subagent_type: "ai-dev-tools:<coder effort>-effort", prompt: <task prompt>, model: "<coder model>")
 
 8. WORK IN THIS TREE AND BRANCH: running /implement here is the consent.
