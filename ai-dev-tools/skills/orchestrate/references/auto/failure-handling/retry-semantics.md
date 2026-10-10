@@ -9,8 +9,11 @@ An agent crash is any of:
 2. The agent times out after 10 minutes without returning
 3. The agent returns without writing its expected output artifact, except a review that ran on the MECHANICAL tier, whether it ended `Not reviewed (MECHANICAL)` or `Issues Found`: it writes no review JSON by design
 4. The agent writes its expected output artifact but the artifact fails schema validation
+5. Agent iii returns without printing `review-code`'s `Review Code Complete` block, whatever artifact is on disk
 
 Item 4 matters because without it, malformed-but-present output falls through the crash definition entirely — it is neither a crash nor a usable result, and nothing routes it anywhere.
+
+Item 5 matters because `review-code` runs its Pre-Flight Checks before its Setup. A dispatch they stop, on a dirty tree or at the branch guard, deletes nothing, so on a retry under the same run-id the first attempt's artifact is still on disk and still valid, and items 3 and 4 both miss it.
 
 **Expected output artifacts:**
 - Agent i → `tmp/_reviews_errors/<run_id>-phase{N}-review-doc.json` (the phase is in the run-id), except a review that ran on the MECHANICAL tier

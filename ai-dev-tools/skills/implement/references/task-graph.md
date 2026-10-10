@@ -10,9 +10,9 @@ Generate an ASCII task dependency graph for an implementation plan.
    - 🟢 Green = fast/easy (~2-5 min, 1-2 files, mechanical changes)
    - 🟠 Orange = medium (~8-10 min, 3-6 files or moderate complexity)
    - 🔴 Red = slow/complex (~15+ min, 7+ files, core changes, or high breakage risk)
-4. **Parallel branches** shown with `├──┬──┐` splitting and `└──┴──┘` merging
+4. **Independent branches** (tasks with no ordering between them) shown with `├──┬──┐` splitting and `└──┴──┘` merging
 5. **Sequential dependencies** shown with simple `│` vertical lines
-6. **Total time estimate** at the bottom (both sequential and parallel-optimized)
+6. **Total time estimate** at the bottom: the sum of the tasks, because they run one at a time
 
 ## Task Shape
 
@@ -26,10 +26,10 @@ The graph renders regardless of which fields are present. A missing `Rollback:` 
 ## How to Generate from a Plan
 
 1. **Map dependencies**: For each task, identify which prior tasks must complete before it can start. A task depends on another if it reads/modifies files that the prior task creates or changes. If fewer than half of tasks have a Files section, treat all tasks as sequential and note this in the graph footer.
-2. **Identify parallel windows**: Tasks that touch disjoint file sets and share the same predecessor can run in parallel. Verify no shared type surfaces or build-breaking partial states.
+2. **Identify independent tasks**: Tasks that touch disjoint file sets and share the same predecessor have no ordering between them and can run in any order. Verify no shared type surfaces or build-breaking partial states. Independent does not mean concurrent: implementers never overlap (`../SKILL.md` step 5, Concurrency).
 3. **Assign colors**: Estimate time based on number of files touched, complexity of changes (copy vs. rewrite), and risk of breakage. Use the 3-tier color scale above.
 4. **Add parenthetical context**: Brief reason for the rating (e.g., "templated", "7 files, db threading", "just deletions").
-5. **Draw the graph**: Sequential tasks get `│` connectors. Parallel groups get the split/merge bracket pattern.
+5. **Draw the graph**: Sequential tasks get `│` connectors. Independent groups get the split/merge bracket pattern.
 
 ## Example
 
@@ -49,5 +49,5 @@ Dead Pipeline  Contracts+    Move Tests
   │
 Task 7: Shim Cleanup + Verify          🟢 ~3 min  (rm + grep checks)
 
-Total: ~34 min sequential, ~21 min with parallelism
+Total: ~39 min
 ```
