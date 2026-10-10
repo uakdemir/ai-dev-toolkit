@@ -64,9 +64,10 @@ release 6.0.0.
   - artifact creation
   - merging plan decisions back into the spec
   - CreateArtifact.txt and MergePlanDecisionsIntoSpec.txt
-- **The session's own effort:** the founder drops `--effort max` from the `cl`/`cla`/`cld` aliases.
-  `modelSettings` already defaults both Opus and Sonnet to high. Pins never depended on this
-  (measured 2026-10-05, `agent-dispatch-pin.md`); it affects only work done in the session.
+- **The session's own effort:** the founder drops `--effort max` from the `cld` alias (`cl` and
+  `cla` already omit it). `modelSettings` already defaults both Opus and Sonnet to high. Pins never
+  depended on this (measured 2026-10-05, `agent-dispatch-pin.md`); it affects only work done in the
+  session.
 
 ## 1. The rule: `references/shared-rules/risk-tier.md`
 
@@ -105,7 +106,8 @@ implements.
 
 **Doc tier.** review-doc reads it from the documents as they stand. For a tracked document it also
 reads the latest change: `git diff HEAD -- <doc>` when there are uncommitted edits, otherwise the
-last commit that touched it.
+last commit that touched it. An untracked document has no latest change, so it is never
+MECHANICAL.
 - **FULL if any:** the document drives FULL-tier work, carries legal, policy or consent content, or
   makes claims about existing code.
 - **MECHANICAL if all:** the change is wording, formatting or links, or runbook steps and notes with
@@ -113,8 +115,9 @@ last commit that touched it.
 - **LIGHT:** everything else.
 
 **When unsure between two tiers, take the higher.** The session classifies; no agent is dispatched
-for it. It works from what the skill already reads. The reason it prints names the trigger and the
-evidence, such as a path or a task number.
+for it. It works from what the skill already reads, plus the root CLAUDE.md's `## Risk tiers`
+section (§1.2). The reason it prints names the trigger and the evidence, such as a path or a task
+number.
 
 ### 1.2 Project extension
 
@@ -126,7 +129,9 @@ reads CLAUDE.md for its reviewer, and the classifier reads the same file.
 ### 1.3 Resolution
 
 1. **`--tier <level>`:** that tier, with no classification. It may lower a stored tier, and it is
-   the only thing that can.
+   the only thing that can. Its values are `full`, `light` and `mechanical`, matched exactly as
+   `--effort`'s are; any other prints `Error: --tier must be one of: full, light, mechanical.` and
+   exits.
 2. **Otherwise:** classify, read the floor (§1.4), and take the higher of the two. If the result is
    higher than the floor, print it as "moved up".
 3. **Explicit `--max-iterations N` with N ≥ 1 on a MECHANICAL run:** the tier wins. The run skips
@@ -135,8 +140,10 @@ reads CLAUDE.md for its reviewer, and the classifier reads the same file.
    of a mechanical change.
 4. **`--max-iterations 0`:** keeps its meaning in both review skills. It is resolved before tier
    resolution, so it prints no tier line and writes no tier file.
-5. **Agent flags on a MECHANICAL run** (`--effort`, `--fix-effort`, `--model`) set fields of agents
-   that run does not dispatch. They are unused too, and the tier line says so.
+5. **Agent flags on a MECHANICAL review run** (`--effort`, `--fix-effort`, `--model`) set fields of
+   agents that run does not dispatch. They are unused too, and the tier line says so. implement's
+   MECHANICAL coder takes `--model` and `--effort` as usual; they are unused only when the session
+   makes the scripted edit (§5).
 
 ### 1.4 The floor: `tmp/risk-tier.md`
 
@@ -152,11 +159,13 @@ set_at: <ISO-8601>
 - **Read:** the stored tier counts only when `session` matches `$CLAUDE_CODE_SESSION_ID` and
   `branch` matches the current branch. Otherwise it is ignored and overwritten. A new conversation
   starts fresh, so nothing goes stale overnight.
-- **Write:** every run that resolved a tier writes the file after printing the tier line.
+- **Write:** every run that resolved a tier writes the file after printing the tier line. A
+  `--tier` run stores `reason: --tier <level>`.
 - **Unset variable:** when `CLAUDE_CODE_SESSION_ID` is unset, the run neither reads nor writes the
   file, and the tier line ends with `(not carried: no session id)`.
 - **Never deleted by the review skills' Setup**, which deletes only under `tmp/_reviews_errors/`. Say
-  so beside the existing `tmp/past-issues-backlog.md` note.
+  so in review-code's Setup, beside its `tmp/past-issues-backlog.md` note, and in a new review-doc
+  Setup step, since review-doc has no such note.
 - **Measured on 2026-10-10:** Claude Code exports `CLAUDE_CODE_SESSION_ID` to the session's Bash
   calls; its value matched the session's scratchpad directory. **Not measured:** whether a
   sub-agent sees the same value, and whether `/clear` changes it. Record both in the rule (§9).
@@ -168,14 +177,15 @@ An explicit flag beats the tier's row, one field at a time:
 | Field | Flag |
 |---|---|
 | Round count | `--max-iterations` |
-| Effort of the reviewer and the fact-checker; implement's coders | `--effort` |
+| Effort of the reviewer and the fact-checker; implement's coders and its escalation | `--effort` |
 | Effort of the fixer and the self-reviewer | `--fix-effort` |
-| Model of every agent in the run | `--model` |
+| Model of every agent in the run, except implement's escalation, which is always Opus (§5) | `--model` |
 | implement's execution mode | `--mode` |
 
 ### 1.6 Output
 
-The two tier lines print before anything else the run prints. The run does not pause after them.
+The two tier lines print before anything else a review run prints. implement prints them when its
+tier step runs (§5), after Steps A–C and ahead of the task graph. The run does not pause after them.
 
 ```
 Tier: FULL — the diff touches auth/session.ts
@@ -188,6 +198,10 @@ Variants:
 - **A field set by a flag:** labelled, e.g. `fixer Opus·high (--fix-effort)`
 - **review-doc:** `1 round · reviewer, fact-checker Opus·max · fixer Opus·high`
 - **implement:** `mode single · coders Sonnet·high · escalation Opus·high`
+- **implement on a FULL run without `--mode`:** the mode is not chosen yet, so the line reads
+  `mode pending · coders Sonnet·high · escalation Opus·high`. When the picker answers, or `--auto`
+  takes the recommendation, the run prints `Mode: per-task (picked)` or `Mode: single (recommended)`.
+- **implement's scripted edit (MECHANICAL):** `mode scripted edit · no agents`
 - **MECHANICAL:** `no review agents · runs --verify` (review-code) or `no review round` (review-doc)
 
 ## 2. Routing table
@@ -206,7 +220,7 @@ the backlog format, and none of them restates it.
 | | fixer, self-review | — | Opus·high | Opus·max |
 | implement | process | one coder, or a scripted one-off edit | one coder | the picker: `single` or `per-task` |
 | | coders, per-task spec reviewers | Sonnet·high | Sonnet·high | Sonnet·high |
-| | escalation | one fresh attempt at Opus·high, then BLOCKED | same | same |
+| | escalation | one fresh attempt on Opus at the coders' effort, then BLOCKED | same | same |
 
 In agent terms, Opus·high is `ai-dev-tools:high-effort` with `model: opus`, Opus·max is
 `ai-dev-tools:max-effort` with `model: opus`, and Sonnet·high is `ai-dev-tools:high-effort` with
@@ -246,18 +260,24 @@ longer decides a dispatched agent's model in these skills.
 - **The iteration log** gains a line:
   `**Tier:** FULL — <reason> (classified | --tier | carried | moved up)`.
 - **Also updated:** `argument-hint`, the argument table, `--help` and its examples. The sentence
-  "this skill has no fact-checker" stays true.
+  "this skill has no fact-checker" stays true. The closing parenthesis of the Self-Review section,
+  which says this skill has no `found_this_round`, keeps only the Next-Round Recommendation as
+  review-doc's.
 
 ## 4. review-doc
 
 - **Argument parsing:** the same tier step, using the doc tier. `--max-iterations` becomes optional.
   The defaults follow §2. `--fact-check` still defaults to true, and an explicit `false` is still
   honoured.
+- **Path resolution moves ahead of the tier step.** Pre-Flight's steps 2-8 (input paths, directory
+  expansion, the 20-file cap, existence, `--against`) write nothing, so they run before it: the doc
+  tier classifies the resolved documents, and a path error exits before any tier line or floor
+  write. The branch guard stays in Pre-Flight.
 - **MECHANICAL path:** handled before Setup.
   - For each factual sentence the latest change touched, the session shows the command (`git grep`,
-    `ls`, `git show`) that confirms it.
-  - A sentence it cannot confirm is printed `UNCONFIRMED`, and the status is `Issues Found`.
-    Otherwise the status is `Not reviewed (MECHANICAL)`.
+    `ls`, `git show`) that confirms it: `✓ <sentence> — <command> → <result>`.
+  - A sentence it cannot confirm is printed `✗ UNCONFIRMED <sentence>`, and the status is
+    `Issues Found`. Otherwise the status is `Not reviewed (MECHANICAL)`.
   - The output ends with the brainstorm line, `none — no review round`.
 - **Also updated:** the iteration log's Tier line, `argument-hint`, the argument table, `--help`.
 
@@ -272,14 +292,15 @@ longer decides a dispatched agent's model in these skills.
     execution mode use --mode single|per-task.` This covers `single`, `subagent`, `parallel` and
     `clear-context`.
 - **The tier step** classifies the plan or spec being implemented, using the code tier. It runs
-  after Steps A–C (path resolution, plan-or-spec detection, the spec recommendation) and right
-  before dispatch. A run that exits at Step C dispatches nothing, so it resolves no tier.
+  inside Step D, after the refactor-unit pre-check fails (`--auto` skips that check) and before the
+  task graph is built. A run that exits at Step C dispatches nothing, so it resolves no tier.
 - **Process by tier:**
   - **FULL:** the picker below. `--mode` skips it. Under `--auto` the recommendation is taken.
   - **LIGHT:** `single`, with no picker and no per-task reviewers.
   - **MECHANICAL:** `single`, or a scripted exact-once edit by the session. The edit is allowed when
     the plan's change is a rename, move or reformat that one command applies and an instrument (a
-    grep that must return nothing, a build) proves.
+    grep that must return nothing, a build) proves. The session commits the edit as one commit
+    before it verifies and reports.
 - **The picker (FULL, interactive):**
   ```
   [1] single   — one Sonnet·high agent carries the whole plan
@@ -295,9 +316,16 @@ longer decides a dispatched agent's model in these skills.
     compliance check, two retries then BLOCKED, "report is not evidence", the Validation block, and
     the run-id.
   - **`per-task`:** the session coordinates `superpowers:subagent-driven-development` with the
-    `per-task` preamble. Every implementer and spec reviewer is dispatched in the §6 call form. The
-    per-task code-quality reviewer is skipped (unchanged). New: SDD's final whole-branch review is
-    skipped too, because review-code follows at the tier's level.
+    `per-task` preamble. Every implementer and task reviewer is dispatched in the §6 call form. SDD
+    has one task reviewer per task, which gives the spec and the quality verdict; it stays,
+    and it is the per-task spec reviewer of §2 and the picker.
+  - **Both preambles** override these points where superpowers expects a human partner: work
+    stays in the current tree and branch (running `/implement` there is the consent; no worktree),
+    the final whole-branch review and `finishing-a-development-branch` are skipped, because
+    review-code follows at the tier's level, and the run returns after the last task. Checked in
+    superpowers 6.1.1, 6.4.1 and 6.4.2, the versions installed on the founder's machine: all three
+    have these points, except that `executing-plans` 6.1.1 runs no final review, so that override
+    changes nothing there.
   - **Concurrency:** at most 3 agents run at once, or fewer when the session's
     `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` is lower.
 - **Escalation:**
@@ -315,6 +343,10 @@ longer decides a dispatched agent's model in these skills.
     CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH (at least 2 for a first-level sub-agent).` The MECHANICAL
     scripted edit needs no agent, so this check does not apply to it.
   - Missing agent type: the same text as the review skills.
+  - Flag values: `--effort` and `--tier` as in the review skills (`Error: --effort must be one of:
+    high, xhigh, max.`); a `--mode` other than `single` or `per-task` prints `Error: --mode must be
+    one of: single, per-task.`; `--model` is checked for an old value first, then as in the review
+    skills (`Error: --model must be a model the Agent tool accepts; got '<value>'.`).
 - **Removed:**
   - in-session [1]
   - [3] clear-context and its marker file `tmp/implement-exit-status.md`
@@ -340,14 +372,26 @@ longer decides a dispatched agent's model in these skills.
   Agent(subagent_type: "ai-dev-tools:<fixer effort>-effort", prompt: <substituted prompt>, model: "<fixer model>")         # fixer, self-reviewer
   Agent(subagent_type: "ai-dev-tools:<coder effort>-effort", prompt: <plan or task prompt>, model: "<coder model>")        # implement: coder, spec reviewer, escalation
   ```
-  implement's form goes in `SKILL.md` itself. A form written only under `references/` is read by
-  no check.
+  implement's form goes in `SKILL.md`, where `--print-coverage` sees it; that listing skips every
+  `references/` tree. Check B still reads all of a governed skill's files, `references/` included,
+  so any call in `implementation-step.md` is written in the same one-line form. An escalation is
+  dispatched in the third form with `model: "opus"`, whatever the coders' model (§5).
 - **Sections rewritten:**
   - "When an effort flag is absent" and "When `--model` is absent" become: the tier's row decides.
   - The example in "Naming the agents from a prompt", a fact-checker run by hand between a reviewer
     and a fixer, is replaced with a neutral one.
-  - "What the pin does not decide" is unchanged. `CLAUDE_CODE_EFFORT_LEVEL` and
-    `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` still override, and neither skill looks for them.
+  - "What the pin does not decide" keeps its facts. `CLAUDE_CODE_EFFORT_LEVEL` and
+    `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` still override, and none of the three skills looks for them.
+    Only its wording changes: "neither skill" names the three, and the agents a run dispatches are
+    the ones the tier or a flag names.
+  - Every other passage the new scope makes false follows it:
+    - each phase's directive carries its resolved level, not its flag's value
+    - the no-Agent-tool error gains implement's wording, "the coding agents"
+    - `orchestrate --auto` needs the spawn-depth cap at stage ii too
+    - the sentence that a run without `--model` dispatches in the first form goes
+    - only `orchestrate` stays outside the rule, and implement's `references/` tree is no longer
+      the example of a tree no check reads
+    - no dispatch site gives `model` in words beside its call any more: every form carries it
 - **Governed sites** gain implement's `SKILL.md` and the preamble wording in
   `implementation-step.md`.
 
@@ -357,13 +401,14 @@ longer decides a dispatched agent's model in these skills.
 |---|---|
 | `skills/orchestrate/references/auto/stages/stage-i-spec-review.md` (both phases) | review-doc resolves the doc tier and dispatches Opus. A MECHANICAL result runs no round and writes no review JSON. The stage treats that status line as a pass, not as a crash |
 | `skills/orchestrate/references/auto/stages/stage-iii-code-review.md` | The same for review-code |
-| `skills/orchestrate/references/auto/stages/stage-ii-implement.md` | `--auto` takes the recommendation (`single` or `per-task`); coders run on Sonnet in sub-agents, so the spawn-depth cap must be at least 2 |
-| `skills/orchestrate/references/auto/profiling-log.md` | `model` records the model the tier line names: `opus` for the review skills, `sonnet` for implement, or the override. No longer `inherited` |
+| `skills/orchestrate/references/auto/stages/stage-ii-implement.md` | `--auto` takes the recommendation (`single` or `per-task`); coders run on Sonnet in sub-agents, so the spawn-depth cap must be at least 2. The Failure Surface's helper row goes |
+| `skills/orchestrate/references/auto/profiling-log.md`, and the Profiling section of each stage file | `model` records the model the tier line names: `opus` for the review skills, `sonnet` for implement, or the override. No longer `inherited`, in the schema, its examples or the stage files' `model=inherited` |
+| `skills/orchestrate/references/auto/pipeline-overview.md` | Stage ii's one dispatch spawns its coders (`single` or `per-task`), not a helper, and the commits during it are theirs |
+| `skills/orchestrate/references/auto/failure-handling/unresolved-criticals.md` | `--max-iterations` is no longer required. The loop stays bounded by construction: the tier sets the rounds, and an explicit value is at most 10 |
 | `skills/orchestrate/references/standard/steps/step-5.md` | The marker handling is deleted, because it can no longer fire |
 | `skills/help/SKILL.md` | The agents block: the tier chooses, flags override, and implement is listed |
 | `agents/high-effort.md`, `xhigh-effort.md`, `max-effort.md` | `description`: dispatched by review-code, review-doc and implement as the tier or a flag selects |
-| `skills/orchestrate/references/common/help.md` | Wherever it states implement's or the review skills' flags |
-| `scripts/shared-semantics-mutation-test.sh` | N10's comment ("implement and orchestrate dispatch with a prompt and nothing else, by design") becomes orchestrate only. The case is unchanged |
+| `scripts/shared-semantics-mutation-test.sh`, `scripts/check-shared-semantics.cjs` | N10's comment, and the same sentence on the `untyped-agent-dispatch` detector ("implement and orchestrate dispatch with a prompt and nothing else, by design"), become orchestrate only. Comments only: the case and the gate logic are unchanged |
 
 orchestrate's *dispatch commands* do not change in part A. Its explicit round counts stay as they are, because it is being deprecated (part B).
 
@@ -380,8 +425,10 @@ orchestrate's *dispatch commands* do not change in part A. Its explicit round co
 **Commits.** This working tree is the live plugin, so every commit must leave it consistent:
 - The rule, the three skills' tier steps, the rewritten `agent-dispatch-pin`, the §7 restatements
   and the regenerated coverage baseline land as **one commit**. Check A2 fails in between, and
-  other profiles load whatever is committed.
-- Then, as separate commits: deleting the prompts, the CHANGELOG, and the version bump.
+  other profiles load the working tree, committed or not. So the work is done in one sitting, and
+  no other session starts a review skill until it lands.
+- Then two more commits: deleting the prompts, and the release. As in every release since 3.0.0,
+  one `chore(release)` commit holds both the CHANGELOG and the version bump.
 
 **Gates**, each run before its commit with the output quoted:
 - **The seven gate scripts** from the root CLAUDE.md.
@@ -389,9 +436,10 @@ orchestrate's *dispatch commands* do not change in part A. Its explicit round co
   - checks A, A', A2 and C for `risk-tier`
   - check B now reads implement's files for `untyped-agent-dispatch`, and check D no longer
     applies to implement
-- **`check-detector-coverage.sh`:** the baseline `tests/detector-coverage.txt` changes because
-  implement joins `agent-dispatch-pin`. Regenerate it in the same commit and explain the diff in
-  the commit message.
+- **`check-detector-coverage.sh`:** the baseline `tests/detector-coverage.txt` gains
+  `skills/implement/SKILL.md`, because that file now names a pinned agent type; `--print-coverage`
+  does not read `applies-to`. Regenerate it in the same commit and explain the diff in the commit
+  message.
 - **`shared-semantics-mutation-test.sh`:** still 64 passed, since no gate logic changes.
 - **Both manifest validations**, for the 6.0.0 bump:
   - `claude plugin validate ./ai-dev-tools --strict`
@@ -419,9 +467,11 @@ orchestrate's *dispatch commands* do not change in part A. Its explicit round co
    agents, `--verify` run, and the tier file written.
 2. **Floor:** in one conversation, `/implement` on a FULL plan and then `/review-code`. Expect
    `carried`.
-3. **FULL:** the implementation's own review-code round. Confirm with `agent-effort-check.py` that
-   the reviewer ran at max on Opus. With the session at high, a max pin can be told apart from
-   inheritance.
+3. **FULL:** the implementation's own review-code round. Confirm that the reviewer ran at max on
+   Opus with
+   `python3 /home/umut/projects/tune/tmp/token-usage/2026-10-05/agent-effort-check.py --minutes 30 --project ai-dev-toolkit`
+   (the script is not in this repository). With the session at high, a max pin can be told apart
+   from inheritance.
 4. **Open questions to measure and record in `risk-tier.md`:** does a sub-agent see the same
    `CLAUDE_CODE_SESSION_ID`, and does `/clear` change it?
 
@@ -433,7 +483,7 @@ orchestrate's *dispatch commands* do not change in part A. Its explicit round co
 | FULL runs cost more (Opus·max, fixes at max) | FULL's triggers are specific, and cost per serious finding at max equals high's (5.0.0 data) |
 | A MECHANICAL misclassification skips a needed review | review-code classifies the diff even when the floor says MECHANICAL, and a behaviour change lifts the tier. An explicit round count does not override MECHANICAL (decision 10); `--tier light` does |
 | orchestrate's explicit rounds multiply FULL costs (stage iii up to 4 dispatches) | orchestrate is deprecated (part B); the direct skill calls use the tier's single round |
-| At a spawn depth of 1, implement can't code inside a sub-agent | `orchestrate --auto` already stops at stage i at depth 1; documented in stage ii |
+| At a spawn depth of 1, implement can't code inside a sub-agent | `orchestrate --auto` already stops at stage i at depth 1, unless the doc tier is MECHANICAL, which needs no agent. Stage ii then stops with implement's no-Agent-tool error, unless it makes the scripted edit. Documented in stage ii |
 | An exported `CLAUDE_CODE_EFFORT_LEVEL` overrides every pin | Keep it unexported (the founder's `~/.bashrc:237` is commented out); already disclosed in `agent-dispatch-pin` |
 | `CLAUDE_CODE_SESSION_ID` is not documented | When it is unset there is no floor and no file, and the tier line says so |
 
