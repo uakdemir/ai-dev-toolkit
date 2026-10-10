@@ -42,6 +42,7 @@ gitignored `tmp/` file, so the findings are copied here:
 | 7 | The tier persists in `tmp/risk-tier.md`, per worktree and per conversation, as a floor |
 | 8 | review-code gets no fact-checker. Its findings are already re-judged by the fixer's push-back and by the triage phase, and `--verify` is its ground truth (`skills/review-code/SKILL.md:237`). This closes the 5.0.0 spec's Follow-up 1 |
 | 9 | Delete the five prompts that drive these three skills |
+| 10 | Open calls, answered `1C 2A 3A 4A 5A 6A 7A` on the decision page: an explicit round count does not override MECHANICAL, and neither do agent flags; MECHANICAL review-doc confirms each changed fact; the picker recommends `per-task` only when tasks barely overlap, with at most 3 agents at once; a task blocked on Opus still gets one fresh Opus attempt; the refactor-unit path stays in the session |
 
 ## Scope
 
@@ -128,13 +129,14 @@ reads CLAUDE.md for its reviewer, and the classifier reads the same file.
    the only thing that can.
 2. **Otherwise:** classify, read the floor (§1.4), and take the higher of the two. If the result is
    higher than the floor, print it as "moved up".
-3. **Explicit `--max-iterations N` with N ≥ 1:** lifts a classified MECHANICAL to LIGHT, since a
-   requested round is a request for review. With `--tier mechanical` it is an argument error:
-   `Error: --tier mechanical runs no review rounds; drop --max-iterations or pass --tier light.`
+3. **Explicit `--max-iterations N` with N ≥ 1 on a MECHANICAL run:** the tier wins. The run skips
+   review, and the tier line reports the flag as unused. This holds whether MECHANICAL was
+   classified or passed as `--tier mechanical`. Only `--tier light` or `--tier full` forces a review
+   of a mechanical change.
 4. **`--max-iterations 0`:** keeps its meaning in both review skills. It is resolved before tier
    resolution, so it prints no tier line and writes no tier file.
 5. **Agent flags on a MECHANICAL run** (`--effort`, `--fix-effort`, `--model`) set fields of agents
-   that run does not dispatch. They are unused, and the tier line says so; they do not lift the tier.
+   that run does not dispatch. They are unused too, and the tier line says so.
 
 ### 1.4 The floor: `tmp/risk-tier.md`
 
@@ -284,7 +286,8 @@ longer decides a dispatched agent's model in these skills.
   [2] per-task — one Sonnet·high agent per task, and a spec reviewer per task
   ```
   - The recommendation keeps the coupling assessment from `implementation-step.md`: LOW coupling
-    recommends `per-task`, and anything else recommends `single`.
+    recommends `per-task`, and anything else recommends `single`. `per-task` is only worth it when
+    the tasks barely touch the same files.
   - The context-budget branch goes, because the session no longer writes code.
 - **Dispatch:**
   - **`single`:** one agent, in the §6 call form, given the `single` preamble and the plan. It
@@ -295,8 +298,8 @@ longer decides a dispatched agent's model in these skills.
     `per-task` preamble. Every implementer and spec reviewer is dispatched in the §6 call form. The
     per-task code-quality reviewer is skipped (unchanged). New: SDD's final whole-branch review is
     skipped too, because review-code follows at the tier's level.
-  - **Concurrency** is the session's `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`. The skill states no
-    number.
+  - **Concurrency:** at most 3 agents run at once, or fewer when the session's
+    `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` is lower.
 - **Escalation:**
   - For each task the coders report BLOCKED, the session dispatches one fresh agent for that task
     at the coders' effort on `model: opus`.
@@ -352,8 +355,8 @@ longer decides a dispatched agent's model in these skills.
 
 | File | Becomes |
 |---|---|
-| `skills/orchestrate/references/auto/stages/stage-i-spec-review.md` (both phases) | review-doc resolves the doc tier and dispatches Opus. Its explicit `--max-iterations 2` lifts a MECHANICAL classification to LIGHT |
-| `skills/orchestrate/references/auto/stages/stage-iii-code-review.md` | The same for review-code, with `--max-iterations 1` |
+| `skills/orchestrate/references/auto/stages/stage-i-spec-review.md` (both phases) | review-doc resolves the doc tier and dispatches Opus. A MECHANICAL result runs no round and writes no review JSON. The stage treats that status line as a pass, not as a crash |
+| `skills/orchestrate/references/auto/stages/stage-iii-code-review.md` | The same for review-code |
 | `skills/orchestrate/references/auto/stages/stage-ii-implement.md` | `--auto` takes the recommendation (`single` or `per-task`); coders run on Sonnet in sub-agents, so the spawn-depth cap must be at least 2 |
 | `skills/orchestrate/references/auto/profiling-log.md` | `model` records the model the tier line names: `opus` for the review skills, `sonnet` for implement, or the override. No longer `inherited` |
 | `skills/orchestrate/references/standard/steps/step-5.md` | The marker handling is deleted, because it can no longer fire |
@@ -428,7 +431,7 @@ orchestrate's *dispatch commands* do not change in part A. Its explicit round co
 |---|---|
 | Classification is LLM judgment, so two runs can disagree | The floor only moves up, the tier line shows the reason, and `--tier` corrects it |
 | FULL runs cost more (Opus·max, fixes at max) | FULL's triggers are specific, and cost per serious finding at max equals high's (5.0.0 data) |
-| A MECHANICAL misclassification skips a needed review | review-code classifies the diff even when the floor says MECHANICAL, and a behaviour change lifts the tier |
+| A MECHANICAL misclassification skips a needed review | review-code classifies the diff even when the floor says MECHANICAL, and a behaviour change lifts the tier. An explicit round count does not override MECHANICAL (decision 10); `--tier light` does |
 | orchestrate's explicit rounds multiply FULL costs (stage iii up to 4 dispatches) | orchestrate is deprecated (part B); the direct skill calls use the tier's single round |
 | At a spawn depth of 1, implement can't code inside a sub-agent | `orchestrate --auto` already stops at stage i at depth 1; documented in stage ii |
 | An exported `CLAUDE_CODE_EFFORT_LEVEL` overrides every pin | Keep it unexported (the founder's `~/.bashrc:237` is commented out); already disclosed in `agent-dispatch-pin` |
