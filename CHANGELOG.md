@@ -44,6 +44,10 @@ flag sets them. The tier rules and the routing table live in `references/shared-
 - **review-code, review-doc:** each skill tells the session to substitute the plugin-root variable its reviewer prompt carries. Nothing expanded it in a prompt the session reads, and the reviewer then skipped its validator (25279ad)
 - **review-code:** a MECHANICAL run prints its `Verification:` line once (2b242b0)
 - **shared-rules:** a run that carries the floor's tier writes the stored reason, setter and time back as it read them, so every later run prints the same `carried from` line (5997d51)
+- Applied a LIGHT `review-code` round on the eight commits that applied those decisions, one round on Opus at high: three of its four findings fixed, and one correction by its self-review (01e6008, f598330). One finding waits for the founder: whether a task reviewer may run while the next task's implementer writes
+- **review-doc:** the skill also tells the session to substitute the plugin-root variable in the fact-checker's prompt. Left literal, the fact-checker skipped the check of its own artifact, and one invalid issue then discarded its whole pass at the merge (01e6008)
+- **implement:** the task graph no longer promises parallel work. Its branches are independent tasks in any order, and its total is the sum of the tasks, because implementers run one at a time (01e6008)
+- **orchestrate:** stage iii says that `review-code`'s Setup deletes only on a run that passes its Pre-Flight Checks, and counts a dispatch that returns without its `Review Code Complete` block as a crash, whatever artifact is on disk. A crash retry already runs under a fresh run-id, so that clause guards only a reused one (01e6008, f598330)
 
 ### Tests
 
