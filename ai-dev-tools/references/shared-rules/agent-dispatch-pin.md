@@ -156,11 +156,13 @@ things are open: whether a sub-agent's Agent tool offers the plugin's agent type
 pin holds for an agent dispatched from inside a sub-agent.
 
 One run settles both: from a top-level session whose cap is at least two, a sub-agent that runs
-`/review-doc` with `--max-iterations 1` on a small tracked document, with a record of whether its
-reviewer was dispatched as the pinned agent and ran at that level, or of which error printed. The
-run passes an `--effort` level that neither the session nor the sub-agent runs at, because at a
-shared level a pinned reviewer and an unpinned one cannot be told apart. The result belongs in this
-section.
+`/review-doc` with `--tier light --max-iterations 1` on a small tracked document, with a record of
+whether its reviewer was dispatched as the pinned agent and ran at that level, or of which error
+printed. The run passes an `--effort` level that neither the session nor the sub-agent runs at,
+because at a shared level a pinned reviewer and an unpinned one cannot be told apart. `--tier light`
+is what makes it dispatch a reviewer at all: a small document whose latest change is wording
+classifies MECHANICAL, which runs no review round and leaves `--max-iterations` and `--effort`
+unused. The result belongs in this section.
 
 ## When the Agent tool refuses a call
 
@@ -236,9 +238,12 @@ the root CLAUDE.md, not an automatic one. In a governed skill, check B fails on 
 text from an `Agent(` to its closing bracket carries no `subagent_type` whose value is a quoted or
 backticked `ai-dev-tools:<...>-effort` name, with a placeholder in angle brackets where the level
 goes. A literal level fails: the call would run every value of its effort flag at that one level, and
-nothing would be refused at dispatch. The words inside the placeholder are not checked. Check B
-reads one line at a time, so a governed call written over several lines fails as well, unless its
-`subagent_type` is on the line that holds the `Agent(`.
+nothing would be refused at dispatch. Check B fails as well when that text carries no `model:` whose
+value is a quoted or backticked placeholder in angle brackets: with no model the agent runs on
+`CLAUDE_CODE_SUBAGENT_MODEL` where that variable is exported, and a literal model runs every value
+of `--model` on that one model. The words inside either placeholder are not checked. Check B reads
+one line at a time, so a governed call written over several lines fails as well, unless its
+`subagent_type` and its `model` are on the line that holds the `Agent(`.
 
 Check D fails on a skill outside this rule in which a file outside its `references/` tree holds
 `subagent_type:` followed by an `ai-dev-tools:...-effort` name, quoted or not, with a literal level
@@ -262,8 +267,6 @@ The detector sees a call that is written out. A dispatch described only in prose
 it, and such a dispatch fails silently, so every dispatch site spells its call in the form above. A
 skill outside the rule stays free to dispatch with a prompt and nothing else, in its own files.
 
-The detector reads the agent type and nothing else. No check looks for `model` on a call: every
-form carries it, so what stays green is a call that loses its `model:` and drops the model. For that half of the canonical sentence, checks A2 and C are the
-whole binding: they prove it is stated. Nor does any check compare the definitions under `agents/`
-with the table: one whose `effort:` no longer matches its name, or that gains a `model:`, stays
-green.
+The detector reads the agent type and the model, and nothing else. Nor does any check compare the
+definitions under `agents/` with the table: one whose `effort:` no longer matches its name, or that
+gains a `model:`, stays green.

@@ -133,7 +133,7 @@ This step runs after Argument Parsing, once `--max-iterations 0` has not short-c
 2. **Floor.** The file is `tmp/risk-tier-$CLAUDE_CODE_SESSION_ID.md`. It counts only when its `session:` matches the variable and its `branch:` matches `git rev-parse --abbrev-ref HEAD`; otherwise it is ignored and then overwritten, never used. Another conversation's file is never read. Take the higher of the stored tier and the classified one, as the rule defines; `--tier` skips both. **When `CLAUDE_CODE_SESSION_ID` is unset, neither read nor write the file, and end the tier line with `(not carried: no session id)`.**
 3. **Print** the two tier lines before anything else the run prints. Each phase's effort and model, and the rounds, come from the tier's row; a flag replaces its own field, labelled on the line. On a MECHANICAL run an explicit `--max-iterations N` with N at least 1, and `--effort`, `--fix-effort` and `--model`, are unused, and the line says so. Only `--tier light` or `--tier full` forces a review of a mechanical change.
 4. **Write** the floor after printing (create `./tmp/` if needed): `tier`, `reason` (`--tier <level>` for a `--tier` run), `session`, `branch`, `set_by: review-doc` and `set_at`. Skipped when there is no session id.
-5. **MECHANICAL** continues in `## MECHANICAL` and never reaches the checks below, Setup or Pre-Flight.
+5. **MECHANICAL** continues in `## MECHANICAL` and never reaches the checks below, Setup or Pre-Flight, apart from Pre-Flight check 2, which it runs itself.
 
 **Checks before any dispatch.** They run in this step, after classification and before Setup, and only for agents the tier will dispatch. A MECHANICAL run dispatches none, so it raises none of these errors, and it works inside a sub-agent at the spawn-depth cap.
 
@@ -181,6 +181,8 @@ This step runs after Argument Parsing, once `--max-iterations 0` has not short-c
 ## MECHANICAL
 
 **Handled in Resolve the Tier, after the tier lines print and before Setup**, like `--max-iterations 0`. It deletes no prior artifact, makes no commit and writes no file but the tier floor. It dispatches no agent, so it skips the Agent-tool and agent-type checks and works inside a sub-agent at the spawn-depth cap.
+
+Before step 1 it runs Pre-Flight check 2, Duplicate locations, which writes nothing, and prints that check's warning or every path it matched: the user must see that more than one copy exists whatever happens next. No reviewer runs, so no copy is passed on or reviewed.
 
 1. For each factual sentence the latest change touched (`git diff HEAD -- <doc>`, otherwise the last commit that touched the document), the session shows the command that confirms it (`git grep`, `ls`, `git show`) and prints `✓ <sentence> — <command> → <result>`.
 2. A sentence it cannot confirm prints `✗ UNCONFIRMED <sentence>`.

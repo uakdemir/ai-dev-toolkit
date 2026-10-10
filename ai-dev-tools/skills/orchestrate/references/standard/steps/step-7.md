@@ -1,6 +1,6 @@
 # Step 7: Complete
 
-**Trigger:** Review clean (zero critical/high) or user accepts remaining.
+**Trigger:** Review clean (zero critical/high), a review that ended `Not reviewed (MECHANICAL)` (step 6 Case M), or user accepts remaining.
 
 ---
 
@@ -15,6 +15,8 @@ Not inspected: <files from coverage.not_inspected, or omit this line entirely>
 
 Ready to finalize?
 ```
+
+When the hint's `review` is `mechanical`, the status is `Not reviewed (MECHANICAL)` and the `Not inspected:` line is omitted: that review wrote no summary or JSON, so the ones on disk are an earlier run's and are not read.
 
 ## Phase 2 (Post-confirmation)
 

@@ -1,6 +1,9 @@
 # Q2: Unresolved Criticals
 
 **Trigger:** the caller's `--max-iterations` is exhausted and the final round still found criticals.
+At stage i it is also a phase-2 `review-doc` that ran on the MECHANICAL tier and ended `Issues Found`
+(`../stages/stage-i-spec-review.md`): it ran no round and wrote no review JSON, so the changed sentences
+it printed as `✗ UNCONFIRMED`, in the output it returned, stand in for the criticals.
 
 ---
 
@@ -53,7 +56,8 @@ and it counts only what **this** round found — an issue a previous round fixed
 ## Response
 
 1. Append the unresolved criticals where the reader will find them:
-   - **Agent i (spec-review):** to the spec file itself
+   - **Agent i (spec-review):** to the spec file itself. After a MECHANICAL run, append the
+     `✗ UNCONFIRMED` sentences from the output it returned: no artifact holds them
    - **Agent iii (code-review):** to `tmp/_reviews_errors/<run_id>-unresolved-criticals.md`
 2. Commit wip: `wip(auto): <spec-slug>: <spec-review|code-review> unresolved criticals at iter <N> — see tmp/_reviews_errors/error-logs.md`. Stage every modified and untracked file outside `tmp/`, matching stage iii's `':!tmp/'` exclusion — so agent i's criticals, appended to the spec file in step 1, are committed with the work rather than left dirty in the tree. Agent iii's record stays under `tmp/`, which is never committed; step 3's log entry is what points a reader at it.
 3. Log a Warning to `tmp/_reviews_errors/error-logs.md`

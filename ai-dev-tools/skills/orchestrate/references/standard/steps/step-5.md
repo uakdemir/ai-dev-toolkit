@@ -6,7 +6,7 @@
 
 ## Action
 
-Step 5 is a delegating wrapper: orchestrate does NOT inline plan detection, task graph, or execution model dispatch — all of that lives in `/implement`.
+Step 5 is a delegating wrapper: orchestrate does NOT inline plan detection, task graph, or execution mode dispatch — all of that lives in `/implement`.
 
 Read the `plan:` field from the hint file. If `plan:` is empty or the plan file does not exist, emit error and route to Step 4:
 

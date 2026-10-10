@@ -22,7 +22,7 @@ Continue? or specify a different command.
 ## After Review Completes
 
 **Case M (status `Not reviewed (MECHANICAL)` — no review round ran):**
-Checked first. The review wrote no review JSON, so there are no counts to route on. Advance to Step 7 as Case B does.
+Checked first. The review wrote no review JSON and no summary, so there are no counts to route on. Write `review: mechanical` to the hint (`references/standard/hint-file-protocol.md`), so Step 7 reads this result and not a summary an earlier run left, and advance to Step 7 as Case B does.
 ```
 /commit
 /clear → /orchestrate

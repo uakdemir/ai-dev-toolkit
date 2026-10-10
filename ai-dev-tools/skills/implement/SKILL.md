@@ -1,7 +1,7 @@
 ---
 name: implement
 argument-hint: "[path] [--mode single|per-task] [--model <model>] [--effort <level>] [--tier full|light|mechanical] [--auto] [--skip-plan-recommendation]"
-description: "Use when the user wants to execute a written implementation plan or implement directly from a spec — generates a task graph, recommends an execution model, and dispatches with quality overrides. Invoked standalone (/implement <path>) or via orchestrate (/orchestrate (/implement <plan>))."
+description: "Use when the user wants to execute a written implementation plan or implement directly from a spec — generates a task graph, recommends an execution mode, and dispatches with quality overrides. Invoked standalone (/implement <path>) or via orchestrate (/orchestrate (/implement <plan>))."
 ---
 
 <help-text>
@@ -20,7 +20,7 @@ Arguments:
   --effort LEVEL   Effort of the coders: high, xhigh, max (default: the tier's row)
   --tier LEVEL     Skip classification: full, light, mechanical (default: classified)
   --auto           Non-interactive dispatch: takes the recommendation.
-                   Skips refactor-unit pre-check.
+                   Skips the Step C plan prompt and the refactor-unit pre-check.
   --skip-plan-recommendation
                    Suppress the Step C spec recommendation prompt (this
                    invocation only).
@@ -34,7 +34,7 @@ Examples:
   /implement docs/plans/baz.md --mode per-task  # skip the picker
 </help-text>
 
-Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--mode` is present, validate its value against the set `{single, per-task}`; on any other value print `Error: --mode must be one of: single, per-task.` and exit. If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. If `--tier` is present, validate its value against the set `{full, light, mechanical}`, matched exactly as `--effort`'s are; on any other value print `Error: --tier must be one of: full, light, mechanical.` and exit. If `--model` is present, check it for an old value first: `single`, `subagent`, `parallel` and `clear-context` named the execution mode before, and print `Error: --model now names the coders' model; for the execution mode use --mode single|per-task.` and exit. An old value never reaches the next check. Any other value is judged against the Agent tool in the Normal-feature path's step 4, "Checks before any dispatch", because that check needs the Agent tool. If `--skip-plan-recommendation` is present, suppress the Step C spec recommendation prompt for this invocation only (see Step C). If `--auto` is present, set auto mode active for this invocation. `--auto` + `--mode` is valid — `--mode` overrides the recommendation `--auto` would take. If `--run-id <id>` is present, store the run-id for threading to dispatched sub-agents.
+Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--mode` is present, validate its value against the set `{single, per-task}`; on any other value print `Error: --mode must be one of: single, per-task.` and exit. If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. If `--tier` is present, validate its value against the set `{full, light, mechanical}`, matched exactly as `--effort`'s are; on any other value print `Error: --tier must be one of: full, light, mechanical.` and exit. If `--model` is present, check it for an old value first: `single`, `subagent`, `parallel` and `clear-context` named the execution mode before, and print `Error: --model now names the coders' model; for the execution mode use --mode single|per-task.` and exit. An old value never reaches the next check. Any other value is judged against the Agent tool in the Normal-feature path's step 4, "Checks before any dispatch", because that check needs the Agent tool. If `--skip-plan-recommendation` is present, suppress the Step C spec recommendation prompt for this invocation only (see Step C). If `--auto` is present, set auto mode active for this invocation; it also suppresses the Step C spec recommendation prompt (see Step C). `--auto` + `--mode` is valid — `--mode` overrides the recommendation `--auto` would take. If `--run-id <id>` is present, store the run-id for threading to dispatched sub-agents.
 
 # implement
 
@@ -105,7 +105,7 @@ Pick one to proceed.
 
 Then exit. Do not auto-dispatch either option.
 
-**`--skip-plan-recommendation` suppression:** If the flag was passed on the current invocation, skip the hard-signal check entirely and proceed directly to Step D. The flag is a one-shot suppression; it is not persisted.
+**`--skip-plan-recommendation` suppression:** If the flag was passed on the current invocation, skip the hard-signal check entirely and proceed directly to Step D. The flag is a one-shot suppression; it is not persisted. `--auto` suppresses the check the same way: auto mode takes no input, so the prompt would end the run with nothing implemented.
 
 ---
 
@@ -114,7 +114,7 @@ Then exit. Do not auto-dispatch either option.
 ### `--auto` Mode Pre-check
 
 If `--auto` is active:
-1. **Skip the Refactor-Unit Branch Handling pre-check entirely.** Proceed directly to the Normal-feature path. Rationale: auto mode prioritizes a narrow, deterministic dispatch surface. Users who need refactor-unit handling must omit `--auto`.
+1. **Skip the Refactor-Unit Branch Handling pre-check entirely.** Proceed directly to Resolve the Tier. Rationale: auto mode prioritizes a narrow, deterministic dispatch surface. Users who need refactor-unit handling must omit `--auto`.
 2. After building the task graph, take the recommendation instead of presenting the picker (see below).
 
 ### Refactor-Unit Branch Handling (pre-check)
@@ -126,12 +126,12 @@ Before building the task graph, perform this refactor-unit check (moved verbatim
    - The resolved plan/spec filename (stripped of date prefix and `-plan.md`/`.md` suffix), OR
    - The hint file's `feature:` field when `/implement` was invoked with no positional arg (i.e., via orchestrate)
 3. **If the match succeeds → refactor-unit path:**
-   - Skip the task graph generation and execution model recommendation (steps 1-2 in the normal-feature path below).
+   - Skip the task graph generation and execution mode recommendation (steps 1-2 in the normal-feature path below).
    - Load `references/refactor-execution.md` and execute directly following its **Pre-flight → File Operations → Verification** sequence.
    - Perform the checklist pre-flight surfacing: read `tmp/checklists/index.md` if it exists, filter for rows where Phase is `coding` or `both` AND Recommended Skill contains `refactor-to-monorepo` or `refactor-to-layers`. Surface any matching entries to the user before beginning execution. Note: the `refactor-to-layers` filter branch currently returns empty (no checklist crystallization section) — do not warn on an empty result from that branch.
-   - **`--model` flag handling:** The `--model` flag is **ignored** on the refactor-unit path because refactor execution is inherently single-agent. If `--model` was explicitly passed, print `warning: --model ignored for refactor-unit execution` and continue.
+   - **Flag handling:** this path dispatches no agent and resolves no tier, so `--mode`, `--model`, `--effort` and `--tier` are all **ignored** on it. If any of them was passed, print one warning naming each one passed, e.g. `warning: --mode, --model ignored for refactor-unit execution`, and continue.
    - After the refactor-execution sequence completes, return control to the caller (orchestrate or standalone shell), ending the report with the `## Validation` hand-back block defined in `references/refactor-execution.md`.
-4. **If the match fails (normal-feature path) → proceed to the normal-feature dispatch below.**
+4. **If the match fails (normal-feature path) → proceed to Resolve the Tier, then the normal-feature dispatch below.**
 
 ### Resolve the Tier
 

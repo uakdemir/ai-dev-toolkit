@@ -41,7 +41,7 @@ JSON Lines (JSONL). One JSON object per line.
 | `spec` | string | Spec file basename (e.g. `"mobile-scaffold-integration-design.md"`) — basename, not full path |
 | `action` | enum: `"review-doc"` \| `"implement"` \| `"review-code"` | Which pipeline stage. Consumers MUST treat unknown values as opaque (forward compatibility). |
 | `round` | integer ≥ 1 | Phase/iteration ordinal within the action (see below) |
-| `model` | string | Effective model for the dispatch: the model the tier line names. orchestrate passes no model flag, so `review-doc` and `review-code` emit `"opus"` and `implement` emits `"sonnet"`, by the tier's row. **Operational invariant:** if a dispatch is ever made with an explicit model override, the emitted value MUST reflect the effective model used. The `sonnet`/`opus` enum was widened to a free string in `schema_version` 2. |
+| `model` | string | Effective model for the dispatch: the model the tier line names, in lower case (for `implement`, the coders'), or `"none"` when the run dispatched no agent: a review on the MECHANICAL tier, or `implement`'s scripted edit (`mode scripted edit · no agents`). orchestrate passes no model flag, so the value is the tier's row's. **Operational invariant:** if a dispatch is ever made with an explicit model override, the emitted value MUST reflect the effective model used. The `sonnet`/`opus` enum was widened to a free string in `schema_version` 2. |
 | `total_time_s` | float | Wall-clock seconds from dispatch start to dispatch return. **Precision: 3 decimal places (millisecond resolution).** Formatted with `printf '%.3f'`. |
 
 ### Round semantics

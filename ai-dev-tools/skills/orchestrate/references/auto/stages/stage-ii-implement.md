@@ -15,7 +15,7 @@ Dispatches `/implement <spec> --auto --run-id <id>`.
 /implement <spec> --auto --run-id <run_id>
 ```
 
-The `--auto` flag short-circuits the interactive picker: it takes the recommendation (`per-task` when the plan's tasks barely overlap, otherwise `single`), as `/implement` defines it.
+The `--auto` flag short-circuits the interactive picker: on a FULL run it takes the recommendation (`per-task` when the plan's tasks barely overlap, otherwise `single`), as `/implement` defines it. A LIGHT run is `single`, and a MECHANICAL run `single` or the scripted edit, with no recommendation to take. `--auto` also suppresses Step C's write-a-plan prompt, so a spec that fires one of its hard signals is implemented directly instead of ending the dispatch with no commit.
 
 `/implement` resolves its tier and dispatches its coders as agents, on Sonnet by the tier's row, so this stage's sub-agent can run it only where Claude Code's spawn-depth cap is at least two. Under a cap of one `/implement` stops with its no-Agent-tool error and makes no commit, which the commit check below fails, unless the tier is MECHANICAL and the run makes the scripted edit, which dispatches no agent. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
 
@@ -57,7 +57,7 @@ Run after implement returns, before advancing to agent iii:
 
 ## Profiling
 
-After `/implement` returns (BEFORE the validator suite runs), append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=implement`, `round=1`, `model=sonnet`.
+After `/implement` returns (BEFORE the validator suite runs), append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=implement`, `round=1`, and `model` the coders' model the tier line names, or `none` when the run made the scripted edit, which dispatches no agent.
 
 If the Q3 retry-once fires, the retry dispatch emits its own entry on clean return (see profiling-log.md retry rule). Write failures are silently swallowed.
 

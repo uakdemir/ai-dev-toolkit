@@ -592,7 +592,7 @@ echo "8. the detector added for agent-dispatch-pin"
 # `Agent(prompt: ...)` put that agent back at the dispatching session's effort with the gate green
 # and the iteration log still printing the pinned agent's name.
 
-PIN_CANON='Every dispatched agent is the plugin agent that matches `--effort`, and carries `--model` on its Agent call whenever the flag was passed.'
+PIN_CANON="Every dispatched agent is the plugin agent that matches its phase's effort, and carries its phase's model on its Agent call; the run's tier sets both unless a flag does."
 
 build_pin() {  # minimal tree: one dispatch rule, one compliant governed skill
   rm -rf "$BASE"
@@ -604,7 +604,7 @@ build_pin() {  # minimal tree: one dispatch rule, one compliant governed skill
   } > "$BASE/references/shared-rules/agent-dispatch-pin.md"
   { printf '# Review Fake\n\n**%s**\n\n' "$PIN_CANON"
     printf 'Defined once, in `references/shared-rules/agent-dispatch-pin.md`.\n\n'
-    printf 'Dispatch the reviewer with the Agent tool: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <reviewer-prompt>)`.\n'
+    printf 'Dispatch the reviewer with the Agent tool: `Agent(subagent_type: "ai-dev-tools:<reviewer effort>-effort", prompt: <reviewer-prompt>, model: "<reviewer model>")`.\n'
   } > "$BASE/skills/review-fake/SKILL.md"
 }
 
@@ -618,14 +618,14 @@ expect red "$BASE" "T2  a governed skill dispatching with a prompt and nothing e
 # Naming an agent is not enough: only the plugin's effort agents carry a pin. `general-purpose`
 # takes the session's effort exactly as an untyped call does.
 build_pin
-printf '\nDispatch the fixer: `Agent(subagent_type: "general-purpose", prompt: <fixer-prompt>)`.\n' \
+printf '\nDispatch the fixer: `Agent(subagent_type: "general-purpose", prompt: <fixer-prompt>, model: "<fixer model>")`.\n' \
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T3  a dispatch naming an agent that pins no effort is caught"
 
 # The fallback the rule forbids, written on the line of a compliant call. Testing the line as a
 # whole lets the first call vouch for the second.
 build_pin
-printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>)`, and if that is refused `Agent(prompt: <fixer-prompt>)`.\n' \
+printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>, model: "<fixer model>")`, and if that is refused `Agent(prompt: <fixer-prompt>)`.\n' \
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T4  an untyped fallback beside a typed call on one line is caught"
 
@@ -639,7 +639,7 @@ expect red "$BASE" "T6  a pinned type quoted after an untyped call's closing bra
 # A governed call that names one fixed agent. The type is a pinned one, so nothing is refused at
 # dispatch, and every `--effort` value then runs at that level: the flag changes nothing again.
 build_pin
-printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:high-effort", prompt: <fixer-prompt>)`.\n' \
+printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:high-effort", prompt: <fixer-prompt>, model: "<fixer model>")`.\n' \
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T7  a governed dispatch naming one fixed level instead of the --effort placeholder is caught"
 
@@ -699,6 +699,19 @@ printf '# Dispatch\n\nThe review skills dispatch the fixer as `Agent(prompt: <fi
   > "$BASE/references/dispatch.md"
 printf '\nDispatch the fixer as `references/dispatch.md` says.\n' >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T11 an untyped dispatch in the plugin-root references/ tree is caught"
+
+# 6.0.0 made `model` part of every call form. A governed call that drops it puts its agent back on
+# CLAUDE_CODE_SUBAGENT_MODEL, and a check that read only the agent type stayed green over it.
+build_pin
+printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<fixer effort>-effort", prompt: <fixer-prompt>)`.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "T12 a governed dispatch that drops its model is caught (check B)"
+
+# The model is judged as the level is: a literal one runs every `--model` value on that one model.
+build_pin
+printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<fixer effort>-effort", prompt: <fixer-prompt>, model: "opus")`.\n' \
+  >> "$BASE/skills/review-fake/SKILL.md"
+expect red "$BASE" "T13 a governed dispatch naming one fixed model instead of a placeholder is caught"
 
 echo
 echo "-------- $pass passed, $fail failed --------"

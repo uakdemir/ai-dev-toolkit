@@ -31,11 +31,11 @@ One tool call each:
 |---|---|---|
 | 1 | spec not exist | If exists → advance to 2 |
 | 2 | spec Status header | Check review status |
-| 3 | review-doc-summary Reviewed matches hint spec AND Critical/High counts | Critical>0: stay. Critical=0 + High>0: advance to 4. Critical=0 + High=0: advance to 4. Mismatch: stale, route to 2 |
+| 3 | review-doc-summary Reviewed matches hint spec AND Critical/High counts. A hint whose `review` is `mechanical` makes the summary stale: that review wrote none, so the one on disk is an earlier run's | Critical>0: stay. Critical=0 + High>0: advance to 4. Critical=0 + High=0: advance to 4. Mismatch or `review: mechanical`: stale, route to 2 |
 | 4 | plan exists | — |
 | 5 | commits since plan_hash | Implementation progress check |
 | 6 | commits since plan_hash via `git log <plan_hash>..HEAD` | If plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}` |
-| 7 | review-code-summary criticals/highs (a review that ended `Not reviewed (MECHANICAL)` wrote no summary, so there is nothing to check) | — |
+| 7 | review-code-summary criticals/highs, unless the hint's `review` is `mechanical`: a review that ended `Not reviewed (MECHANICAL)` wrote no summary, so the one on disk is an earlier run's and is not read | — |
 
 If validation contradicts hint, advance to next logical step (don't rescan).
 

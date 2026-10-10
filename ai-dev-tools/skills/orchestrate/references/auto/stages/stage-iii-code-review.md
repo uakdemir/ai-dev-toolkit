@@ -95,7 +95,7 @@ Advancing unvalidated output as clean was a silent false green — a review that
 
 ## Profiling
 
-After each code-review iteration dispatch returns, append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=review-code`, `round=N` (iteration number 1–4), `model=opus`. Early-exit iterations that never dispatch produce no entry. Write failures are silently swallowed.
+After each code-review iteration dispatch returns, append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=review-code`, `round=N` (iteration number 1–4), and `model` the model the dispatch's tier line names, or `none` for a dispatch on the MECHANICAL tier, which runs no agent. Early-exit iterations that never dispatch produce no entry. Write failures are silently swallowed.
 
 ---
 

@@ -13,6 +13,7 @@
 | `spec` | path | Full path to spec file, `""` if none |
 | `plan` | path | Full path to plan file, `""` if none |
 | `plan_hash` | 40-char SHA or `""` | From `git log --format=%H -1 -- {plan_path}` when first writing hint at step 5+ |
+| `review` | `mechanical` or `""` | `mechanical` when the review step 2 or step 6 last ran ended `Not reviewed (MECHANICAL)`. That review writes no summary or JSON, so this field is its only record, and a summary on disk is an earlier run's |
 | `head` | 40-char SHA | `git rev-parse HEAD` at hint-write time |
 | `updated` | ISO timestamp | When hint was last written |
 
@@ -29,6 +30,8 @@ Written at end of every orchestrate invocation.
 | Step 1-7 presented | The step number |
 | User overrides or exits | The detected step |
 
-When routing to Step 1 from `finalized`, write hint with `feature: ""`, `spec: ""`, `plan: ""`, `plan_hash: ""`, `step: 1`. The hint file is never deleted. `finalized` is a valid state.
+Step 2 and step 6 set `review` from the review they just ran: `mechanical` when it ended `Not reviewed (MECHANICAL)`, `""` otherwise. Every other write keeps the value it read.
+
+When routing to Step 1 from `finalized`, write hint with `feature: ""`, `spec: ""`, `plan: ""`, `plan_hash: ""`, `review: ""`, `step: 1`. The hint file is never deleted. `finalized` is a valid state.
 
 **Validation:** Read hint → compare `head` to `git rev-parse HEAD` → run step-specific check.

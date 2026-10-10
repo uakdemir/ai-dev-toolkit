@@ -9,8 +9,10 @@ canonical: Every run resolves its tier before it dispatches an agent, prints the
 **Every run resolves its tier before it dispatches an agent, prints the tier and its reason first, and takes its process and each agent's model and effort from that tier unless a flag sets them.**
 
 The tier is FULL, LIGHT or MECHANICAL. It decides the process of a run; the activity (reviewer,
-fixer, coder) decides the model and the effort. The routing table at the end of this file is the
-only place the pairing is written. A skill reads it at run time and never restates it.
+fixer, coder) decides the model and the effort. The routing table at the end of this file defines
+the pairing. The three skills read it at run time and do not restate it, except the escalation's
+Opus, which `implement` names on its call. Every file that restates any of it is listed under
+Governed sites, to be kept in step with the table.
 
 ## Tiers
 
@@ -35,6 +37,11 @@ implements.
     or internal scripts off the production path
 - **LIGHT:** everything else.
 
+`review-code` runs the instrument that proves a rename or move when it classifies (for a rename, a
+`git grep` for the old name, which must return nothing) and quotes the command and its result in the
+reason. A rename or move it cannot prove that way is LIGHT: its MECHANICAL path runs only
+`--verify`, so the classification is the one place the proof can happen.
+
 **Doc tier.** `review-doc` reads it from the documents as they stand. For a tracked document it also
 reads the latest change: `git diff HEAD -- <doc>` when there are uncommitted edits, otherwise the
 last commit that touched it. An untracked document has no latest change, so it is never MECHANICAL.
@@ -47,8 +54,8 @@ last commit that touched it. An untracked document has no latest change, so it i
 
 **When unsure between two tiers, take the higher.** The session classifies; no agent is dispatched
 for it. It works from what the skill already reads, plus the root CLAUDE.md's `## Risk tiers`
-section (below). The reason it prints names the trigger and the evidence, such as a path or a task
-number.
+section (below) and, in `review-code`, the instrument above. The reason it prints names the
+trigger and the evidence, such as a path or a task number.
 
 ## Project extension
 
@@ -169,3 +176,11 @@ longer decides a dispatched agent's model in these skills.
 - `skills/review-code/SKILL.md`
 - `skills/review-doc/SKILL.md`
 - `skills/implement/SKILL.md`
+
+Restatements of the routing table, to be kept in step with it. No gate reads them:
+
+- `skills/implement/SKILL.md` (Escalation) and `references/shared-rules/agent-dispatch-pin.md` (The
+  call): the escalation's `model: "opus"`
+- `skills/orchestrate/references/auto/stages/stage-i-spec-review.md` (both phases) and
+  `skills/orchestrate/references/auto/stages/stage-iii-code-review.md`: the review agents' model
+- `skills/orchestrate/references/auto/stages/stage-ii-implement.md`: the coders' model

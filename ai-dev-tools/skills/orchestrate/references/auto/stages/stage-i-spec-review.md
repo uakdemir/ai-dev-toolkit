@@ -46,8 +46,9 @@ After each phase completes, orchestrate checks `git diff --quiet <spec_path>`:
 
 After each phase dispatch (phase 1 and phase 2) returns, append one JSONL entry to the profiling log per the protocol in `references/auto/profiling-log.md`.
 
-- Phase 1 entry: `action=review-doc`, `round=1`, `model=opus`.
-- Phase 2 entry: `action=review-doc`, `round=2`, `model=opus`.
+- Phase 1 entry: `action=review-doc`, `round=1`.
+- Phase 2 entry: `action=review-doc`, `round=2`.
+- `model` is the model the phase's tier line names, or `none` when the phase ran on the MECHANICAL tier, which dispatches no agent.
 - Write failures are silently swallowed; profiling never blocks the pipeline.
 
 ---

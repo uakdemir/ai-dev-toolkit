@@ -173,6 +173,11 @@ const CLAIMS_LAST_LINE =
 // nothing is refused at dispatch, and every `--effort` value runs at that one level. Check B
 // therefore requires a `<...>` placeholder where the level goes.
 const PINNED_TYPE = /subagent_type:\s*["'`]ai-dev-tools:<[^<>"'`\n]+>-effort["'`]/;
+// The model, judged as the level is: a quoted or backticked `<...>` placeholder. Every call form
+// carries one, so a call without it lost it. With no model the agent runs on
+// CLAUDE_CODE_SUBAGENT_MODEL where that variable is exported, and a literal model runs every
+// `--model` value on that one model.
+const PINNED_MODEL = /\bmodel:\s*["'`]<[^<>"'`\n]+>["'`]/;
 // What check D looks for: the agent type named at all, quoted or not, level literal or not. It is
 // tested over a whole file and never through agentCalls. For D a lost match is the quiet outcome,
 // and a call written over several lines, an unquoted value, or a bracket ahead of the type each
@@ -333,6 +338,10 @@ const DETECTORS = {
   //
   // It sees a call that is written out. A dispatch described only in prose is invisible to it,
   // which is why every governed site spells its call.
+  //
+  // It checks the model the same way, because 6.0.0 made `model` part of every call form. Before
+  // that a call without one was legitimate, and a governed call that dropped its model stayed green
+  // while its agent ran on CLAUDE_CODE_SUBAGENT_MODEL again.
   'untyped-agent-dispatch': {
     describe: 'a dispatch of one of the plugin\'s effort-pinned agents',
     // `orchestrate` dispatches with a prompt and nothing else, by design: it takes no effort for
@@ -344,8 +353,17 @@ const DETECTORS = {
     scan(file, report) {
       const lines = fs.readFileSync(file, 'utf8').split('\n');
       for (let i = 0; i < lines.length; i += 1) {
-        const failing = agentCalls(lines[i]).filter((call) => !PINNED_TYPE.test(call));
-        if (failing.length === 0) continue;
+        const calls = agentCalls(lines[i]);
+        const failing = calls.filter((call) => !PINNED_TYPE.test(call));
+        if (failing.length === 0) {
+          if (calls.every((call) => PINNED_MODEL.test(call))) continue;
+          report(i + 1, 'unpinned-model-dispatch',
+            'an Agent call whose `model:` is not a quoted `<...>` placeholder. With no model the ' +
+            'agent runs on `CLAUDE_CODE_SUBAGENT_MODEL` where that variable is exported, and a ' +
+            'literal model runs every `--model` value on that one model.',
+            lines[i].trim().slice(0, 130));
+          continue;
+        }
         if (failing.every((call) => NAMES_PINNED_TYPE.test(call))) {
           report(i + 1, 'fixed-level-dispatch',
             'an Agent call that names an effort-pinned agent, but not as the quoted ' +
