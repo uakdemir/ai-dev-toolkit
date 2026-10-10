@@ -291,6 +291,8 @@ Single agent, dispatched at the reviewer's resolved effort and on its resolved m
 
 `{{MUST_INSPECT}}` is not a reopening of that slot. It carries **paths, not findings** — a list of files the caller wants opened first, which tells the reviewer nothing about what a previous round concluded and cannot move a count. `{{MUST_INSPECT}}` is substituted to the literal `none` when `--must-inspect` is absent, on the same terms as the fixer's two conditional inputs below: an unsubstituted placeholder reaching the agent is a defect, and `none` is a value rather than a defect.
 
+**The prompt also carries the plugin-root variable, and nothing expands it in a file this session reads.** It is written there as a dollar sign followed by `{CLAUDE_PLUGIN_ROOT}`: in the path of `references/verification-evidence.md`, and in the validator command. Substitute it with `${CLAUDE_PLUGIN_ROOT}`, along with the placeholders. Left as it is, the reviewer reports `validator skipped: path not substituted` and cannot open the file its Verification Gap section names.
+
 Read `prompts/reviewer.md` from this skill's directory and dispatch: `Agent(subagent_type: "ai-dev-tools:<reviewer effort>-effort", prompt: <reviewer-prompt>, model: "<reviewer model>")`. The reviewer writes to the resolved `{{OUTPUT_PATH}}` (`tmp/_reviews_errors/[<run_id>-]review-code.json`) directly using the Write tool. The reviewer prompt includes the review-code JSON schema so the agent produces valid structured output. The orchestrator validates the output in the Validation step.
 
 ## Context Budgets
