@@ -2,8 +2,8 @@
 
 **Date:** 2026-10-10 · **Target release:** ai-dev-tools 6.0.0 · **Skills:** review-code, review-doc,
 implement (plus restatements in orchestrate, help, the agent definitions and two shared rules) ·
-**Part A of three.** Part B covers orchestrate carrying the tier across a whole cycle. Part C covers
-spec creation, artifacts, and merging plan decisions back into the spec.
+**Part A of three.** Part B deprecates orchestrate. Part C covers spec creation, plan depth by tier,
+artifacts, and merging plan decisions back into the spec.
 
 ## Why
 
@@ -50,14 +50,14 @@ rewriting `agent-dispatch-pin` to govern implement; updating restatements; delet
 release 6.0.0.
 
 **Out:**
-- **Part B:**
-  - orchestrate carries one tier from plan to review, through its own hint file so it survives
-    `/clear`
+- **Part B, deprecating orchestrate:** the founder and colleagues now run review-doc, implement and
+  review-code directly, and each works on its own. `tmp/risk-tier.md` already carries the tier
+  between those calls, which was the one thing orchestrate would have added. So orchestrate gets no
+  new work: part B marks it deprecated and later removes it. Part A changes it only where its files
+  would otherwise become wrong (§7).
+- **Part C:**
   - plan depth by tier (FULL uses writing-plans, LIGHT a chat plan of up to 15 lines, MECHANICAL the
     change plus the instrument that proves it)
-  - the explicit round counts orchestrate passes
-  - stage i's two-phase design
-- **Part C:**
   - spec creation at the right effort; brainstorming runs in the session, and a skill can read
     `CLAUDE_EFFORT` but cannot set it
   - artifact creation
@@ -362,14 +362,14 @@ longer decides a dispatched agent's model in these skills.
 | `skills/orchestrate/references/common/help.md` | Wherever it states implement's or the review skills' flags |
 | `scripts/shared-semantics-mutation-test.sh` | N10's comment ("implement and orchestrate dispatch with a prompt and nothing else, by design") becomes orchestrate only. The case is unchanged |
 
-orchestrate's *dispatch commands* do not change in part A. Its explicit round counts are part B.
+orchestrate's *dispatch commands* do not change in part A. Its explicit round counts stay as they are, because it is being deprecated (part B).
 
 ## 8. Prompts
 
 - **Deleted:** ReviewCode.txt, ReviewDoc.txt, Implement.txt, PlanImplement.txt,
   PlanImplementCodeReview.txt.
 - **Kept until part C:** CreateArtifact.txt and MergePlanDecisionsIntoSpec.txt.
-- **Lost until part B:** plan depth by tier. Until then, an automated flow asks for the plan it
+- **Lost until part C:** plan depth by tier. Until then, an automated flow asks for the plan it
   wants.
 
 ## 9. Gates, commits and release
@@ -429,19 +429,19 @@ orchestrate's *dispatch commands* do not change in part A. Its explicit round co
 | Classification is LLM judgment, so two runs can disagree | The floor only moves up, the tier line shows the reason, and `--tier` corrects it |
 | FULL runs cost more (Opus·max, fixes at max) | FULL's triggers are specific, and cost per serious finding at max equals high's (5.0.0 data) |
 | A MECHANICAL misclassification skips a needed review | review-code classifies the diff even when the floor says MECHANICAL, and a behaviour change lifts the tier |
-| orchestrate's explicit rounds multiply FULL costs (stage iii up to 4 dispatches) | Part B |
+| orchestrate's explicit rounds multiply FULL costs (stage iii up to 4 dispatches) | orchestrate is deprecated (part B); the direct skill calls use the tier's single round |
 | At a spawn depth of 1, implement can't code inside a sub-agent | `orchestrate --auto` already stops at stage i at depth 1; documented in stage ii |
 | An exported `CLAUDE_CODE_EFFORT_LEVEL` overrides every pin | Keep it unexported (the founder's `~/.bashrc:237` is commented out); already disclosed in `agent-dispatch-pin` |
 | `CLAUDE_CODE_SESSION_ID` is not documented | When it is unset there is no floor and no file, and the tier line says so |
 
 ## Follow-ups
 
-1. **Part B (orchestrate):**
-   - one tier per cycle, kept in its hint file
-   - plan depth by tier
-   - the tier decides the round counts
-   - rethink stage i's two phases now that spec review runs on Opus·max
+1. **Part B, deprecating orchestrate:**
+   - mark it deprecated in its description, its `--help` and `/ai-dev-tools:help`, pointing at the
+     direct calls
+   - remove it in a later major release, with the references only it uses
 2. **Part C:**
+   - plan depth by tier
    - spec creation gated on `CLAUDE_EFFORT`, which Claude Code exports from `--effort`
    - artifact creation
    - merging plan decisions back into the spec (orchestrate Step 7 is a candidate)
