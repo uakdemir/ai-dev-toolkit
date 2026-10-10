@@ -631,9 +631,11 @@ printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<--effort valu
 expect red "$BASE" "T4  an untyped fallback beside a typed call on one line is caught"
 
 # The mirror of T4, found by the fact-check of the rule file: a call was read up to the end of its
-# line, so a pinned type quoted in prose AFTER an untyped call vouched for it.
+# line, so a pinned type quoted in prose AFTER an untyped call vouched for it. The prose quotes the
+# type and the model as placeholders, the only form check B accepts: a literal level there fails
+# the call either way, and a gate that reads past the bracket again would stay red over it.
 build_pin
-printf '\nDispatch the fixer: `Agent(prompt: <fixer-prompt>)`, never with `subagent_type: "ai-dev-tools:max-effort"`.\n' \
+printf '\nDispatch the fixer: `Agent(prompt: <fixer-prompt>)`, never without `subagent_type: "ai-dev-tools:<--effort value>-effort"` and `model: "<fixer model>"`.\n' \
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T6  a pinned type quoted after an untyped call's closing bracket does not vouch for it"
 
