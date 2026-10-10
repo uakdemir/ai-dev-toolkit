@@ -103,8 +103,9 @@ set_at: <ISO-8601>
   Nothing else deletes the files either: earlier conversations' files stay behind in gitignored
   `tmp/`.
 - **Measured on 2026-10-10:** Claude Code exports `CLAUDE_CODE_SESSION_ID` to the session's Bash
-  calls; its value matched the session's scratchpad directory.
-- **Not measured:** whether a sub-agent sees the same value, and whether `/clear` changes it.
+  calls; its value matched the session's scratchpad directory. A sub-agent sees the same value as
+  the session that dispatched it, so a skill run inside one reads and writes its session's floor.
+  `/clear` changes the value, so it starts a new floor; resuming a conversation keeps it.
 
 ## Precedence
 
