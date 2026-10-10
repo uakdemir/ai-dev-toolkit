@@ -170,7 +170,7 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    would read half-written edits. Start a task's implementer only after
    the task before it is closed: its task reviewer has returned, its
    fix rounds have ended and its verification gate (override 2) has
-   run, or it is marked BLOCKED (override 4). Dispatch every
+   passed, or it is marked BLOCKED (override 4). Dispatch every
    implementer and every task reviewer in this one form:
    Agent(subagent_type: "ai-dev-tools:<coder effort>-effort", prompt: <task prompt>, model: "<coder model>")
 

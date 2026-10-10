@@ -336,10 +336,11 @@ longer decides a dispatched agent's model in these skills.
     changes nothing there.
   - **Concurrency:** one agent runs at a time. Implementers, fix-round implementers and
     escalations write in one working tree and its index (decision 12), and a task reviewer or a
-    verification run beside one of them would read half-written edits. So an implementer starts
-    only after the task before it is closed: its task reviewer has returned, its fix rounds have
-    ended and its verification has run, or it is marked BLOCKED. The cap of 3 agents is dropped,
-    because nothing is left for it to bound (decision 13).
+    verification run beside one of them would read half-written edits. So none of the three runs
+    beside a task reviewer or a verification run, and an implementer starts only after the task
+    before it is closed: its task reviewer has returned, its fix rounds have ended and its
+    verification has passed, or it is marked BLOCKED. The cap of 3 agents is dropped, because
+    nothing is left for it to bound (decision 13).
 - **Escalation:**
   - For each task the coders report BLOCKED, the session dispatches one fresh agent for that task
     at the coders' effort on `model: opus`.
