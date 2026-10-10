@@ -623,9 +623,10 @@ printf '\nDispatch the fixer: `Agent(subagent_type: "general-purpose", prompt: <
 expect red "$BASE" "T3  a dispatch naming an agent that pins no effort is caught"
 
 # The fallback the rule forbids, written on the line of a compliant call. Testing the line as a
-# whole lets the first call vouch for the second.
+# whole lets the first call vouch for the second. The fallback keeps its model, so its missing
+# agent type is all that fails the line: without one, the model check alone keeps this case red.
 build_pin
-printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>, model: "<fixer model>")`, and if that is refused `Agent(prompt: <fixer-prompt>)`.\n' \
+printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<--effort value>-effort", prompt: <fixer-prompt>, model: "<fixer model>")`, and if that is refused `Agent(prompt: <fixer-prompt>, model: "<fixer model>")`.\n' \
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T4  an untyped fallback beside a typed call on one line is caught"
 
@@ -701,9 +702,11 @@ printf '\nDispatch the fixer as `references/dispatch.md` says.\n' >> "$BASE/skil
 expect red "$BASE" "T11 an untyped dispatch in the plugin-root references/ tree is caught"
 
 # 6.0.0 made `model` part of every call form. A governed call that drops it puts its agent back on
-# CLAUDE_CODE_SUBAGENT_MODEL, and a check that read only the agent type stayed green over it.
+# CLAUDE_CODE_SUBAGENT_MODEL, and a check that read only the agent type stayed green over it. The
+# call is written beside one that carries its model, because the model is judged call by call as
+# the type is: tested as a whole, the line would let the first call vouch for the second.
 build_pin
-printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<fixer effort>-effort", prompt: <fixer-prompt>)`.\n' \
+printf '\nDispatch the fixer: `Agent(subagent_type: "ai-dev-tools:<fixer effort>-effort", prompt: <fixer-prompt>, model: "<fixer model>")`, and if that fails `Agent(subagent_type: "ai-dev-tools:<fixer effort>-effort", prompt: <fixer-prompt>)`.\n' \
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "T12 a governed dispatch that drops its model is caught (check B)"
 

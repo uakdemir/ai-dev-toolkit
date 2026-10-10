@@ -30,7 +30,7 @@ Written at end of every orchestrate invocation.
 | Step 1-7 presented | The step number |
 | User overrides or exits | The detected step |
 
-Step 2 and step 6 set `review` from the review they just ran: `mechanical` when it ended `Not reviewed (MECHANICAL)`, `""` otherwise. Every other write keeps the value it read.
+Step 2 and step 6 set `review` from the review they just ran: `mechanical` when it ended `Not reviewed (MECHANICAL)`, `""` otherwise. Every other write keeps the value it read, unless it writes a different `feature`: the record is that feature's, so another feature starts with `review: ""`.
 
 When routing to Step 1 from `finalized`, write hint with `feature: ""`, `spec: ""`, `plan: ""`, `plan_hash: ""`, `review: ""`, `step: 1`. The hint file is never deleted. `finalized` is a valid state.
 
