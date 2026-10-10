@@ -10,7 +10,7 @@ flag sets them. The tier rules and the routing table live in `references/shared-
 ### Breaking Changes
 
 - **review-code, review-doc, implement:** a run without flags classifies its tier and routes by it: Opus reviewers at high or max, and Sonnet coders. `orchestrate`'s stages pass no model flags, so they change too. Every Agent call now names a model, so `CLAUDE_CODE_SUBAGENT_MODEL` no longer decides a dispatched agent's model in these skills (1d86fff)
-- **review-code, review-doc:** `--max-iterations` is optional: the tier sets the rounds and prints them. A MECHANICAL classification runs no review agents, and writes no review JSON; `orchestrate` reads such a review (`Not reviewed (MECHANICAL)`) as a pass with zero criticals, in auto and in standard mode (1d86fff)
+- **review-code, review-doc:** `--max-iterations` is optional: the tier sets the rounds and prints them. A MECHANICAL classification runs no review agents, and writes no review JSON; `orchestrate` reads such a review (`Not reviewed (MECHANICAL)`) as a pass with zero criticals in auto mode and at standard mode's Step 6. Standard mode's Step 2 leaves the spec's Status as it is, because nothing was reviewed (1d86fff)
 - **implement:** `--model` names the coders' model, `--effort <level>` sets their effort, and the execution mode is `--mode single|per-task`. A call that passes an old `--model` value (`single`, `subagent`, `parallel`, `clear-context`) gets `Error: --model now names the coders' model; for the execution mode use --mode single|per-task.` (1d86fff)
 - **implement:** clear-context, the parallel helper and in-session coding are gone, along with `tmp/implement-exit-status.md`. The picker has two options, and a FULL run is the only one that shows it (1d86fff)
 - **prompts:** the five prompts that drove these skills are deleted: `ReviewCode.txt`, `ReviewDoc.txt`, `Implement.txt`, `PlanImplement.txt` and `PlanImplementCodeReview.txt`. `CreateArtifact.txt` and `MergePlanDecisionsIntoSpec.txt` stay (3a5e288)
@@ -28,9 +28,22 @@ flag sets them. The tier rules and the routing table live in `references/shared-
 - **review-code:** `Found this round:` in the terminal output, as `review-doc` prints it (1d86fff)
 - **implement:** a task the coders report BLOCKED gets one fresh attempt on Opus, at the coders' effort (1d86fff)
 
+### Fixes
+
+- Applied a FULL `review-code` round on this release, one round on Opus at max: 11 of its 14 findings fixed, and three corrections by its self-review (c4e07e5, e99ef26). This entry also no longer says that `orchestrate` reads a MECHANICAL review as a pass throughout standard mode: Step 2 does not. Three findings wait for the founder: two follow from this release's settled decisions, and one is the wiki page
+- **scripts:** check B of `check-shared-semantics.cjs` fails a governed Agent call whose `model:` is missing or a literal, as it already did for the agent type. Every call form carries `model: "<...>"`, and a call that lost it would run on `CLAUDE_CODE_SUBAGENT_MODEL`, where that is exported, with every gate green (c4e07e5)
+- **review-code:** a rename or move classifies MECHANICAL only once its instrument has proved it at classification: `git grep -n` for the old name or path returns nothing, and the tier reason quotes the command and its result. Otherwise the change is LIGHT (c4e07e5)
+- **implement:** `--auto` suppresses Step C's write-a-plan prompt. That prompt used to end `orchestrate --auto`'s stage ii with no commit, on a spec that fires one of its hard signals (c4e07e5)
+- **implement:** the refactor-unit path ignores `--mode`, `--model`, `--effort` and `--tier`, with one warning that names the ones passed; it used to warn about `--model` alone, read as the execution mode. `--auto`'s pre-check hands off to Resolve the Tier, which its old wording skipped. "Execution model" reads "execution mode" in the skill's description and in `orchestrate`'s steps 4 and 5 (c4e07e5)
+- **orchestrate:** standard mode's hint file gains `review`, which Step 2 and Step 6 set to `mechanical` after a review that ended `Not reviewed (MECHANICAL)`. Step 7 and fast-path rows 3 and 7 read it, where they read a summary an earlier run had left. A write that names another feature starts with `review: ""` (c4e07e5, e99ef26)
+- **orchestrate:** in auto mode a review on the MECHANICAL tier is no crash when it ends `Issues Found`: stage i takes the unresolved-criticals path and appends the `✗ UNCONFIRMED` sentences to the spec. The profiling log records `model` as `none` for a run that dispatched no agent (c4e07e5)
+- **review-doc:** the MECHANICAL path runs the Duplicate locations check before it confirms sentences (c4e07e5)
+- **shared-rules:** `risk-tier` lists the files that restate its routing table, where it called the table the only place the pairing is written. The nested measurement `agent-dispatch-pin` prescribes passes `--tier light`, without which it classifies MECHANICAL and dispatches nothing (c4e07e5)
+
 ### Tests
 
 - **scripts:** `tests/detector-coverage.txt` gains one line, `skills/implement/SKILL.md` under `untyped-agent-dispatch`. That file now names a pinned agent type, and `--print-coverage` does not read `applies-to`. The listing skips every `references/` tree, so `implementation-step.md` does not appear (1d86fff)
+- **scripts:** `shared-semantics-mutation-test.sh` has 66 cases, up from 64: T12, a governed call that drops its model, and T13, one that names a fixed model. T4 and T12 each write the failing call beside a compliant one, so a gate that judges the line as a whole fails them (c4e07e5, e99ef26)
 
 ## 5.0.1 (2026-10-09)
 
