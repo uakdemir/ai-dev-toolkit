@@ -44,6 +44,7 @@ gitignored `tmp/` file, so the findings are copied here:
 | 9 | Delete the five prompts that drive these three skills |
 | 10 | Open calls, answered `1C 2A 3A 4A 5A 6A 7A` on the decision page: an explicit round count does not override MECHANICAL, and neither do agent flags; MECHANICAL review-doc confirms each changed fact; the picker recommends `per-task` only when tasks barely overlap, with at most 3 agents at once; a task blocked on Opus still gets one fresh Opus attempt; the refactor-unit path stays in the session |
 | 11 | Review round 1's open calls, answered `1B 2A 3C` on the decision page: every orchestrate reader, in auto and in standard mode, learns that a MECHANICAL review is a pass, and such a review still writes no review JSON; the floor is one file per conversation; the proof runs make no throwaway commit and need no scratch branch |
+| 12 | The FULL review-code round's open calls, answered `1A 2A 3A 4A` on the decision page: a document nobody has reviewed may still classify MECHANICAL, and decision 10 stands; agents that write run one at a time in the shared tree, and the cap of 3 bounds the agents that only read (§5); the wiki page is updated; and five defects the proof runs exposed are fixed: Pre-Flight runs before Setup in both review skills, a carried run keeps the floor's reason, setter and time (§1.4), each review skill names the plugin-root variable its reviewer prompt carries, review-code's MECHANICAL run prints its Verification line once, and mutation case T6 pins its defect again |
 
 ## Scope
 
@@ -164,7 +165,8 @@ set_at: <ISO-8601>
   `branch` matches the current branch. Otherwise it is ignored and overwritten. A new conversation
   has its own file, so nothing goes stale overnight.
 - **Write:** every run that resolved a tier writes the file after printing the tier line. A
-  `--tier` run stores `reason: --tier <level>`.
+  `--tier` run stores `reason: --tier <level>`. A run that carried the floor's tier writes the
+  stored `reason`, `set_by` and `set_at` back as it read them (decision 12).
 - **Unset variable:** when `CLAUDE_CODE_SESSION_ID` is unset, the run neither reads nor writes the
   file, and the tier line ends with `(not carried: no session id)`.
 - **Never deleted by the review skills' Setup**, which deletes only under `tmp/_reviews_errors/`. Say
@@ -331,8 +333,10 @@ longer decides a dispatched agent's model in these skills.
     superpowers 6.1.1, 6.4.1 and 6.4.2, the versions installed on the founder's machine: all three
     have these points, except that `executing-plans` 6.1.1 runs no final review, so that override
     changes nothing there.
-  - **Concurrency:** at most 3 agents run at once, or fewer when the session's
-    `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` is lower.
+  - **Concurrency:** agents that write run one at a time: implementers, fix-round implementers and
+    escalations share one working tree and its index (decision 12). At most 3 agents run at once,
+    or fewer when the session's `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` is lower; that cap bounds
+    the agents that only read.
 - **Escalation:**
   - For each task the coders report BLOCKED, the session dispatches one fresh agent for that task
     at the coders' effort on `model: opus`.
