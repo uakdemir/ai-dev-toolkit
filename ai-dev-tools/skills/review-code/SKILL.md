@@ -140,19 +140,9 @@ This step runs after Argument Parsing, once `--max-iterations 0` has not short-c
 - **A missing agent type is an error, never a fallback.** If the agent type for the chosen level is not among the ones the Agent tool offers in this session, print `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session. Run /reload-plugins, or restart the session, and re-run.` and exit, in this step, before Setup. A call without `subagent_type` would run, and would report as though the level had been honoured.
 - **`--model` is handed to the Agent tool unchanged.** Its accepted values are the ones that tool's `model` parameter accepts in the running session. On a value it does not accept, print `Error: --model must be a model the Agent tool accepts; got '<value>'.` and exit, in this step, before Setup.
 
-## Setup
-
-1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
-2. Delete stale files from prior runs:
-   - Without `--run-id`: `./tmp/_reviews_errors/review-code.json`, `./tmp/_reviews_errors/review-code.json.bak`, `./tmp/_reviews_errors/review-code-summary.md`, `./tmp/_reviews_errors/review-code-fix-report.json`, `./tmp/_reviews_errors/review-code-brainstorm.md`, `./tmp/_reviews_errors/review-code-iteration-*.md`, `./tmp/_reviews_errors/review-code-iteration-*.json`, `./tmp/_reviews_errors/review-code-fix-report-iteration-*.json`
-   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-code*.json`, `./tmp/_reviews_errors/<run_id>-review-code*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-code*.md`
-
-   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's self-review phase would otherwise survive into the next run.
-
-   The two per-round snapshot globs matter for the same reason: the exact filenames beside them name only the live artifacts, so without the globs a four-round run followed by a two-round run leaves the earlier run's `-iteration-3` and `-iteration-4` snapshots sitting beside the new run's rounds with nothing to tell them apart — and those files are the durable per-round record every cross-round aggregate is checked against. The `--run-id` branch needs no addition: `<run_id>-review-code*.json` already matches both.
-3. Do NOT delete `./tmp/past-issues-backlog.md` — it is intentionally append-only across runs. The `./tmp/risk-tier-*.md` files are never deleted either: they are the conversations' tier floors.
-
 ## Pre-Flight Checks
+
+These run before Setup. A run they stop (a `no` at the branch guard, or a dirty tree) has deleted none of an earlier run's artifacts.
 
 1. `git rev-parse HEAD` succeeds. If not: `"Error: no commits in repository."`
 2. **Branch guard — unconditional, never waived.** Resolve the current branch yourself:
@@ -167,6 +157,20 @@ This step runs after Argument Parsing, once `--max-iterations 0` has not short-c
 
    This check previously delegated itself to "the invoking skill" whenever the caller was programmatic. **No caller discharged it.** `main` and `master` appear nowhere under `skills/orchestrate/`, and before this check was written `git rev-parse --abbrev-ref` / `git symbolic-ref` appeared nowhere in the plugin at all — no caller resolved the branch. So the one path where no human can be prompted, and where the fixer, the self-review pass and stage-iii all commit, was the path with no guard. A guard that delegates to a caller nobody wrote is not a guard.
 3. If `git status --porcelain` non-empty: `"Working tree is dirty. Please commit or stash your changes before running review-code."` This check runs once during pre-flight only. Verification command side-effects (coverage reports, cache files) are expected during the loop and do not re-trigger this check. The fixer uses `git add -u` (tracked files only) when committing to avoid including verification artifacts.
+
+## Setup
+
+Runs once the Pre-Flight Checks above have passed.
+
+1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
+2. Delete stale files from prior runs:
+   - Without `--run-id`: `./tmp/_reviews_errors/review-code.json`, `./tmp/_reviews_errors/review-code.json.bak`, `./tmp/_reviews_errors/review-code-summary.md`, `./tmp/_reviews_errors/review-code-fix-report.json`, `./tmp/_reviews_errors/review-code-brainstorm.md`, `./tmp/_reviews_errors/review-code-iteration-*.md`, `./tmp/_reviews_errors/review-code-iteration-*.json`, `./tmp/_reviews_errors/review-code-fix-report-iteration-*.json`
+   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-code*.json`, `./tmp/_reviews_errors/<run_id>-review-code*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-code*.md`
+
+   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's self-review phase would otherwise survive into the next run.
+
+   The two per-round snapshot globs matter for the same reason: the exact filenames beside them name only the live artifacts, so without the globs a four-round run followed by a two-round run leaves the earlier run's `-iteration-3` and `-iteration-4` snapshots sitting beside the new run's rounds with nothing to tell them apart — and those files are the durable per-round record every cross-round aggregate is checked against. The `--run-id` branch needs no addition: `<run_id>-review-code*.json` already matches both.
+3. Do NOT delete `./tmp/past-issues-backlog.md` — it is intentionally append-only across runs. The `./tmp/risk-tier-*.md` files are never deleted either: they are the conversations' tier floors.
 
 ## Edge Case: `--max-iterations 0`
 

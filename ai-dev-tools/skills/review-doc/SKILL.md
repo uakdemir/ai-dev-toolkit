@@ -141,19 +141,9 @@ This step runs after Argument Parsing, once `--max-iterations 0` has not short-c
 - **A missing agent type is an error, never a fallback.** If the agent type for the chosen level is not among the ones the Agent tool offers in this session, print `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session. Run /reload-plugins, or restart the session, and re-run.` and exit, in this step, before Setup. A call without `subagent_type` would run, and would report as though the level had been honoured.
 - **`--model` is handed to the Agent tool unchanged.** Its accepted values are the ones that tool's `model` parameter accepts in the running session. On a value it does not accept, print `Error: --model must be a model the Agent tool accepts; got '<value>'.` and exit, in this step, before Setup.
 
-## Setup
-
-1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
-2. Delete stale files from prior runs:
-   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-brainstorm.md`, `./tmp/_reviews_errors/review-doc-iteration-*.md`, `./tmp/_reviews_errors/review-doc-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fix-report-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fact-check.json`, `./tmp/_reviews_errors/review-doc-fact-check-iteration-*.json`
-   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
-
-   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's self-review phase would otherwise survive into the next run.
-
-   The three per-round snapshot globs matter for the same reason: the exact filenames beside them name only the live artifacts, so without the globs a four-round run followed by a two-round run leaves the earlier run's `-iteration-3` and `-iteration-4` snapshots sitting beside the new run's rounds with nothing to tell them apart — and those files are the durable per-round record every cross-round aggregate is checked against. The `--run-id` branch needs no addition: `<run_id>-review-doc*.json` already matches all three.
-3. Do NOT delete `./tmp/risk-tier-*.md` — they are the conversations' tier floors.
-
 ## Pre-Flight Checks
+
+These run before Setup. A run they stop (a `no` at the branch guard) has deleted none of an earlier run's artifacts.
 
 1. **Branch guard — unconditional, never waived.** Resolve the current branch yourself:
 
@@ -177,6 +167,20 @@ This step runs after Argument Parsing, once `--max-iterations 0` has not short-c
    - Print every matched path. Never resolve the ambiguity silently — the user must see that more than one copy exists whatever happens next.
    - Pass the copies to the reviewer as read-only context if that keeps the total within the 20-file cap. The reviewer then reads **both** and surfaces the conflict as a `cross-reference` finding. Read-only copies never enter the fixer's document paths: which copy is authoritative is the user's call, not the fixer's.
    - If adding them would exceed the cap, do NOT expand and do NOT error — a common basename (`README.md`, `index.md`) is not a duplicated document. Print `Warning: <basename> exists at N locations; not expanded (20-file cap). Copies not reviewed: <paths>` and continue with the explicit paths. This is a skipped check, so it is stated, not dropped.
+
+## Setup
+
+Runs once the Pre-Flight Checks above have passed.
+
+1. Ensure `./tmp/_reviews_errors/` directory exists (create if needed).
+2. Delete stale files from prior runs:
+   - Without `--run-id`: `./tmp/_reviews_errors/review-doc.json`, `./tmp/_reviews_errors/review-doc.json.bak`, `./tmp/_reviews_errors/review-doc-summary.md`, `./tmp/_reviews_errors/review-doc-fix-report.json`, `./tmp/_reviews_errors/review-doc-brainstorm.md`, `./tmp/_reviews_errors/review-doc-iteration-*.md`, `./tmp/_reviews_errors/review-doc-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fix-report-iteration-*.json`, `./tmp/_reviews_errors/review-doc-fact-check.json`, `./tmp/_reviews_errors/review-doc-fact-check-iteration-*.json`
+   - With `--run-id`: `./tmp/_reviews_errors/<run_id>-review-doc*.json`, `./tmp/_reviews_errors/<run_id>-review-doc*.json.bak`, `./tmp/_reviews_errors/<run_id>-review-doc*.md`
+
+   The `.bak` entries matter because the `*.json` globs do not match them — a backup left by a prior run's self-review phase would otherwise survive into the next run.
+
+   The three per-round snapshot globs matter for the same reason: the exact filenames beside them name only the live artifacts, so without the globs a four-round run followed by a two-round run leaves the earlier run's `-iteration-3` and `-iteration-4` snapshots sitting beside the new run's rounds with nothing to tell them apart — and those files are the durable per-round record every cross-round aggregate is checked against. The `--run-id` branch needs no addition: `<run_id>-review-doc*.json` already matches all three.
+3. Do NOT delete `./tmp/risk-tier-*.md` — they are the conversations' tier floors.
 
 ## MECHANICAL
 
