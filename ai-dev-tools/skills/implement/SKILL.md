@@ -183,8 +183,8 @@ Load `references/implementation-step.md` (which transitively loads `references/t
    ```
    - **`single`:** one coder in that form, given the `single` preamble and the plan. It follows `superpowers:executing-plans`.
    - **`per-task`:** this session coordinates `superpowers:subagent-driven-development` with the `per-task` preamble. Every implementer and every task reviewer is dispatched in that form.
-   - **Concurrency:** at most 3 agents run at once, or fewer when the session's `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` is lower.
-6. **Escalation.** For each task the coders report BLOCKED, dispatch one fresh agent for that task in that form, given the `single` preamble and that task, at the coders' effort and with `model: "opus"`. Do this even when the coders already ran on Opus. `--effort` moves it with the coders, and `--model` never changes it. If it fails, the task stays BLOCKED in the report.
+   - **Concurrency:** agents that write run one at a time. Implementers, fix-round implementers and step 6's escalations share this working tree and its index, so one starts only after the one before it has returned. At most 3 agents run at once, or fewer when the session's `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` is lower; that cap bounds the agents that only read, such as a task reviewer.
+6. **Escalation.** For each task the coders report BLOCKED, dispatch one fresh agent for that task in that form, given the `single` preamble and that task, at the coders' effort and with `model: "opus"`. Do this even when the coders already ran on Opus. `--effort` moves it with the coders, and `--model` never changes it. Escalations run one at a time and never beside an implementer, because they write in the same tree (step 5, Concurrency). If it fails, the task stays BLOCKED in the report.
 7. **Verify before reporting.** After the coders return, this session runs the plan's verification commands itself and quotes their output, because a subagent's report is not evidence. The report gives the commits, the exact commands with their output, checks SKIPPED and why, and residual risk.
 
 ### Default Mode
