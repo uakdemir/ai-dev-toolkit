@@ -1,5 +1,37 @@
 # Changelog
 
+## 6.0.0 (2026-10-10)
+
+The release in which `review-code`, `review-doc` and `implement` classify the risk of their own work
+and route every agent from one table. A run resolves a tier (FULL, LIGHT or MECHANICAL), prints it
+with its reason, and takes its process and each agent's model and effort from that tier unless a
+flag sets them. The tier rules and the routing table live in `references/shared-rules/risk-tier.md`.
+
+### Breaking Changes
+
+- **review-code, review-doc, implement:** a run without flags classifies its tier and routes by it: Opus reviewers at high or max, and Sonnet coders. `orchestrate`'s stages pass no model flags, so they change too. Every Agent call now names a model, so `CLAUDE_CODE_SUBAGENT_MODEL` no longer decides a dispatched agent's model in these skills (1d86fff)
+- **review-code, review-doc:** `--max-iterations` is optional: the tier sets the rounds and prints them. A MECHANICAL classification runs no review agents, and writes no review JSON; `orchestrate` reads such a review (`Not reviewed (MECHANICAL)`) as a pass with zero criticals, in auto and in standard mode (1d86fff)
+- **implement:** `--model` names the coders' model, `--effort <level>` sets their effort, and the execution mode is `--mode single|per-task`. A call that passes an old `--model` value (`single`, `subagent`, `parallel`, `clear-context`) gets `Error: --model now names the coders' model; for the execution mode use --mode single|per-task.` (1d86fff)
+- **implement:** clear-context, the parallel helper and in-session coding are gone, along with `tmp/implement-exit-status.md`. The picker has two options, and a FULL run is the only one that shows it (1d86fff)
+- **prompts:** the five prompts that drove these skills are deleted: `ReviewCode.txt`, `ReviewDoc.txt`, `Implement.txt`, `PlanImplement.txt` and `PlanImplementCodeReview.txt`. `CreateArtifact.txt` and `MergePlanDecisionsIntoSpec.txt` stay (3a5e288)
+
+> As in 5.0.0, no commit carried a `BREAKING CHANGE:` footer. The first item's commit marks the
+> break with `!` in its subject, and these are listed because the same invocation now behaves
+> differently.
+
+### Features
+
+- **review-code, review-doc, implement:** `--tier full|light|mechanical` skips classification, and is the only flag that lowers a stored tier (1d86fff)
+- **review-code, review-doc, implement:** two tier lines name the tier, its reason and the agents' model and effort. A review run prints them before anything else; `implement` prints them when its tier step runs, after Steps A–C and ahead of the task graph (1d86fff)
+- **shared-rules:** `risk-tier` is a new shared rule, and `agent-dispatch-pin` now governs `implement` too (1d86fff)
+- **review-code, review-doc, implement:** the tier persists per conversation in `tmp/risk-tier-<session-id>.md` and only moves up; it is ignored when its session or branch differs, and not written when `CLAUDE_CODE_SESSION_ID` is unset (1d86fff)
+- **review-code:** `Found this round:` in the terminal output, as `review-doc` prints it (1d86fff)
+- **implement:** a task the coders report BLOCKED gets one fresh attempt on Opus, at the coders' effort (1d86fff)
+
+### Tests
+
+- **scripts:** `tests/detector-coverage.txt` gains one line, `skills/implement/SKILL.md` under `untyped-agent-dispatch`. That file now names a pinned agent type, and `--print-coverage` does not read `applies-to`. The listing skips every `references/` tree, so `implementation-step.md` does not appear (1d86fff)
+
 ## 5.0.1 (2026-10-09)
 
 ### Features
