@@ -103,7 +103,10 @@ set_at: <ISO-8601>
   `branch` matches the current branch. Otherwise it is ignored and then overwritten, never used. A
   new conversation has its own file, so nothing goes stale overnight.
 - **Write:** every run that resolved a tier writes the file after printing the tier line. A `--tier`
-  run stores `reason: --tier <level>`.
+  run stores `reason: --tier <level>`. A run that carried the floor's tier writes the stored
+  `reason`, `set_by` and `set_at` back as it read them: those three say which run set the floor and
+  why, so every later run prints the same `carried from` line. A run that classified its tier,
+  moved it up or took `--tier` stores its own.
 - **Unset variable:** when `CLAUDE_CODE_SESSION_ID` is unset, the run neither reads nor writes the
   file, and the tier line ends with `(not carried: no session id)`.
 - **Never deleted by the review skills' Setup**, which deletes only under `tmp/_reviews_errors/`.
