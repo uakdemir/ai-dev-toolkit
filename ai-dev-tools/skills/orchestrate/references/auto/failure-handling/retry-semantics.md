@@ -13,7 +13,7 @@ An agent crash is any of:
 
 Item 4 matters because without it, malformed-but-present output falls through the crash definition entirely — it is neither a crash nor a usable result, and nothing routes it anywhere.
 
-Item 5 matters because `review-code` runs its Pre-Flight Checks before its Setup. A dispatch they stop, on a dirty tree or at the branch guard, deletes nothing, so on a retry under the same run-id the first attempt's artifact is still on disk and still valid, and items 3 and 4 both miss it.
+Item 5 matters because `review-code` runs its Pre-Flight Checks before its Setup. A dispatch they stop, on a dirty tree or at the branch guard, deletes nothing, so an artifact on disk under its run-id is an earlier dispatch's, can still be valid, and items 3 and 4 both miss it. The retry's fresh `dispatch_hash` (Retry-Once Rule, step 2) keeps the first attempt's artifact out of the retry's path; item 5 holds wherever a run-id is reused all the same.
 
 **Expected output artifacts:**
 - Agent i → `tmp/_reviews_errors/<run_id>-phase{N}-review-doc.json` (the phase is in the run-id), except a review that ran on the MECHANICAL tier
