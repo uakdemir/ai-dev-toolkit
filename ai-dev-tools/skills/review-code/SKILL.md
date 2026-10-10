@@ -190,7 +190,7 @@ The handoff line prints here too, and writes no file. `references/shared-rules/b
 **Handled in Resolve the Tier, after the tier lines print and before Setup and Pre-Flight**, like `--max-iterations 0`. It deletes no prior artifact, needs no clean tree and makes no commit, and the only file it writes is the tier floor. It dispatches no agent, so it skips the Agent-tool and agent-type checks and works inside a sub-agent at the spawn-depth cap.
 
 1. Run each `--verify` command once. Quote the command, its exit code and the tail of its output.
-2. With no `--verify`, print `Verification: none configured`.
+2. Set the `Verification:` line of the block below, which is the one place it prints: `none configured` with no `--verify`, `all passing` when every command exited 0, and otherwise the commands that failed.
 3. The status is `Not reviewed (MECHANICAL)`, or `Issues Found` when a command fails.
 4. Print and exit:
 
