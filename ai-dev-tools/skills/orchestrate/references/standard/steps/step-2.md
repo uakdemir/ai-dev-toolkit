@@ -33,6 +33,6 @@ Emit a 2-option breadcrumb **regardless of findings count**:
 - Option 2: run additional review iterations (state-machine-correct path)
 - Option 3: skip ahead, implement directly (escape hatch)
 
-Edge: clean review (zero criticals) → update spec Status to "Approved", then still emit the same breadcrumb.
+Edge: clean review (zero criticals) → update spec Status to "Approved", then still emit the same breadcrumb. A review that ended `Not reviewed (MECHANICAL)` is not a clean review: nothing was reviewed, so the spec's Status stays as it is, and the same breadcrumb is emitted.
 
 `/respond-to-review` is intentionally NOT surfaced — review-doc's fix phase applies critical fixes during iterations.

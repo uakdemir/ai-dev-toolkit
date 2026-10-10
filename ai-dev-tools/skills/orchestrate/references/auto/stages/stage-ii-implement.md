@@ -15,14 +15,9 @@ Dispatches `/implement <spec> --auto --run-id <id>`.
 /implement <spec> --auto --run-id <run_id>
 ```
 
-The `--auto` flag short-circuits the interactive picker:
+The `--auto` flag short-circuits the interactive picker: it takes the recommendation (`per-task` when the plan's tasks barely overlap, otherwise `single`), as `/implement` defines it.
 
-```
-IF parallelism_ratio >= 0.35  → option [4]: single-agent + 1 parallel helper
-ELSE                           → option [1]: single-agent
-```
-
-Options [2] subagent-per-task and [3] clear-context are excluded.
+`/implement` resolves its tier and dispatches its coders as agents, on Sonnet by the tier's row, so this stage's sub-agent can run it only where Claude Code's spawn-depth cap is at least two. Under a cap of one `/implement` stops with its no-Agent-tool error and makes no commit, which the commit check below fails, unless the tier is MECHANICAL and the run makes the scripted edit, which dispatches no agent. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
 
 ---
 
@@ -57,13 +52,12 @@ Run after implement returns, before advancing to agent iii:
 | Failure | Handling |
 |---|---|
 | Main agent crash | Retry once → stop (Q3, see `../failure-handling/crash.md`) |
-| Helper hang/crash | Main agent absorbs helper's tasks (existing executing-plans behavior) |
 
 ---
 
 ## Profiling
 
-After `/implement` returns (BEFORE the validator suite runs), append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=implement`, `round=1`, `model=inherited`.
+After `/implement` returns (BEFORE the validator suite runs), append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=implement`, `round=1`, `model=sonnet`.
 
 If the Q3 retry-once fires, the retry dispatch emits its own entry on clean return (see profiling-log.md retry rule). Write failures are silently swallowed.
 

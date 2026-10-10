@@ -1,6 +1,6 @@
 ---
 name: xhigh-effort
-description: "Role-neutral agent pinned at `xhigh` reasoning effort, whatever effort the dispatching session is at. Use it only when a skill or a prompt names it: /review-code and /review-doc dispatch it for `--effort xhigh` or `--fix-effort xhigh`. It pins no model, so pass `model` on the Agent call."
+description: "Role-neutral agent pinned at `xhigh` reasoning effort, whatever effort the dispatching session is at. Use it only when a skill or a prompt names it: /review-code, /review-doc and /implement dispatch it when the run's tier or a flag selects `xhigh`. It pins no model, so pass `model` on the Agent call."
 effort: xhigh
 ---
 

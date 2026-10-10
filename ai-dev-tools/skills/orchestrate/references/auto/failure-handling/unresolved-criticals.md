@@ -6,8 +6,8 @@
 
 ## This is not a loop failure
 
-It used to be called one. `--max-iterations` is a **required** argument on both review skills, so the
-loop is bounded by construction — it cannot run away, and there is nothing to detect. What this
+It used to be called one. The loop is bounded by construction: the tier sets the rounds, and an
+explicit `--max-iterations` is at most 10, so it cannot run away and there is nothing to detect. What this
 records is a result, not a pathology: the review ran the number of rounds it was given and did not
 clear every critical.
 

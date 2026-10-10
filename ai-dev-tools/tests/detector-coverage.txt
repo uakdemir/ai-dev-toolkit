@@ -14,5 +14,6 @@ detector handoff-last-line:
   skills/review-code/SKILL.md
   skills/review-doc/SKILL.md
 detector untyped-agent-dispatch:
+  skills/implement/SKILL.md
   skills/review-code/SKILL.md
   skills/review-doc/SKILL.md

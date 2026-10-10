@@ -35,7 +35,7 @@ One tool call each:
 | 4 | plan exists | — |
 | 5 | commits since plan_hash | Implementation progress check |
 | 6 | commits since plan_hash via `git log <plan_hash>..HEAD` | If plan_hash empty, populate via `git log --format=%H -1 -- {plan_path}` |
-| 7 | review-code-summary criticals/highs | — |
+| 7 | review-code-summary criticals/highs (a review that ended `Not reviewed (MECHANICAL)` wrote no summary, so there is nothing to check) | — |
 
 If validation contradicts hint, advance to next logical step (don't rescan).
 

@@ -17,7 +17,7 @@ Orchestrate owns the iteration loop. One dispatch is one iteration, up to 4:
 /review-code <spec_baseline> --against <spec_path> --run-id <run_id>-iter<N> --max-iterations 1 [--must-inspect <paths>]
 ```
 
-**Model and effort.** None of `--model`, `--effort` and `--fix-effort` is passed, so `review-code` selects its defaults, the `high` agent for every phase, and names no model. This stage's sub-agent can dispatch that agent only where Claude Code's spawn-depth cap is at least two. Under a cap of one `review-code` stops with its no-Agent-tool error and writes no artifact, which `references/auto/failure-handling/retry-semantics.md` treats as a crash. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
+**Model and effort.** None of `--model`, `--effort` and `--fix-effort` is passed, so `review-code` resolves the code tier and takes each agent's model and effort from the tier's row, which is Opus for every phase. This stage's sub-agent can dispatch those agents only where Claude Code's spawn-depth cap is at least two. Under a cap of one `review-code` stops with its no-Agent-tool error and writes no artifact, which `references/auto/failure-handling/retry-semantics.md` treats as a crash, unless the code tier is MECHANICAL, which dispatches no agent. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
 
 **`--max-iterations 1` is forced, not a preference.** Orchestrate's `N` is what the per-iteration commit, the `code-review-iter-{N}-complete` state and the profiling entry's `round=N` all key off. Any inner cap above 1 makes each of those name a different number of rounds than actually ran — at `--max-iterations 4` this stage's own header, "up to 4 iterations", would mean up to 16. Stage i takes the other shape for a reason this stage does not have: its outer loop runs over *phases* (`--fact-check` off, then on), a genuine second axis, so its inner cap of 2 still totals 4.
 
@@ -48,6 +48,8 @@ All three hold after any dispatch → skip remaining iterations, advance to stag
 
 It is scope direction, not carry-forward — it hands the next reviewer a list of files to open, never a finding, so nothing crosses the round boundary that could move a count (`references/shared-rules/counts-exclude-self-review.md`).
 
+**A dispatch that ends `Not reviewed (MECHANICAL)` ends the loop.** The tier ran no review round, so there are zero criticals and nothing uninspected: skip the remaining iterations and advance to stage iv. Stage iii passes no `--verify`, so a MECHANICAL dispatch has no command to run and does not end `Issues Found`.
+
 If criticals are 0 but `not_inspected` is non-empty, do NOT early-exit. The review did not see every changed file — the standard-mode counterpart is step-6's Case C. Continue to the next iteration. If the final iteration still reports a non-empty `not_inspected`, log a Warning to `tmp/_reviews_errors/error-logs.md` naming the uninspected files (template: `../failure-handling/error-log-templates.md` > Stage iii coverage hole) and advance: auto mode has no user to ask, and a coverage hole that is written down is not the silent green this pipeline exists to avoid.
 
 ---
@@ -62,6 +64,8 @@ After every successful agent iii iteration, orchestrate:
 
 This commit is what makes each iteration's fixes separately reviewable, and what `spec_baseline..HEAD` counts at the end. Step 4 runs regardless of whether a commit was created.
 
+**A dispatch that ended `Not reviewed (MECHANICAL)` is a successful iteration with no artifact.** It writes no review JSON by design, so the artifact clauses below do not apply to it.
+
 **Successful iteration definition:** agent returned without exception AND the review artifact exists (`tmp/_reviews_errors/<run_id>-iter<N>-review-code.json`) AND that artifact passes `scripts/validate-review-json.cjs`. Stage iii passes `--run-id <run_id>-iter<N>`, so each iteration writes its own artifact and no later dispatch overwrites it — the count this definition validates stays readable after the iteration that wrote it has passed. The per-iteration record is that artifact together with that dispatch's iteration log, `<run_id>-iter<N>-review-code-iteration-1.md`. `review-code`'s own per-round snapshots (`skills/review-code/SKILL.md` > Cross-Iteration Tracking) still run, but at `--max-iterations 1` they duplicate a separation the run-id already provides; they earn their keep on a standalone multi-round run, not here.
 
 **If `node` is unavailable**, the validator cannot run and the third clause is waived — the artifact's existence and a clean agent return are sufficient. Log a Warning to `tmp/_reviews_errors/error-logs.md` recording `schema validation not run: node unavailable` (template: `../failure-handling/error-log-templates.md` > Stage iii schema check waived), matching the same carve-out in `review-code`'s VALIDATION step and reviewer prompt. Without this waiver a machine without Node could never produce a successful iteration, so no auto run on such a machine could ever reach stage iv.
@@ -75,6 +79,7 @@ An artifact that exists but does not validate is a crash (`references/auto/failu
 At the final iteration's REVIEW output, pre-fix:
 - Pre-fix criticals == 0 → success
 - Pre-fix criticals > 0 → Q2 unresolved-criticals failure (see `../failure-handling/unresolved-criticals.md`)
+- A final dispatch that ended `Not reviewed (MECHANICAL)` wrote no review JSON; the critical count reads zero → success
 
 ---
 
@@ -82,7 +87,7 @@ At the final iteration's REVIEW output, pre-fix:
 
 Agent iii's output is validated like any other artifact — by `scripts/validate-review-json.cjs`, per `review-code`'s VALIDATION step. There is no optimistic-trust exemption and no fail-open at the final iteration.
 
-Malformed or missing output is a crash (`references/auto/failure-handling/retry-semantics.md`), which means retry-once and then `references/auto/failure-handling/crash.md`: wip-commit whatever is on disk, leave the tree untouched, and stop. One spec is reviewed loudly or not at all; nothing is destroyed and nothing is silently carried forward.
+Malformed or missing output is a crash (`references/auto/failure-handling/retry-semantics.md`), which means retry-once and then `references/auto/failure-handling/crash.md`: wip-commit whatever is on disk, leave the tree untouched, and stop. One spec is reviewed loudly or not at all; nothing is destroyed and nothing is silently carried forward. A dispatch that ended `Not reviewed (MECHANICAL)` has no artifact by design and is not malformed or missing output.
 
 Advancing unvalidated output as clean was a silent false green — a review that never ran, reported as a review that passed.
 
@@ -90,7 +95,7 @@ Advancing unvalidated output as clean was a silent false green — a review that
 
 ## Profiling
 
-After each code-review iteration dispatch returns, append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=review-code`, `round=N` (iteration number 1–4), `model=inherited`. Early-exit iterations that never dispatch produce no entry. Write failures are silently swallowed.
+After each code-review iteration dispatch returns, append one JSONL entry to the profiling log per `references/auto/profiling-log.md`: `action=review-code`, `round=N` (iteration number 1–4), `model=opus`. Early-exit iterations that never dispatch produce no entry. Write failures are silently swallowed.
 
 ---
 

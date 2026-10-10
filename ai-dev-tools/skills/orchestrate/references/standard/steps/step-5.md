@@ -18,10 +18,7 @@ Otherwise, emit the breadcrumb and exit.
 
 ## Post-`/implement` Resume
 
-After `/implement` returns, check for `tmp/implement-exit-status.md`:
-
-- **Marker exists AND contains `early_exit: clear_context`:** Do NOT write `step: 6` (hint stays at `step: 5`). Delete the marker. `/implement` has already printed its own breadcrumb.
-- **Marker absent OR no `early_exit: clear_context`:** Write `step: 6` to hint, emit phase-boundary breadcrumb.
+After `/implement` returns, write `step: 6` to hint, emit phase-boundary breadcrumb.
 
 ## Breadcrumb
 

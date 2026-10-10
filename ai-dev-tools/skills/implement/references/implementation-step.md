@@ -1,6 +1,6 @@
 # Implementation Step
 
-This file is loaded by orchestrate at Step 5 onset for task graph visualization, execution model recommendation, and override dispatch.
+This file is loaded by orchestrate at Step 5 onset for task graph visualization, execution mode recommendation, and override dispatch.
 
 ---
 
@@ -8,16 +8,17 @@ This file is loaded by orchestrate at Step 5 onset for task graph visualization,
 
 Read `references/task-graph.md`, analyze the plan, and generate an ASCII dependency graph.
 
-Present the task graph and execution model recommendation together in the same response (no intermediate user acknowledgment required between them).
+Present the task graph and execution mode recommendation together in the same response (no intermediate user acknowledgment required between them).
 
 ---
 
-## Execution Model Recommendation
+## Execution Mode Recommendation
+
+Only a FULL run uses it: for the picker, and for `--auto`. LIGHT runs `single`, and MECHANICAL runs `single` or a scripted edit (see `../SKILL.md` Resolve the Tier).
 
 **Inputs:**
 1. Plan file (count tasks, scan for "Files" sections)
-2. Context estimate: `estimated_used = number_of_user_messages_in_conversation × 5_000`. Apply floor: `estimated_used = max(estimated_used, 10_000)`.
-3. Task coupling from "Files" sections (see algorithm below)
+2. Task coupling from "Files" sections (see algorithm below)
 
 **Coupling assessment:**
 ```
@@ -29,73 +30,44 @@ Otherwise, only tasks with "Files" sections participate:
   >40% share → HIGH | 20-40% → MEDIUM | <20% → LOW
 ```
 
-**Parallelism yield check** (runs when task_count >= 4 AND coupling != HIGH):
-```
-Scan tasks in plan order. For each unassigned task, find the next
-unassigned task with no dependency on it or vice versa. If found,
-pair them into a parallel phase. Continue until all tasks are
-assigned or no more pairs can be formed.
-
-P = number of parallel pairs
-parallelism_ratio = P / task_count
-
-If parallelism_ratio >= 0.35 → option [4] is eligible
-If parallelism_ratio < 0.35  → not eligible, fall through to single-agent
-```
-
-Note: `parallelism_ratio` is a proxy for time savings (fraction of parallelisable tasks), not a wall-clock measurement.
-
 **Recommendation algorithm:**
 ```
-remaining = 200_000 - estimated_used
-implementation_estimate = task_count × 12_000
-parallelism_ratio = 0  # default; overwritten if yield check runs
-
-If implementation_estimate > remaining × 0.8 → subagent-per-task
-  (also include in Reason line: "Consider clearing context first for single-agent (Option [3])")
-Else if coupling == HIGH → single-agent
-Else if task_count > 8 AND coupling == LOW → subagent-per-task
-Else if task_count >= 4 AND coupling != HIGH AND parallelism_ratio >= 0.35 → single-agent + parallel helper
-Else → single-agent
+If coupling == LOW → per-task
+Else → single
 ```
+
+`per-task` is only worth it when the tasks barely touch the same files.
 
 **Present to user:**
 ```
 ── Step 5: Implementation ──────────────────────
 Plan: <N> tasks, <coupling assessment>
-Context: ~<used>K / 200K used, ~<remaining>K remaining
-Estimated cost: ~<estimate>K tokens
-Parallelism yield: <P> pairs, ratio <parallelism_ratio>%
 
-Recommendation: <Single-agent | Subagent-per-task | Single-agent + parallel helper>
+Recommendation: <single | per-task>
   Reason: <one-line explanation>
 
-Alternatives:
-  [1] Single-agent <(recommended) if applicable>
-  [2] Subagent-per-task <(recommended) if applicable>
-  [3] Clear context + single-agent
-  [4] Single-agent + one parallel helper <(recommended) if applicable>
+Options:
+  [1] single   — one <coders> agent carries the whole plan <(recommended) if applicable>
+  [2] per-task — one <coders> agent per task, and a spec reviewer per task <(recommended) if applicable>
 
 Proceed with [N]?
 ```
 
-The "Parallelism yield" line is shown only when the yield check ran (task_count >= 4 and coupling != HIGH). When [4] is not eligible (ratio < 0.35), it still appears as an alternative but the recommendation does not point to it.
+`<coders>` is the coders' model and effort as the second tier line printed them.
 
-Any input other than 1, 2, 3, or 4 re-presents the options.
+Any input other than 1 or 2 re-presents the options.
 
-**Auto mode (`--auto` flag):** When auto mode is active, the picker is not presented. The dispatch narrows to two options only: `{single-agent, single-agent + parallel helper}`. The threshold is the same (0.35). Options [2] and [3] are excluded. See `../SKILL.md` for the `--auto` algorithm.
-
-**Option [3] behavior:** Print: "Start a new conversation and run `/orchestrate` to continue with a fresh context window. Your plan is saved and will be picked up automatically." Then exit.
+**Auto mode (`--auto` flag):** the picker is not presented. `--auto` takes the recommendation. See `../SKILL.md`.
 
 ---
 
 ## Override Dispatch
 
-Once [1], [2], or [4] is selected — by the user at the picker, by `--model`, or by the `--auto` algorithm — dispatch to the chosen superpowers skill with a behavioral override block prepended to the dispatch prompt. Every dispatch path prepends one; there is no path that dispatches without a preamble.
+Once the mode, `single` or `per-task`, is settled — at the picker, by `--mode`, by `--auto`, or by the tier — dispatch with a behavioral override block prepended to the dispatch prompt. Every dispatch path prepends one; there is no path that dispatches without a preamble.
 
 The `## Validation` block that every preamble requires is `/implement`'s hand-back format — it is what orchestrate and the user receive when the dispatched agent returns. Its bullets are spelled out inside each preamble rather than referenced from here, because the preamble is copied into another agent's prompt and that agent never reads this file. **Empty bullets print `none stated` rather than being omitted:** an explicit "none" is a claim someone can challenge; silence is indistinguishable from having forgotten.
 
-**If user selected [1] Single-agent**, dispatch to `superpowers:executing-plans` with this preamble prepended:
+**If the mode is `single`**, dispatch one coder to follow `superpowers:executing-plans`, with this preamble prepended:
 
 ```
 IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
@@ -133,18 +105,24 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    All three bullets are required. A bullet with nothing to report
    prints `none stated`. Never omit a bullet.
 
-7. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
+7. WORK IN THIS TREE AND BRANCH: running /implement here is the consent.
+   Create no worktree.
+
+8. SKIP THE FINAL WHOLE-BRANCH REVIEW AND finishing-a-development-branch:
+   review-code runs next at the tier's level. Return after the last task.
+
+9. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
    artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
    is active. This is for traceability in multi-agent pipelines.
 ```
 
-Override 7 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
+Override 9 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
 
-Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip.
+Note: `executing-plans` dispatches no reviewer per task, so there is no code-quality reviewer to skip. Where it runs a final whole-branch review, override 8 skips it.
 
-Single-agent spec compliance limitation: Self-assessment is less reliable than the subagent spec-reviewer, but is the only option without subagent architecture. Drift will be caught by review-code at Step 6.
+Single-mode spec compliance limitation: self-assessment is less reliable than a task reviewer's. Drift will be caught by review-code at Step 6.
 
-**If user selected [2] Subagent-per-task**, dispatch to `superpowers:subagent-driven-development` with this preamble prepended:
+**If the mode is `per-task`**, this session coordinates `superpowers:subagent-driven-development` with this preamble prepended:
 
 ```
 IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
@@ -159,27 +137,23 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    commands and confirm they pass BEFORE marking the task as done.
    Do not rely on the subagent's self-report — run verification fresh.
 
-3. SKIP CODE QUALITY REVIEW: Do NOT dispatch the code-quality-reviewer
-   after each task. Quality review is handled by a superior engine
-   (review-code with confidence scoring and noise filtering) at a
-   later stage. Dispatching both is redundant and wastes tokens.
+3. TASK REVIEWER: the task reviewer runs after every task and gives
+   both the spec verdict and the quality verdict. Dispatch it for
+   every task. It is the "did you build what the plan said?" check
+   that catches scope drift.
 
-4. KEEP SPEC COMPLIANCE REVIEW: DO dispatch the spec-reviewer after
-   each task. This lightweight "did you build what the plan said?"
-   check is essential for catching scope drift.
-
-5. RETRY ON FAILURE: If a subagent's tests fail, allow 2 retry
+4. RETRY ON FAILURE: If a subagent's tests fail, allow 2 retry
    attempts. If still failing after 2 retries, mark the task as
    BLOCKED and continue to the next task. Report all blocked tasks
    when execution completes.
 
-6. REPORT IS NOT EVIDENCE: a completion report — the implementer
+5. REPORT IS NOT EVIDENCE: a completion report — the implementer
    subagent's or your own — is a claim. Evidence is command output.
    Never write "tests pass" or "the gate is green" unless you ran it
    in this session and can quote it. If you did not run it, say
    "not run" — never omit it.
 
-7. VALIDATION IN YOUR REPORT: end your completion report with:
+6. VALIDATION IN YOUR REPORT: end your completion report with:
 
      ## Validation
      - Commands run (exact) and their results
@@ -190,71 +164,22 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
    prints `none stated`. Never omit a bullet. Commands run by an
    implementer subagent count only if you can quote their output.
 
-8. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
+7. CONCURRENCY AND CALL FORM: at most 3 agents run at once, or fewer
+   when CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS is lower. Dispatch every
+   implementer and every task reviewer in this one form:
+   Agent(subagent_type: "ai-dev-tools:<coder effort>-effort", prompt: <task prompt>, model: "<coder model>")
+
+8. WORK IN THIS TREE AND BRANCH: running /implement here is the consent.
+   Create no worktree.
+
+9. SKIP THE FINAL WHOLE-BRANCH REVIEW AND finishing-a-development-branch:
+   review-code runs next at the tier's level. Return after the last task.
+
+10. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
    artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
    is active. This is for traceability in multi-agent pipelines.
 ```
 
-Override 8 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
+Override 10 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
 
-**If user selected [4] Single-agent + parallel helper**, dispatch to `superpowers:executing-plans` with this preamble prepended:
-
-```
-IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
-
-1. TDD ENFORCEMENT: You MUST use red-green-refactor for every task.
-   Write a failing test first, watch it fail, write minimal code to
-   pass, watch it pass, then refactor. No production code without a
-   failing test. This is non-negotiable.
-
-2. VERIFICATION GATE: After completing each task, run the project's
-   test/build commands and confirm they pass BEFORE proceeding to the
-   next task. Do not skip this step.
-
-3. SPEC COMPLIANCE CHECK: After each task, verify: "Did I build
-   exactly what the plan specified? Nothing more, nothing less?"
-   If you detect drift, fix before proceeding.
-
-4. RETRY ON FAILURE: If tests fail for a task, you have 2 retry
-   attempts to fix. If still failing after 2 retries, mark the task
-   as BLOCKED and continue to the next task. Report all blocked
-   tasks when execution completes.
-
-5. PARALLEL HELPER: Spawn one background helper agent on the first
-   parallelizable task. Reuse it via SendMessage for all subsequent
-   parallel tasks. Never spawn more than one helper. For serial or
-   coupled tasks, work directly — helper idles. Before each task,
-   check the remaining tasks for one with no dependency on the
-   current task. If found, send it to the helper. Wait for the
-   helper to complete before starting the next phase. If the helper
-   has not returned output after the main agent completes its own
-   task, proceed without the helper's result and take ownership of
-   the helper's task.
-
-6. REPORT IS NOT EVIDENCE: a completion report — the helper's or
-   your own — is a claim. Evidence is command output. Never write
-   "tests pass" or "the gate is green" unless you ran it in this
-   session and can quote it. If you did not run it, say "not run"
-   — never omit it.
-
-7. VALIDATION IN YOUR REPORT: end your completion report with:
-
-     ## Validation
-     - Commands run (exact) and their results
-     - Checks SKIPPED, and why
-     - Residual risk
-
-   All three bullets are required. A bullet with nothing to report
-   prints `none stated`. Never omit a bullet. Commands run by the
-   helper count only if you can quote their output.
-
-8. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
-   artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
-   is active. This is for traceability in multi-agent pipelines.
-```
-
-Override 8 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
-
-Note: No SKIP CODE QUALITY REVIEW override is included because `executing-plans` does not dispatch separate reviewer subagents — there is nothing to skip. The parallel helper override (5) is unique to option [4]; option [1] does not include it.
-
-**Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure mode is benign: the agent may occasionally dispatch the code-quality-reviewer (wasting tokens), skip TDD enforcement, or skip verification (all caught by review-code at Step 6 and the Step 8 verification gate). No destructive failure path exists.
+**Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure modes are these: the agent may skip TDD enforcement or skip verification (caught by review-code at Step 6 and the Step 8 verification gate), or it may create a worktree, or run the final whole-branch review or the finishing step, despite the overrides that forbid each.

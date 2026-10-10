@@ -335,10 +335,10 @@ const DETECTORS = {
   // which is why every governed site spells its call.
   'untyped-agent-dispatch': {
     describe: 'a dispatch of one of the plugin\'s effort-pinned agents',
-    // `implement` and `orchestrate` dispatch with a prompt and nothing else, by design: neither
-    // takes an effort for its agents. An untyped call is therefore a violation only inside a
-    // governed skill, and the F4 sweep skips this detector in the references/ tree of a skill
-    // outside the rule. It still runs it over the plugin-root tree, which the governed skills read.
+    // `orchestrate` dispatches with a prompt and nothing else, by design: it takes no effort for
+    // its agents. An untyped call is therefore a violation only inside a governed skill, and the
+    // F4 sweep skips this detector in the references/ tree of a skill outside the rule. It still
+    // runs it over the plugin-root tree, which the governed skills read.
     governedOnly: true,
     governs: (text) => NAMES_PINNED_TYPE.test(text),
     scan(file, report) {

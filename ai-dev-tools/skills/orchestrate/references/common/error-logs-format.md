@@ -105,6 +105,8 @@ The auto-pipeline gates (stage-iii early-exit, stage-i and stage-iii unresolved-
 jq '.critical_count' tmp/_reviews_errors/<run_id>-iter<N>-review-code.json
 ```
 
+A review that ended `Not reviewed (MECHANICAL)` ran no round and writes no review JSON, so there is no file to read. Each gate reads that as zero criticals.
+
 **The gates read this value in flight, not off disk.** Every consuming gate is specified against the
 iteration's REVIEW output, before that iteration's fix phase, and the orchestrator holds that number
 in its own state. What the file lacks is freshness, not correctness. Every write to the counts happens

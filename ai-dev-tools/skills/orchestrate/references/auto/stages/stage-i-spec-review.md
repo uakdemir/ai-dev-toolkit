@@ -10,7 +10,7 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 /review-doc <spec> --fact-check false --max-iterations 2 --run-id <run_id>-phase1
 ```
 
-- Model and effort: none of `--model`, `--effort` and `--fix-effort` is passed, so `review-doc` selects its defaults, the `high` agent for every phase, and names no model. This stage's sub-agent can dispatch that agent only where Claude Code's spawn-depth cap is at least two. Under a cap of one `review-doc` stops with its no-Agent-tool error and writes no artifact, which `../failure-handling/retry-semantics.md` treats as a crash. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
+- Model and effort: none of `--model`, `--effort` and `--fix-effort` is passed, so `review-doc` resolves the doc tier and takes each agent's model and effort from the tier's row, which is Opus for every agent. This stage's sub-agent can dispatch those agents only where Claude Code's spawn-depth cap is at least two. Under a cap of one `review-doc` stops with its no-Agent-tool error and writes no artifact, which `../failure-handling/retry-semantics.md` treats as a crash, unless the doc tier is MECHANICAL, which dispatches no agent. A MECHANICAL result runs no round, ends `Not reviewed (MECHANICAL)` and writes no review JSON: this stage treats it as a pass with zero criticals, not as a crash. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
 - No fact-check
 - Up to 2 iterations with early-exit on 0 criticals
 
@@ -20,7 +20,7 @@ Orchestrate composes phase structure by making two serial `/review-doc` calls.
 /review-doc <spec> --fact-check true --max-iterations 2 --run-id <run_id>-phase2
 ```
 
-- Model and effort: none of `--model`, `--effort` and `--fix-effort` is passed, so `review-doc` selects its defaults, the `high` agent for every phase, and names no model. This stage's sub-agent can dispatch that agent only where Claude Code's spawn-depth cap is at least two. Under a cap of one `review-doc` stops with its no-Agent-tool error and writes no artifact, which `../failure-handling/retry-semantics.md` treats as a crash. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
+- Model and effort: none of `--model`, `--effort` and `--fix-effort` is passed, so `review-doc` resolves the doc tier and takes each agent's model and effort from the tier's row, which is Opus for every agent. This stage's sub-agent can dispatch those agents only where Claude Code's spawn-depth cap is at least two. Under a cap of one `review-doc` stops with its no-Agent-tool error and writes no artifact, which `../failure-handling/retry-semantics.md` treats as a crash, unless the doc tier is MECHANICAL, which dispatches no agent. A MECHANICAL result runs no round, ends `Not reviewed (MECHANICAL)` and writes no review JSON: this stage treats it as a pass with zero criticals, not as a crash. No nested run has measured the dispatch: `references/shared-rules/agent-dispatch-pin.md`
 - Fact-check enabled: the fact-checker runs alongside the reviewer and is merged before the fixer
 - Up to 2 iterations
 
@@ -46,8 +46,8 @@ After each phase completes, orchestrate checks `git diff --quiet <spec_path>`:
 
 After each phase dispatch (phase 1 and phase 2) returns, append one JSONL entry to the profiling log per the protocol in `references/auto/profiling-log.md`.
 
-- Phase 1 entry: `action=review-doc`, `round=1`, `model=inherited`.
-- Phase 2 entry: `action=review-doc`, `round=2`, `model=inherited`.
+- Phase 1 entry: `action=review-doc`, `round=1`, `model=opus`.
+- Phase 2 entry: `action=review-doc`, `round=2`, `model=opus`.
 - Write failures are silently swallowed; profiling never blocks the pipeline.
 
 ---
@@ -69,6 +69,8 @@ from one that completed and found problems. If it did:
 
 Applies ONLY to phase 2's final iteration (not phase 1):
 - Phase 2 final iter pre-fix criticals == 0 → success, continue pipeline
+- Phase 2 ended `Not reviewed (MECHANICAL)` → it wrote no review JSON; read the critical count as zero → success, continue pipeline
+- Phase 2 ended `Issues Found` on a MECHANICAL run (a changed sentence it could not confirm) → take the unresolved-criticals path
 - Phase 2 final iter pre-fix criticals > 0 → Q2 failure (see `../failure-handling/unresolved-criticals.md`)
 
 Phase 1's exit state is irrelevant for this check.

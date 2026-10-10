@@ -44,8 +44,9 @@ AGENTS (name one as subagent_type in a prompt, and pass model on the call)
   ai-dev-tools:xhigh-effort   Any role, pinned at xhigh reasoning effort
   ai-dev-tools:max-effort     Any role, pinned at max reasoning effort
 
-  /review-code and /review-doc choose among them with --effort (reviewer,
-  fact-checker) and --fix-effort (fixer, self-review).
+  /review-code, /review-doc and /implement choose among them by risk tier:
+  the tier sets each agent's effort and model, and --effort, --fix-effort
+  and --model override it.
 
 TIPS
   Start with /orchestrate — it handles the workflow for you.

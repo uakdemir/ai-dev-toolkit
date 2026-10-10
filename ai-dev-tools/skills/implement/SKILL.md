@@ -1,24 +1,25 @@
 ---
 name: implement
-argument-hint: "[path] [--model single|subagent|parallel] [--auto] [--skip-plan-recommendation]"
+argument-hint: "[path] [--mode single|per-task] [--model <model>] [--effort <level>] [--tier full|light|mechanical] [--auto] [--skip-plan-recommendation]"
 description: "Use when the user wants to execute a written implementation plan or implement directly from a spec — generates a task graph, recommends an execution model, and dispatches with quality overrides. Invoked standalone (/implement <path>) or via orchestrate (/orchestrate (/implement <plan>))."
 ---
 
 <help-text>
 /implement — execute a plan or spec
 
-Usage: /implement [path] [--model single|subagent|parallel] [--auto] [--skip-plan-recommendation] [--run-id <id>]
+Usage: /implement [path] [--mode single|per-task] [--model <model>] [--effort <level>] [--tier <level>]
+                  [--auto] [--skip-plan-recommendation] [--run-id <id>]
 
 Arguments:
   path             Plan or spec file to implement. If omitted, uses the
                    active orchestrate plan or spec from tmp/orchestrate-state.md
-  --model MODEL    Skip the execution model picker and dispatch directly:
-                     single   = single-agent in current context
-                     subagent = subagent-per-task
-                     parallel = parallel helper agents
-                   (clear-context is interactive-only — use the picker)
-  --auto           Non-interactive dispatch: narrows to {single, parallel}.
-                   Excludes options [2] subagent-per-task and [3] clear-context.
+  --mode MODE      Skip the mode picker and dispatch directly:
+                     single   = one agent carries the whole plan
+                     per-task = one agent per task, and a task reviewer per task
+  --model MODEL    Model of the coders (default: the tier's row)
+  --effort LEVEL   Effort of the coders: high, xhigh, max (default: the tier's row)
+  --tier LEVEL     Skip classification: full, light, mechanical (default: classified)
+  --auto           Non-interactive dispatch: takes the recommendation.
                    Skips refactor-unit pre-check.
   --skip-plan-recommendation
                    Suppress the Step C spec recommendation prompt (this
@@ -30,14 +31,14 @@ Examples:
   /implement                                    # use orchestrate hint file
   /implement docs/plans/2026-04-06-foo-plan.md  # explicit plan
   /implement docs/specs/2026-04-06-bar.md       # implement directly from spec
-  /implement docs/plans/baz.md --model parallel # skip the picker
+  /implement docs/plans/baz.md --mode per-task  # skip the picker
 </help-text>
 
-Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--model` is present, validate its value against the set `{single, subagent, parallel}` — reject `clear-context` with the exact error from Edge Case 7 below. If `--skip-plan-recommendation` is present, suppress the Step C spec recommendation prompt for this invocation only (see Step C). If `--auto` is present, set auto mode active for this invocation. `--auto` is incompatible with `--model clear-context` (Edge Case 7 already covers this). `--auto` + `--model` is valid — `--model` overrides the auto algorithm's choice. If `--run-id <id>` is present, store the run-id for threading to dispatched sub-agents.
+Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--mode` is present, validate its value against the set `{single, per-task}`; on any other value print `Error: --mode must be one of: single, per-task.` and exit. If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. If `--tier` is present, validate its value against the set `{full, light, mechanical}`, matched exactly as `--effort`'s are; on any other value print `Error: --tier must be one of: full, light, mechanical.` and exit. If `--model` is present, check it for an old value first: `single`, `subagent`, `parallel` and `clear-context` named the execution mode before, and print `Error: --model now names the coders' model; for the execution mode use --mode single|per-task.` and exit. An old value never reaches the next check. Any other value is judged against the Agent tool in the Normal-feature path's step 4, "Checks before any dispatch", because that check needs the Agent tool. If `--skip-plan-recommendation` is present, suppress the Step C spec recommendation prompt for this invocation only (see Step C). If `--auto` is present, set auto mode active for this invocation. `--auto` + `--mode` is valid — `--mode` overrides the recommendation `--auto` would take. If `--run-id <id>` is present, store the run-id for threading to dispatched sub-agents.
 
 # implement
 
-Execute a written implementation plan or implement directly from a spec. `/implement` owns plan/spec detection, task-graph construction, execution-model recommendation, the 4-option dispatch picker, and the refactor-unit branch. It is **stateless** with respect to `tmp/orchestrate-state.md` — it READS the hint file in Step A but NEVER writes it. Orchestrate is the sole writer of the hint file.
+Execute a written implementation plan or implement directly from a spec. `/implement` owns plan/spec detection, tier resolution, task-graph construction, execution-mode recommendation, the two-option mode picker, and the refactor-unit branch. It is **stateless** with respect to `tmp/orchestrate-state.md` — it READS the hint file in Step A but NEVER writes it. Orchestrate is the sole writer of the hint file.
 
 ---
 
@@ -108,13 +109,13 @@ Then exit. Do not auto-dispatch either option.
 
 ---
 
-## Step D — Dispatch with Execution Model
+## Step D — Dispatch with Execution Mode
 
 ### `--auto` Mode Pre-check
 
 If `--auto` is active:
 1. **Skip the Refactor-Unit Branch Handling pre-check entirely.** Proceed directly to the Normal-feature path. Rationale: auto mode prioritizes a narrow, deterministic dispatch surface. Users who need refactor-unit handling must omit `--auto`.
-2. After building the task graph, use the narrowed 2-option algorithm instead of the 4-option picker (see below).
+2. After building the task graph, take the recommendation instead of presenting the picker (see below).
 
 ### Refactor-Unit Branch Handling (pre-check)
 
@@ -132,6 +133,23 @@ Before building the task graph, perform this refactor-unit check (moved verbatim
    - After the refactor-execution sequence completes, return control to the caller (orchestrate or standalone shell), ending the report with the `## Validation` hand-back block defined in `references/refactor-execution.md`.
 4. **If the match fails (normal-feature path) → proceed to the normal-feature dispatch below.**
 
+### Resolve the Tier
+
+Runs after the refactor-unit pre-check has failed to match (`--auto` skips that pre-check) and before the task graph is built. The refactor-unit path dispatches no agent, and a run that exits at Step C dispatches nothing, so neither resolves a tier.
+
+**Every run resolves its tier before it dispatches an agent, prints the tier and its reason first, and takes its process and each agent's model and effort from that tier unless a flag sets them.** Defined once, in `references/shared-rules/risk-tier.md`, and shared with `review-code` and `review-doc`. **Every dispatched agent is the plugin agent that matches its phase's effort, and carries its phase's model on its Agent call; the run's tier sets both unless a flag does.** Defined once, in `references/shared-rules/agent-dispatch-pin.md`, and shared with `review-code` and `review-doc`. Read the tiers, the routing table, the floor format and the tier-line formats at run time, from `${CLAUDE_PLUGIN_ROOT}/references/shared-rules/risk-tier.md`: this skill restates none of them.
+
+1. **Classify**, unless `--tier` was passed. Use the code tier, read from the plan or spec being implemented, and add the triggers in the `## Risk tiers` section of the root CLAUDE.md when it has one. When unsure between two tiers, take the higher. The reason names the trigger and the evidence, such as a task number.
+2. **Floor.** The file is `tmp/risk-tier-$CLAUDE_CODE_SESSION_ID.md`. It counts only when its `session:` matches the variable and its `branch:` matches `git rev-parse --abbrev-ref HEAD`; otherwise it is ignored and then overwritten, never used. Another conversation's file is never read. Take the higher of the stored tier and the classified one, as the rule defines; `--tier` skips both. **When `CLAUDE_CODE_SESSION_ID` is unset, neither read nor write the file, and end the tier line with `(not carried: no session id)`.**
+3. **Print** the two tier lines, after Steps A to C and ahead of the task graph, and do not pause after them. The coders' model and effort come from the tier's row; `--model` and `--effort` replace their own fields, labelled on the line. On a FULL run without `--mode` the second line reads `mode pending · …` (formats in the rule).
+4. **Write** the floor after printing (create `./tmp/` if needed): `tier`, `reason` (`--tier <level>` for a `--tier` run), `session`, `branch`, `set_by: implement` and `set_at`. Skipped when there is no session id.
+
+**Process by tier:**
+- **FULL:** the mode picker below. `--mode` skips it, and `--auto` takes the recommendation.
+- **LIGHT:** `single`, with no picker and no per-task reviewers.
+- **MECHANICAL:** `single`, or a scripted exact-once edit by this session. The edit is allowed when the plan's change is a rename, move or reformat that one command applies and an instrument (a grep that must return nothing, a build) proves. The session commits the edit as one commit before it verifies and reports, dispatches no agent, and its second tier line is `mode scripted edit · no agents`.
+- An explicit `--mode` replaces the mode the tier's row gives, on any tier; the scripted edit is then not used.
+
 ### Normal-feature path
 
 Load `references/implementation-step.md` (which transitively loads `references/task-graph.md`) and follow its logic:
@@ -144,67 +162,40 @@ Load `references/implementation-step.md` (which transitively loads `references/t
    Interactive runs (no `--auto`):
    - **No task carries a `Rollback:` field** → the plan predates the field. Print `Plan predates the Rollback field; no per-task rollback stated` and continue without prompting — except for any task the plan itself describes as a schema migration or an infrastructure apply, which is prompted regardless. Judge that from the task's own text and `Files:` paths; do not infer it from anything outside the plan.
    - **Some tasks carry it and some do not** → list every task whose `Rollback:` field is missing or empty, and ask the user to supply one or confirm forward-fix-only. Do not dispatch until each is resolved.
-2. Compute the execution model recommendation (per `references/implementation-step.md` Execution Model Recommendation section).
-3. **If `--model` flag was provided** → short-circuit the picker, dispatch directly with that model. The preamble block in `references/implementation-step.md` Override Dispatch section is still prepended.
-3.5. **If `--auto` flag is active (and `--model` is NOT provided):**
-   Use the narrowed 2-option algorithm:
-   ```
-   IF parallelism_ratio >= 0.35  → dispatch option [4]: single-agent + 1 parallel helper
-   ELSE                           → dispatch option [1]: single-agent
-   ```
-   Options [2] subagent-per-task and [3] clear-context are **excluded**.
-   Skip the picker presentation — dispatch directly. The preamble block for the selected option in `references/implementation-step.md` Override Dispatch section is still prepended, exactly as in step 3.
-4. **Else** → present the 4-option dispatch picker exactly as defined in `references/implementation-step.md`:
-   ```
-   [1] Single-agent <(recommended) if applicable>
-   [2] Subagent-per-task <(recommended) if applicable>
-   [3] Clear context + single-agent
-   [4] Single-agent + one parallel helper <(recommended) if applicable>
-   ```
-5. **If user picks Option [3] (clear-context) → early-exit path:**
-   - **Write the marker file** `tmp/implement-exit-status.md` with the following exact schema (plain key-value, one per line, NOT YAML frontmatter):
+2. Compute the execution mode recommendation (per `references/implementation-step.md` Execution Mode Recommendation section). Only FULL uses it: for the picker, and for `--auto`.
+3. **Settle the mode.**
+   - FULL with `--mode` → that mode, with no picker.
+   - FULL with `--auto` (and no `--mode`) → the recommendation, with no picker.
+   - FULL otherwise → present the two-option picker exactly as defined in `references/implementation-step.md`:
      ```
-     early_exit: clear_context
-     exit_reason: user picked option [3] at execution model picker
-     exit_time: <ISO-8601 timestamp>
-     plan_or_spec: <absolute path that /implement was invoked with>
+     [1] single   — one <coders> agent carries the whole plan
+     [2] per-task — one <coders> agent per task, and a spec reviewer per task
      ```
-     `early_exit` is the required discriminator. Orchestrate matches on the literal value `clear_context`. The other three fields are informational.
-   - Print the breadcrumb:
-     ```
-     ── Next ────────────────────────────────────────
-     /clear → /implement <path> --model single
-     ────────────────────────────────────────────────
-     ```
-     The `--model single` is explicit so that on re-entry after `/clear`, the picker is bypassed regardless of whether the user edits the command before pasting.
-   - Exit. Do NOT dispatch.
-6. **Else** dispatch the chosen execution model with the appropriate override preamble from `references/implementation-step.md` Override Dispatch section.
+   - When the picker or `--auto` settles the mode, print `Mode: <mode> (picked)` when the picker answered, and `Mode: <mode> (recommended)` when `--auto` took the recommendation.
+   - LIGHT and MECHANICAL → as in Resolve the Tier. With `--mode`, that mode.
+4. **Checks before any dispatch.** They run after the tier and the mode are settled, and only for agents the run will dispatch: the MECHANICAL scripted edit dispatches none, so it raises none of these errors.
+   - **A session with no Agent tool cannot run this skill.** Claude Code gives no Agent tool to an agent at its spawn-depth cap. If this session has none, print `Error: this session has no Agent tool, so the coding agents cannot be dispatched. Run the skill from the top-level session, or raise CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH (at least 2 for a first-level sub-agent).` and exit. This is checked before the agent type and before the `--model` value. Never run the coding in this session instead.
+   - **A missing agent type is an error, never a fallback.** If the agent type for the chosen level is not among the ones the Agent tool offers in this session, print `Error: agent type 'ai-dev-tools:<level>-effort' is not available in this session. Run /reload-plugins, or restart the session, and re-run.` and exit.
+   - **`--model` is handed to the Agent tool unchanged.** On a value it does not accept, print `Error: --model must be a model the Agent tool accepts; got '<value>'.` and exit.
+5. **Dispatch** the chosen mode with the matching override preamble from `references/implementation-step.md` Override Dispatch section. Every agent is dispatched in this one call form, with the coders' effort and model resolved in Resolve the Tier:
+   ```
+   Agent(subagent_type: "ai-dev-tools:<coder effort>-effort", prompt: <plan or task prompt>, model: "<coder model>")        # implement: coder, spec reviewer, escalation
+   ```
+   - **`single`:** one coder in that form, given the `single` preamble and the plan. It follows `superpowers:executing-plans`.
+   - **`per-task`:** this session coordinates `superpowers:subagent-driven-development` with the `per-task` preamble. Every implementer and every task reviewer is dispatched in that form.
+   - **Concurrency:** at most 3 agents run at once, or fewer when the session's `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` is lower.
+6. **Escalation.** For each task the coders report BLOCKED, dispatch one fresh agent for that task in that form, given the `single` preamble and that task, at the coders' effort and with `model: "opus"`. Do this even when the coders already ran on Opus. `--effort` moves it with the coders, and `--model` never changes it. If it fails, the task stays BLOCKED in the report.
+7. **Verify before reporting.** After the coders return, this session runs the plan's verification commands itself and quotes their output, because a subagent's report is not evidence. The report gives the commits, the exact commands with their output, checks SKIPPED and why, and residual risk.
 
-### Default Model Selection
+### Default Mode
 
-When `--model` is not passed and the picker is not presented (e.g., `/implement` invoked standalone without arguments, no picker interaction occurs), the default execution model is **single** (single-agent in current context). Override explicitly with `--model single|subagent|parallel`.
+When `--mode` is not passed and the picker is not presented (LIGHT and MECHANICAL runs), the mode is **single**. Override explicitly with `--mode single|per-task`.
 
 ---
 
 ## Return Contract with Orchestrate
 
-When `/implement` is invoked via orchestrate (breadcrumb `/orchestrate (/implement <plan>)`), orchestrate resumes control after `/implement` returns. Orchestrate's post-`/implement` logic (defined in spec 04) runs auto-commit verification, writes `step: 6` to the hint file, and emits the Step 5 → Step 6 breadcrumb — BUT ONLY on normal completion. Option [3] clear-context is an **early exit** before any implementation has run, and orchestrate must NOT run post-`/implement` logic in that case.
-
-`/implement` signals early-exit to orchestrate via the marker file `tmp/implement-exit-status.md` described in Step D.5 above.
-
-**Marker file lifecycle (canonical definition — spec 04 references this section):**
-
-- **Location:** Always `tmp/implement-exit-status.md` (plain file, not YAML frontmatter).
-- **Written by:** `/implement` ONLY, and ONLY on Option [3] clear-context exit.
-- **Read by:** orchestrate Step 5 post-`/implement` logic (spec 04 wires this in).
-- **Deleted by:** orchestrate as part of its post-`/implement` resume.
-- **When to write:** Option [3] exit ONLY.
-- **When NOT to write:**
-  - Normal dispatch completion (Options [1], [2], [4]) — orchestrate's normal resume path applies.
-  - `--model single|subagent|parallel` dispatch returning control after implementation — normal resume.
-  - Refactor-unit path returning after `references/refactor-execution.md` completes — normal resume.
-  - Error exits from path-resolution or plan-not-found — orchestrate's existing error-handling path applies; marker is unnecessary.
-- **Unknown-field tolerance:** The `early_exit:` field is the sole load-bearing discriminator. Orchestrate MUST NOT ignore the marker because of unknown or missing informational fields.
+When `/implement` is invoked via orchestrate (breadcrumb `/orchestrate (/implement <plan>)`), orchestrate resumes control after `/implement` returns. Orchestrate's post-`/implement` logic (defined in spec 04) runs auto-commit verification, writes `step: 6` to the hint file, and emits the Step 5 → Step 6 breadcrumb. On this path, a plan passed by orchestrate, `/implement` has no early exit: every return that is not an error exit is a normal completion, and it writes no marker file.
 
 ---
 
@@ -224,11 +215,8 @@ When `/implement` is invoked via orchestrate (breadcrumb `/orchestrate (/impleme
 3. **Hint file `plan:` field points to nonexistent file but `spec:` field is valid** — Fall through to `spec:` (Step A.3). Do not error on plan-not-found if spec is available.
 4. **Spec has `## Phase 1` but only one phase** — Hard signal triggers, recommendation prompt shows. (Refine the threshold later if this is too aggressive.)
 5. **Plan file has zero actionable tasks** — Task graph is empty; print `Plan contains no actionable tasks. Nothing to implement.` and exit.
-6. **`--model parallel` requested but plan has no parallelizable tasks** — Print `--model parallel requested but plan tasks have linear dependencies; falling back to subagent-per-task.` and continue with subagent-per-task dispatch.
-7. **`--model clear-context` passed** — **NOT a valid value.** Reject with: `--model clear-context is not supported; clear-context is dispatch-only. Omit --model and choose option [3] from the picker.` and exit.
-8. **Spec recommendation prompt declined repeatedly** — User passes `--skip-plan-recommendation` once per invocation; not persisted.
-9. **Plan and spec both in `tmp/`** — Location detection ambiguous; content fallback decides. If still ambiguous, error per Step B.4.
-10. **Plan written by `/writing-plans` mid-orchestrate, then `/implement` invoked standalone with no path** — Hint file's `plan:` field has the freshly-written plan. Step A picks it up. Works.
-11. **Concurrent orchestrate sessions writing different plans to the hint file** — Out of scope. Single-session assumption.
-12. **Spec with no hard signals AND user wants a plan anyway** — User manually runs `/writing-plans <spec>` first; `/implement` is not a hard gate.
-13. **Hint still says `step: 5` after standalone `/implement` completes from the clear-context path** — Expected. `/implement` is stateless. User re-invokes `/orchestrate` to resume; Fast-Path Detection advances to Step 6 automatically via commit detection.
+6. **Spec recommendation prompt declined repeatedly** — User passes `--skip-plan-recommendation` once per invocation; not persisted.
+7. **Plan and spec both in `tmp/`** — Location detection ambiguous; content fallback decides. If still ambiguous, error per Step B.4.
+8. **Plan written by `/writing-plans` mid-orchestrate, then `/implement` invoked standalone with no path** — Hint file's `plan:` field has the freshly-written plan. Step A picks it up. Works.
+9. **Concurrent orchestrate sessions writing different plans to the hint file** — Out of scope. Single-session assumption.
+10. **Spec with no hard signals AND user wants a plan anyway** — User manually runs `/writing-plans <spec>` first; `/implement` is not a hard gate.

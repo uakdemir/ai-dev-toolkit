@@ -679,10 +679,10 @@ printf '# Help Fake\n\nAGENTS (name one as subagent_type in a prompt, and pass m
   > "$BASE/skills/help-fake/SKILL.md"
 expect green "$BASE" "N11 a skill that lists the pinned agents' names without dispatching one does NOT join the contract"
 
-# `implement` and `orchestrate` dispatch with a prompt and nothing else, by design: neither takes an
-# effort for its agents, and the rule says so. The F4 sweep runs every detector over every
-# references/ tree, which would make that design a violation the day either skill writes its call
-# out. This detector binds governed skills only.
+# `orchestrate` dispatches with a prompt and nothing else, by design: it takes no effort for its
+# agents, and the rule says so. The F4 sweep runs every detector over every references/ tree,
+# which would make that design a violation the day it writes its call out. This detector binds
+# governed skills only.
 build_pin
 mkdir -p "$BASE/skills/implement-fake/references"
 printf '# Implement Fake\n\nDispatch the coder: `Agent(prompt: <coder-prompt>)`.\n' \

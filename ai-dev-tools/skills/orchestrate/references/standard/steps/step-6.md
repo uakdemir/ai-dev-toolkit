@@ -21,6 +21,13 @@ Continue? or specify a different command.
 
 ## After Review Completes
 
+**Case M (status `Not reviewed (MECHANICAL)` — no review round ran):**
+Checked first. The review wrote no review JSON, so there are no counts to route on. Advance to Step 7 as Case B does.
+```
+/commit
+/clear → /orchestrate
+```
+
 **Case A (criticals or highs remaining):**
 Write `step: 7` to hint BEFORE emitting breadcrumb.
 ```
@@ -42,7 +49,7 @@ Do NOT advance to Step 7. A run with 0 criticals and 0 highs can still be Incomp
 /commit
 /clear → /orchestrate (/review-code <N> --against <spec_path> --max-iterations 1 --must-inspect <files from coverage.not_inspected>)
 ```
-Case C is checked **before** Case B, since both match on the same counts. If the user explicitly accepts the coverage hole, advance to Step 7 with the uninspected files carried into the Step 7 status line.
+Case M is checked before every other case. Case C is checked **before** Case B, since both match on the same counts. If the user explicitly accepts the coverage hole, advance to Step 7 with the uninspected files carried into the Step 7 status line.
 
 Edge: >50% non-feature commits interleaved → warn.
 

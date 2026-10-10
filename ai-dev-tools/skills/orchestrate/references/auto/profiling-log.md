@@ -24,10 +24,10 @@ LOG="$LOG_DIR/ai-dev-tools.log"
 JSON Lines (JSONL). One JSON object per line.
 
 ```json
-{"schema_version":2,"ts":"2026-04-18T10:00:00Z","spec":"foo.md","action":"review-doc","round":1,"model":"inherited","total_time_s":42.123}
-{"schema_version":2,"ts":"2026-04-18T10:00:45Z","spec":"foo.md","action":"review-doc","round":2,"model":"inherited","total_time_s":88.307}
-{"schema_version":2,"ts":"2026-04-18T10:02:14Z","spec":"foo.md","action":"implement","round":1,"model":"inherited","total_time_s":412.612}
-{"schema_version":2,"ts":"2026-04-18T10:09:07Z","spec":"foo.md","action":"review-code","round":1,"model":"inherited","total_time_s":95.204}
+{"schema_version":2,"ts":"2026-04-18T10:00:00Z","spec":"foo.md","action":"review-doc","round":1,"model":"opus","total_time_s":42.123}
+{"schema_version":2,"ts":"2026-04-18T10:00:45Z","spec":"foo.md","action":"review-doc","round":2,"model":"opus","total_time_s":88.307}
+{"schema_version":2,"ts":"2026-04-18T10:02:14Z","spec":"foo.md","action":"implement","round":1,"model":"sonnet","total_time_s":412.612}
+{"schema_version":2,"ts":"2026-04-18T10:09:07Z","spec":"foo.md","action":"review-code","round":1,"model":"opus","total_time_s":95.204}
 ```
 
 ---
@@ -41,7 +41,7 @@ JSON Lines (JSONL). One JSON object per line.
 | `spec` | string | Spec file basename (e.g. `"mobile-scaffold-integration-design.md"`) — basename, not full path |
 | `action` | enum: `"review-doc"` \| `"implement"` \| `"review-code"` | Which pipeline stage. Consumers MUST treat unknown values as opaque (forward compatibility). |
 | `round` | integer ≥ 1 | Phase/iteration ordinal within the action (see below) |
-| `model` | string | Effective model for the dispatch. `review-doc` and `review-code` emit `"inherited"`: orchestrate passes neither skill a `--model`, so their Agent calls name no model and Claude Code resolves one — `CLAUDE_CODE_SUBAGENT_MODEL` when that variable is exported, the session's model otherwise. `implement` names no model either and emits `"inherited"` (its `--model` flag selects execution topology — single/subagent/parallel — not the LLM). **Operational invariant:** if `/implement` is ever dispatched with an explicit model override, the emitted value MUST reflect the effective model used. The `sonnet`/`opus` enum was widened to a free string in `schema_version` 2, when review-doc and review-code stopped naming a model. |
+| `model` | string | Effective model for the dispatch: the model the tier line names. orchestrate passes no model flag, so `review-doc` and `review-code` emit `"opus"` and `implement` emits `"sonnet"`, by the tier's row. **Operational invariant:** if a dispatch is ever made with an explicit model override, the emitted value MUST reflect the effective model used. The `sonnet`/`opus` enum was widened to a free string in `schema_version` 2. |
 | `total_time_s` | float | Wall-clock seconds from dispatch start to dispatch return. **Precision: 3 decimal places (millisecond resolution).** Formatted with `printf '%.3f'`. |
 
 ### Round semantics
@@ -125,7 +125,7 @@ For a phase-1 review-doc dispatch on spec `foo.md` that ran 42.123 seconds and e
 
 ```bash
 printf '{"schema_version":2,"ts":"%s","spec":"%s","action":"%s","round":%d,"model":"%s","total_time_s":%s}\n' \
-  "2026-04-18T10:00:00Z" "foo.md" "review-doc" 1 "inherited" "42.123" \
+  "2026-04-18T10:00:00Z" "foo.md" "review-doc" 1 "opus" "42.123" \
   >> "$LOG" 2>/dev/null || true
 ```
 
