@@ -39,10 +39,11 @@ gitignored `tmp/` file, so the findings are copied here:
 | 4 | The tier sets the round count and prints it, so `--max-iterations` becomes optional |
 | 5 | Generic triggers live in the rule. A project adds its own under `## Risk tiers` in its CLAUDE.md |
 | 6 | `--model` names an LLM in every skill. implement's execution mode moves to `--mode single\|per-task`, and in-session coding is removed |
-| 7 | The tier persists in `tmp/risk-tier.md`, per worktree and per conversation, as a floor |
+| 7 | The tier persists in `tmp/risk-tier-<session-id>.md`, one file per conversation in the worktree, as a floor |
 | 8 | review-code gets no fact-checker. Its findings are already re-judged by the fixer's push-back and by the triage phase, and `--verify` is its ground truth (`skills/review-code/SKILL.md:237`). This closes the 5.0.0 spec's Follow-up 1 |
 | 9 | Delete the five prompts that drive these three skills |
 | 10 | Open calls, answered `1C 2A 3A 4A 5A 6A 7A` on the decision page: an explicit round count does not override MECHANICAL, and neither do agent flags; MECHANICAL review-doc confirms each changed fact; the picker recommends `per-task` only when tasks barely overlap, with at most 3 agents at once; a task blocked on Opus still gets one fresh Opus attempt; the refactor-unit path stays in the session |
+| 11 | Review round 1's open calls, answered `1B 2A 3C` on the decision page: every orchestrate reader, in auto and in standard mode, learns that a MECHANICAL review is a pass, and such a review still writes no review JSON; the floor is one file per conversation; the proof runs make no throwaway commit and need no scratch branch |
 
 ## Scope
 
@@ -52,7 +53,7 @@ release 6.0.0.
 
 **Out:**
 - **Part B, deprecating orchestrate:** the founder and colleagues now run review-doc, implement and
-  review-code directly, and each works on its own. `tmp/risk-tier.md` already carries the tier
+  review-code directly, and each works on its own. The floor file (§1.4) already carries the tier
   between those calls, which was the one thing orchestrate would have added. So orchestrate gets no
   new work: part B marks it deprecated and later removes it. Part A changes it only where its files
   would otherwise become wrong (§7).
@@ -133,7 +134,7 @@ reads CLAUDE.md for its reviewer, and the classifier reads the same file.
    `--effort`'s are; any other prints `Error: --tier must be one of: full, light, mechanical.` and
    exits.
 2. **Otherwise:** classify, read the floor (§1.4), and take the higher of the two. If the result is
-   higher than the floor, print it as "moved up".
+   higher than the floor, print it as "moved up". If the floor's tier stands, print it as carried.
 3. **Explicit `--max-iterations N` with N ≥ 1 on a MECHANICAL run:** the tier wins. The run skips
    review, and the tier line reports the flag as unused. This holds whether MECHANICAL was
    classified or passed as `--tier mechanical`. Only `--tier light` or `--tier full` forces a review
@@ -145,7 +146,10 @@ reads CLAUDE.md for its reviewer, and the classifier reads the same file.
    MECHANICAL coder takes `--model` and `--effort` as usual; they are unused only when the session
    makes the scripted edit (§5).
 
-### 1.4 The floor: `tmp/risk-tier.md`
+### 1.4 The floor: `tmp/risk-tier-<session-id>.md`
+
+One file per conversation, named by `$CLAUDE_CODE_SESSION_ID`. A run reads and writes only its own
+conversation's file, so two conversations in one worktree never overwrite each other's floor.
 
 ```
 tier: FULL
@@ -158,14 +162,15 @@ set_at: <ISO-8601>
 
 - **Read:** the stored tier counts only when `session` matches `$CLAUDE_CODE_SESSION_ID` and
   `branch` matches the current branch. Otherwise it is ignored and overwritten. A new conversation
-  starts fresh, so nothing goes stale overnight.
+  has its own file, so nothing goes stale overnight.
 - **Write:** every run that resolved a tier writes the file after printing the tier line. A
   `--tier` run stores `reason: --tier <level>`.
 - **Unset variable:** when `CLAUDE_CODE_SESSION_ID` is unset, the run neither reads nor writes the
   file, and the tier line ends with `(not carried: no session id)`.
 - **Never deleted by the review skills' Setup**, which deletes only under `tmp/_reviews_errors/`. Say
   so in review-code's Setup, beside its `tmp/past-issues-backlog.md` note, and in a new review-doc
-  Setup step, since review-doc has no such note.
+  Setup step, since review-doc has no such note. Nothing else deletes them either: earlier
+  conversations' files stay behind in gitignored `tmp/`.
 - **Measured on 2026-10-10:** Claude Code exports `CLAUDE_CODE_SESSION_ID` to the session's Bash
   calls; its value matched the session's scratchpad directory. **Not measured:** whether a
   sub-agent sees the same value, and whether `/clear` changes it. Record both in the rule (§9).
@@ -399,8 +404,11 @@ longer decides a dispatched agent's model in these skills.
 
 | File | Becomes |
 |---|---|
-| `skills/orchestrate/references/auto/stages/stage-i-spec-review.md` (both phases) | review-doc resolves the doc tier and dispatches Opus. A MECHANICAL result runs no round and writes no review JSON. The stage treats that status line as a pass, not as a crash |
-| `skills/orchestrate/references/auto/stages/stage-iii-code-review.md` | The same for review-code |
+| `skills/orchestrate/references/auto/stages/stage-i-spec-review.md` (both phases, and the criticals check) | review-doc resolves the doc tier and dispatches Opus. A MECHANICAL result runs no round and writes no review JSON. The stage treats `Not reviewed (MECHANICAL)` as a pass with zero criticals, not as a crash. A MECHANICAL run that ends `Issues Found`, on a sentence it could not confirm, takes the unresolved-criticals path |
+| `skills/orchestrate/references/auto/stages/stage-iii-code-review.md` (the dispatch, Early Exit, the successful-iteration definition, the criticals check, Output Validation) | The same for review-code. A MECHANICAL result is a successful iteration with zero criticals and nothing uninspected: the loop ends, and no artifact is expected |
+| `skills/orchestrate/references/auto/failure-handling/retry-semantics.md` | Crash item 3 and the expected-artifact list except a review that ended `Not reviewed (MECHANICAL)`: it writes no review JSON by design |
+| `skills/orchestrate/references/common/error-logs-format.md` | The gate read contract: a MECHANICAL review writes no review JSON, and each gate reads that as zero criticals |
+| `skills/orchestrate/references/standard/steps/step-2.md`, `step-6.md`, `step-7.md`, and `standard/fast-path-detection.md` | Standard mode learns the same result. Step 2 leaves the spec's Status as it is, because nothing was reviewed. Step 6 gains a case that advances to Step 7 as a clean review does. Step 7's status line can read `Not reviewed (MECHANICAL)`. Fast-path row 7 expects no summary from such a review |
 | `skills/orchestrate/references/auto/stages/stage-ii-implement.md` | `--auto` takes the recommendation (`single` or `per-task`); coders run on Sonnet in sub-agents, so the spawn-depth cap must be at least 2. The Failure Surface's helper row goes |
 | `skills/orchestrate/references/auto/profiling-log.md`, and the Profiling section of each stage file | `model` records the model the tier line names: `opus` for the review skills, `sonnet` for implement, or the override. No longer `inherited`, in the schema, its examples or the stage files' `model=inherited` |
 | `skills/orchestrate/references/auto/pipeline-overview.md` | Stage ii's one dispatch spawns its coders (`single` or `per-task`), not a helper, and the commits during it are theirs |
@@ -455,25 +463,31 @@ orchestrate's *dispatch commands* do not change in part A. Its explicit round co
   - `--model` names the coders' model, and the execution mode is `--mode single|per-task`.
   - clear-context, the parallel helper and in-session coding are gone, along with
     `tmp/implement-exit-status.md`.
-- **New:** the per-conversation file `tmp/risk-tier.md`.
+- **New:** the per-conversation file `tmp/risk-tier-<session-id>.md`.
 - **Features:**
   - `--tier`
   - the tier lines
   - `Found this round:` in review-code
   - escalation to Opus
 
-**Proof**, after `/reload-plugins`:
-1. **MECHANICAL:** a comment-only commit, then `/review-code 1`. Expect the MECHANICAL tier, no
-   agents, `--verify` run, and the tier file written.
-2. **Floor:** in one conversation, `/implement` on a FULL plan and then `/review-code`. Expect
-   `carried`.
-3. **FULL:** the implementation's own review-code round. Confirm that the reviewer ran at max on
+**Proof**, after `/reload-plugins`, on master and in one conversation. No proof makes a throwaway
+commit, so none needs a scratch branch (decision 11):
+1. **Open questions first:** does a sub-agent see the same `CLAUDE_CODE_SESSION_ID`, and does
+   `/clear` change it? Measure both and commit the answers to the measured lines of `risk-tier.md`.
+   That docs-only commit is the next proof's input.
+2. **MECHANICAL:** `/review-code 1` on that commit. Expect the MECHANICAL tier, no agents,
+   `--verify` run, and the floor file written. If the classifier answers LIGHT, decline at the
+   master warning, record its reason, and prove the path with `--tier mechanical`.
+3. **Floor:** a floor whose `branch:` or `session:` was edited to another value is ignored and
+   rewritten. Then the carry: `/implement <plan> --tier full`, cancelled at the picker, has already
+   written the floor, so `/review-code 1` prints `carried from implement`. Decline at the master
+   warning, so that no agent runs. No proof run dispatches implement's coder; the first real
+   `/implement` does.
+4. **FULL:** the implementation's own review-code round. Confirm that the reviewer ran at max on
    Opus with
    `python3 /home/umut/projects/tune/tmp/token-usage/2026-10-05/agent-effort-check.py --minutes 30 --project ai-dev-toolkit`
    (the script is not in this repository). With the session at high, a max pin can be told apart
    from inheritance.
-4. **Open questions to measure and record in `risk-tier.md`:** does a sub-agent see the same
-   `CLAUDE_CODE_SESSION_ID`, and does `/clear` change it?
 
 ## Risks
 
