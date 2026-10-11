@@ -1,5 +1,44 @@
 # Changelog
 
+## 7.0.0 (2026-10-11)
+
+The release that removes `orchestrate`. The team runs four skills by hand, in this order:
+`brainstorm`, `review-doc`, `implement`, `review-code`. Each one prints the command for the next,
+with its paths, and no skill keeps state. The spec is the only artefact a human reviews: a plan,
+when there is one, is internal to `implement`.
+
+### Breaking Changes
+
+- **orchestrate:** the skill is removed, with `tmp/orchestrate-state.md`, its auto mode and its profiling log. Nothing replaces the state file. Its roadmap suggestions, session bootstrap, post-implement commit check and completion step go with it; the roadmap tick moves to `implement` (1ede933)
+- **implement:** the path is required. A run without one prints `Error: /implement needs a spec or plan path.`; the hint-file fallback is gone (bec77ec)
+- **implement:** `--auto` is removed, and a call that passes it gets `Error: --auto was removed in 7.0.0.` To run unattended, ask the session to run `review-doc`, `implement` and `review-code` in succession, and pass `--mode` so that a FULL run's picker does not wait. `--run-id` is ignored with a warning (bec77ec)
+- **implement:** given a spec, a run no longer stops at a write-a-plan prompt. It judges whether a plan would change the outcome, prints `Plan: needed — <reason>` or `Plan: skipped — <reason>`, writes the plan itself when one is needed, and carries on. `--plan` and `--no-plan` override the decision; `--skip-plan-recommendation` is read as `--no-plan`, with a warning (bec77ec)
+- **review-doc:** a completed run commits every document it changed, where it committed only when its triage applied a fix. `N` in `fix(review-doc): apply N review suggestions` now counts the fixer's fixes as well (ac62a38)
+- **refactor-to-layers, refactor-to-monorepo:** generated specs carry no `Status:` line, and `--next-unit` no longer asks whether the previous unit is finalized. No skill reads or writes a spec's `Status:` (fab1a75)
+
+> As in 6.0.0, no commit carries a `BREAKING CHANGE:` footer. The commits that remove the skill and
+> the flags mark the break with `!` in their subjects; the other items are listed because the same
+> invocation now behaves differently.
+
+### Features
+
+- **brainstorm:** new skill, `/ai-dev-tools:brainstorm [topic]`. It runs `superpowers:brainstorming` to a committed spec, with no plan and no user-review gate, and prints `/ai-dev-tools:review-doc <spec-path>` (411f5de)
+- **review-doc:** "continue to implementation" prints `/ai-dev-tools:implement <spec-path>` when the run reviewed exactly one document, under `docs/superpowers/specs/` or `docs/specs/` (ac62a38)
+- **implement:** a run that implemented anything ends its output with `/ai-dev-tools:review-code <sha> --against <spec-path>`, where `<sha>` is HEAD when the run started. A run given a plan prints no `--against` (bec77ec)
+- **implement:** spec changes found while deciding or planning are made by the session, committed alone and listed in the report. Only a change that is both ambiguous and significant stops the run, before any dispatch, with its questions printed (bec77ec)
+- **implement:** the refactor-unit path ticks the matched roadmap item and commits the unit with the tick, once its verification passes (bec77ec)
+- **help:** shows the four-step workflow and lists `/brainstorm` (fab1a75)
+
+### Fixes
+
+- **review-code, review-doc, shared-rules:** the rules that `orchestrate` used to justify stay, with reasons that still hold. The counts feed each skill's own stop check and status; `--must-inspect` serves a re-run after Incomplete; `since` mode serves `implement`'s `review-code <sha>`; the run-id prefixes keep two runs in one worktree apart; and the error log is for the user, to see how often runs fail (ac62a38, d1cff14, 51cd2f2)
+- **session-handoff:** no longer parses `/orchestrate (/…)` breadcrumbs, and its next-action check no longer reads a spec's `Status:` (fab1a75)
+- **document-for-ai:** ADR extraction has one consumer, the `adr` command (fab1a75)
+
+### Tests
+
+- **scripts:** `shared-semantics-mutation-test.sh` still has 66 cases. N9's fixture is now `skills/breadcrumb-fake`: the case tests the detector's scope, not `orchestrate`. The gates' comments no longer name the removed skill, and no gate's behaviour changes (29205f8)
+
 ## 6.0.0 (2026-10-10)
 
 The release in which `review-code`, `review-doc` and `implement` classify the risk of their own work

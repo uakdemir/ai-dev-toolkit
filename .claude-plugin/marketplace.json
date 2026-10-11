@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "ai-dev-toolkit",
-  "description": "Marketplace for the ai-dev-tools Claude Code plugin — AI-native development automation: orchestration, AI-optimized docs, monorepo/layer/convention/API-contract refactoring and enforcement, and code & test review.",
+  "description": "Marketplace for the ai-dev-tools Claude Code plugin — AI-native development automation: a brainstorm→review→implement→review workflow, AI-optimized docs, monorepo/layer/convention/API-contract refactoring and enforcement, and code & test review.",
   "owner": {
     "name": "Umut Akdemir"
   },
@@ -9,7 +9,7 @@
     {
       "name": "ai-dev-tools",
       "source": "./ai-dev-tools",
-      "description": "AI-optimized documentation, monorepo/layer/convention/API-contract refactoring & enforcement, and brainstorm→review→implement→review development-cycle orchestration.",
+      "description": "AI-optimized documentation, monorepo/layer/convention/API-contract refactoring & enforcement, and a brainstorm→review→implement→review development workflow.",
       "category": "development",
       "keywords": [
         "documentation",
@@ -17,7 +17,6 @@
         "layer-enforcement",
         "convention-enforcement",
         "api-contracts",
-        "orchestration",
         "code-review",
         "test-audit",
         "automation"

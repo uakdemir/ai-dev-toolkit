@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "ai-dev-tools",
-  "version": "6.0.0",
-  "description": "AI-optimized documentation generation, monorepo refactoring strategy, architectural layer enforcement, convention enforcement, API contract enforcement, and development cycle orchestration",
+  "version": "7.0.0",
+  "description": "AI-optimized documentation generation, monorepo refactoring strategy, architectural layer enforcement, convention enforcement, API contract enforcement, and a brainstorm → review → implement → review development workflow",
   "author": {
     "name": "Umut Akdemir",
     "url": "https://github.com/uakdemir"
@@ -16,7 +16,6 @@
     "layer-enforcement",
     "convention-enforcement",
     "api-contracts",
-    "orchestration",
     "code-review",
     "test-audit",
     "automation"
