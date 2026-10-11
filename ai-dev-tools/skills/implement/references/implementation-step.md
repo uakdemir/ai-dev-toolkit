@@ -1,6 +1,6 @@
 # Implementation Step
 
-This file is loaded by orchestrate at Step 5 onset for task graph visualization, execution mode recommendation, and override dispatch.
+This file is loaded by `/implement` for task graph visualization, execution mode recommendation, and override dispatch.
 
 ---
 
@@ -14,7 +14,7 @@ Present the task graph and execution mode recommendation together in the same re
 
 ## Execution Mode Recommendation
 
-Only a FULL run uses it: for the picker, and for `--auto`. LIGHT runs `single`, and MECHANICAL runs `single` or a scripted edit (see `../SKILL.md` Resolve the Tier).
+Only a FULL run uses it, for the picker. LIGHT runs `single`, and MECHANICAL runs `single` or a scripted edit (see `../SKILL.md` Resolve the Tier).
 
 **Inputs:**
 1. Plan file (count tasks, scan for "Files" sections)
@@ -40,7 +40,7 @@ Else → single
 
 **Present to user:**
 ```
-── Step 5: Implementation ──────────────────────
+── Implementation ──────────────────────────────
 Plan: <N> tasks, <coupling assessment>
 
 Recommendation: <single | per-task>
@@ -57,20 +57,18 @@ Proceed with [N]?
 
 Any input other than 1 or 2 re-presents the options.
 
-**Auto mode (`--auto` flag):** the picker is not presented. `--auto` takes the recommendation. See `../SKILL.md`.
-
 ---
 
 ## Override Dispatch
 
-Once the mode, `single` or `per-task`, is settled — at the picker, by `--mode`, by `--auto`, or by the tier — dispatch with a behavioral override block prepended to the dispatch prompt. Every dispatch path prepends one; there is no path that dispatches without a preamble.
+Once the mode, `single` or `per-task`, is settled — at the picker, by `--mode`, or by the tier — dispatch with a behavioral override block prepended to the dispatch prompt. Every dispatch path prepends one; there is no path that dispatches without a preamble.
 
-The `## Validation` block that every preamble requires is `/implement`'s hand-back format — it is what orchestrate and the user receive when the dispatched agent returns. Its bullets are spelled out inside each preamble rather than referenced from here, because the preamble is copied into another agent's prompt and that agent never reads this file. **Empty bullets print `none stated` rather than being omitted:** an explicit "none" is a claim someone can challenge; silence is indistinguishable from having forgotten.
+The `## Validation` block that every preamble requires is `/implement`'s hand-back format — it is what the user receives when the dispatched agent returns. Its bullets are spelled out inside each preamble rather than referenced from here, because the preamble is copied into another agent's prompt and that agent never reads this file. **Empty bullets print `none stated` rather than being omitted:** an explicit "none" is a claim someone can challenge; silence is indistinguishable from having forgotten.
 
 **If the mode is `single`**, dispatch one coder to follow `superpowers:executing-plans`, with this preamble prepended:
 
 ```
-IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
+IMPORTANT OVERRIDES FOR THIS EXECUTION (from /implement):
 
 1. TDD ENFORCEMENT: You MUST use red-green-refactor for every task.
    Write a failing test first, watch it fail, write minimal code to
@@ -110,22 +108,16 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
 
 8. SKIP THE FINAL WHOLE-BRANCH REVIEW AND finishing-a-development-branch:
    review-code runs next at the tier's level. Return after the last task.
-
-9. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
-   artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
-   is active. This is for traceability in multi-agent pipelines.
 ```
-
-Override 9 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
 
 Note: `executing-plans` dispatches no reviewer per task, so there is no code-quality reviewer to skip. Where it runs a final whole-branch review, override 8 skips it.
 
-Single-mode spec compliance limitation: self-assessment is less reliable than a task reviewer's. Drift will be caught by review-code at Step 6.
+Single-mode spec compliance limitation: self-assessment is less reliable than a task reviewer's. Drift will be caught by review-code, which runs next.
 
 **If the mode is `per-task`**, this session coordinates `superpowers:subagent-driven-development` with this preamble prepended:
 
 ```
-IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
+IMPORTANT OVERRIDES FOR THIS EXECUTION (from /implement):
 
 1. TDD ENFORCEMENT: The implementer subagent MUST use red-green-refactor
    for every change. Write a failing test first, watch it fail, write
@@ -179,12 +171,6 @@ IMPORTANT OVERRIDES FOR THIS EXECUTION (from orchestrate):
 
 9. SKIP THE FINAL WHOLE-BRANCH REVIEW AND finishing-a-development-branch:
    review-code runs next at the tier's level. Return after the last task.
-
-10. RUN-ID THREADING: You are executing under run-id `<run_id>`. Write output
-   artifacts to `tmp/_reviews_errors/<run_id>-<artifact>` when a run-id
-   is active. This is for traceability in multi-agent pipelines.
 ```
 
-Override 10 (RUN-ID THREADING) is only included when `--run-id` was passed. When `--run-id` is absent, omit it entirely.
-
-**Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure modes are these: the agent may skip TDD enforcement or skip verification (caught by review-code at Step 6 and the Step 8 verification gate), or it may create a worktree, or run the final whole-branch review or the finishing step, despite the overrides that forbid each.
+**Override reliability:** Under context pressure, the superpowers skill's native instructions may take priority over these overrides. The failure modes are these: the agent may skip TDD enforcement or skip verification (caught by review-code, which runs next, and by the verification `/implement` runs before it reports), or it may create a worktree, or run the final whole-branch review or the finishing step, despite the overrides that forbid each.

@@ -1,59 +1,51 @@
 ---
 name: implement
-argument-hint: "[path] [--mode single|per-task] [--model <model>] [--effort <level>] [--tier full|light|mechanical] [--auto] [--skip-plan-recommendation]"
-description: "Use when the user wants to execute a written implementation plan or implement directly from a spec — generates a task graph, recommends an execution mode, and dispatches with quality overrides. Invoked standalone (/implement <path>) or via orchestrate (/orchestrate (/implement <plan>))."
+argument-hint: "<path> [--mode single|per-task] [--model <model>] [--effort <level>] [--tier full|light|mechanical] [--plan|--no-plan]"
+description: "Use when the user wants to execute a written implementation plan or implement directly from a spec — decides whether a spec needs a plan, generates a task graph, recommends an execution mode, and dispatches with quality overrides. Invoke with /implement <path>."
 ---
 
 <help-text>
 /implement — execute a plan or spec
 
-Usage: /implement [path] [--mode single|per-task] [--model <model>] [--effort <level>] [--tier <level>]
-                  [--auto] [--skip-plan-recommendation] [--run-id <id>]
+Usage: /implement <path> [--mode single|per-task] [--model <model>] [--effort <level>] [--tier <level>]
+                  [--plan | --no-plan]
 
 Arguments:
-  path             Plan or spec file to implement. If omitted, uses the
-                   active orchestrate plan or spec from tmp/orchestrate-state.md
+  path             Plan or spec file to implement (required)
   --mode MODE      Skip the mode picker and dispatch directly:
                      single   = one agent carries the whole plan
                      per-task = one agent per task, and a task reviewer per task
   --model MODEL    Model of the coders (default: the tier's row)
   --effort LEVEL   Effort of the coders: high, xhigh, max (default: the tier's row)
   --tier LEVEL     Skip classification: full, light, mechanical (default: classified)
-  --auto           Non-interactive dispatch: takes the recommendation.
-                   Skips the Step C plan prompt and the refactor-unit pre-check.
-  --skip-plan-recommendation
-                   Suppress the Step C spec recommendation prompt (this
-                   invocation only).
-  --run-id <id>    Run-id threaded to dispatched sub-agents via override preamble.
+  --plan           Spec only: write a plan first, whatever the decision would be
+  --no-plan        Spec only: implement from the spec, with no plan
   --help           Show this help
 
 Examples:
-  /implement                                    # use orchestrate hint file
   /implement docs/plans/2026-04-06-foo-plan.md  # explicit plan
-  /implement docs/specs/2026-04-06-bar.md       # implement directly from spec
+  /implement docs/specs/2026-04-06-bar.md       # spec: decides whether it needs a plan
+  /implement docs/specs/bar.md --no-plan        # implement directly from the spec
   /implement docs/plans/baz.md --mode per-task  # skip the picker
 </help-text>
 
-Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--mode` is present, validate its value against the set `{single, per-task}`; on any other value print `Error: --mode must be one of: single, per-task.` and exit. If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. If `--tier` is present, validate its value against the set `{full, light, mechanical}`, matched exactly as `--effort`'s are; on any other value print `Error: --tier must be one of: full, light, mechanical.` and exit. If `--model` is present, check it for an old value first: `single`, `subagent`, `parallel` and `clear-context` named the execution mode before, and print `Error: --model now names the coders' model; for the execution mode use --mode single|per-task.` and exit. An old value never reaches the next check. Any other value is judged against the Agent tool in the Normal-feature path's step 4, "Checks before any dispatch", because that check needs the Agent tool. If `--skip-plan-recommendation` is present, suppress the Step C spec recommendation prompt for this invocation only (see Step C). If `--auto` is present, set auto mode active for this invocation; it also suppresses the Step C spec recommendation prompt (see Step C). `--auto` + `--mode` is valid — `--mode` overrides the recommendation `--auto` would take. If `--run-id <id>` is present, store the run-id for threading to dispatched sub-agents.
+Parse arguments: if `--help` is present, output ONLY the text inside `<help-text>` tags above verbatim and exit. If `--mode` is present, validate its value against the set `{single, per-task}`; on any other value print `Error: --mode must be one of: single, per-task.` and exit. If `--effort` is present, validate its value against the set `{high, xhigh, max}`; on an out-of-set value print `Error: --effort must be one of: high, xhigh, max.` and exit. If `--tier` is present, validate its value against the set `{full, light, mechanical}`, matched exactly as `--effort`'s are; on any other value print `Error: --tier must be one of: full, light, mechanical.` and exit. If `--model` is present, check it for an old value first: `single`, `subagent`, `parallel` and `clear-context` named the execution mode before, and print `Error: --model now names the coders' model; for the execution mode use --mode single|per-task.` and exit. An old value never reaches the next check. Any other value is judged against the Agent tool in the Normal-feature path's step 4, "Checks before any dispatch", because that check needs the Agent tool. If `--plan` and `--no-plan` are both present, print `Error: --plan and --no-plan are exclusive.` and exit; either one alone settles Step C's decision (see Step C).
+
+**Removed flags (7.0.0).** `--auto`: print `Error: --auto was removed in 7.0.0.` and exit, since continuing could prompt a caller that asked for no prompts. `--run-id <id>`: print `Warning: --run-id was removed in 7.0.0. Ignoring.`, drop the flag and its value, and continue. `--skip-plan-recommendation`: print `Warning: --skip-plan-recommendation was removed in 7.0.0; reading it as --no-plan.` and continue as though `--no-plan` had been passed.
 
 # implement
 
-Execute a written implementation plan or implement directly from a spec. `/implement` owns plan/spec detection, tier resolution, task-graph construction, execution-mode recommendation, the two-option mode picker, and the refactor-unit branch. It is **stateless** with respect to `tmp/orchestrate-state.md` — it READS the hint file in Step A but NEVER writes it. Orchestrate is the sole writer of the hint file.
+Execute a written implementation plan or implement directly from a spec. `/implement` owns plan/spec detection, the decision whether a spec needs a plan, tier resolution, task-graph construction, execution-mode recommendation, the two-option mode picker, and the refactor-unit branch. It keeps no state and reads none. Before Step A, record HEAD (`git rev-parse HEAD`): a run that implemented anything ends its output with the command for the next step, and that command names this SHA (see Handing Over).
 
 ---
 
 ## Step A — Path Resolution
 
-1. If positional `path` argument was provided → use it. Go to Step A.5.
-2. Else read `tmp/orchestrate-state.md`. If the `plan:` field is non-empty → use it. Go to Step A.5.
-3. Else read `tmp/orchestrate-state.md`. If the `spec:` field is non-empty → use it. Go to Step A.5.
-4. Else print this error and exit:
+1. If no positional `path` argument was provided, print this error and exit:
    ```
-   No path argument and no active plan/spec in orchestrate hint file. Specify a path or run /orchestrate first.
+   Error: /implement needs a spec or plan path.
    ```
-5. **Existence check:** verify the resolved path points to a real file. If not, print `File not found: <path>` and exit (Edge Case 2). Exception: if path came from the hint file `plan:` field and the file does not exist, fall through to step 3 (hint file `spec:` field) before erroring (Edge Case 3).
-
-The order **positional → plan → spec** matters. When both `plan:` and `spec:` are populated (the normal case after `/writing-plans` ran on a spec), prefer the more-recently-written plan.
+2. **Existence check:** verify the path points to a real file. If not, print `File not found: <path>` and exit (Edge Case 1).
 
 ---
 
@@ -75,67 +67,51 @@ Location-first detection covers >95% of cases. The content fallback only fires f
 
 ### If **plan** detected
 
-Proceed directly to Step D with the plan path.
+Proceed directly to Step D with the plan path. `--plan` and `--no-plan` are for a spec: passed with a plan path, the flag is ignored. Print `warning: <flag> ignored: <path> is already a plan` and continue.
 
 ### If **spec** detected
 
-Run the **Spec Recommendation Algorithm**. This is **skip-by-default**: most specs do not need a separate plan. Only recommend `/writing-plans` if at least one of three **hard signals** fires:
+Nothing in this step pauses for input, and nothing in it asks the user to review a plan.
 
-| Hard signal | Detection |
-|---|---|
-| Multi-component spec | Spec mentions ≥3 distinct files/modules to create or modify (scan `## Files Modified / Created` tables or "Create:" bullets) |
-| Cross-cutting concern | Spec mentions database migration AND code change AND test change in the same document |
-| Explicit phase markers | Spec already contains `## Phase 1`, `## Phase 2` (treat as proto-plan) |
+1. **Decide.** `--plan` → a plan is needed. `--no-plan` → no plan. Otherwise read the spec, and the code it touches, and judge whether a plan would change the outcome, as you would if asked "does this need a plan?". A plan pays for itself when the coder would otherwise have to settle sequencing, decomposition or interface questions the spec leaves open, or when the work is large enough that per-task execution and review are worth their cost. There is no file count, no signal table and no threshold. Print one line, and do not pause:
 
-**If none of the signals fire** → silently proceed to Step D treating the spec as the implementation source.
+   ```
+   Plan: needed — <reason>
+   ```
 
-**If at least one signal fires** → print this prompt and await user input:
+   or `Plan: skipped — <reason>`. When a flag decided, the reason is that flag.
+2. **Plan stage** (only when a plan is needed). Invoke `superpowers:writing-plans` in this session, on the spec, with this instruction placed before it:
 
-```
-This spec has [signal description]. A plan would help you sequence the work.
+   > Give every task a `Rollback:` field stating how to undo it — `Forward-fix only` is a valid value when stated deliberately. Save the plan under `docs/superpowers/plans/` and do not commit it. Do not ask the user to review the plan and do not present the Execution Handoff; return to /implement when the plan is saved.
 
-[1] Recommended: write a plan first
-    /writing-plans <spec-path>
-
-[2] Skip the plan, implement directly from the spec
-    /implement <spec-path> --skip-plan-recommendation
-
-Pick one to proceed.
-```
-
-Then exit. Do not auto-dispatch either option.
-
-**`--skip-plan-recommendation` suppression:** If the flag was passed on the current invocation, skip the hard-signal check entirely and proceed directly to Step D. The flag is a one-shot suppression; it is not persisted. `--auto` suppresses the check the same way: auto mode takes no input, so the prompt would end the run with nothing implemented.
+   If writing-plans still presents a review request or an Execution Handoff, ignore it and continue. Then fill in any `Rollback:` the plan still lacks, so the plan gate in Step D never prompts on a plan this step wrote.
+3. **Spec changes found while deciding or planning.** Sort each one on two questions: is it ambiguous (more than one defensible fix, so a decision is needed), and is it significant (your judgement; there is no threshold)?
+   - **Not both** → make the change yourself: edit the spec and any plan, commit the spec edit alone (`docs(spec): <what changed>`), and continue. Every such edit is listed in the final report.
+   - **Ambiguous and significant** → print the questions, delete any unfinished plan file, and stop before any dispatch. Nothing is implemented on a spec known to be undecided. When the user answers, write the answers into the spec, commit that edit alone (`docs(spec): <what changed>`), and resume this step with them. The questions are kept nowhere else: a later `/ai-dev-tools:implement <spec-path>` asks again about whatever is still open.
+4. When a plan was written, print `Plan saved: <plan-path>`, so an interrupted run can resume with `/ai-dev-tools:implement <plan-path>`. Then continue to Step D with the plan, or with the spec when no plan was needed.
 
 ---
 
 ## Step D — Dispatch with Execution Mode
 
-### `--auto` Mode Pre-check
-
-If `--auto` is active:
-1. **Skip the Refactor-Unit Branch Handling pre-check entirely.** Proceed directly to Resolve the Tier. Rationale: auto mode prioritizes a narrow, deterministic dispatch surface. Users who need refactor-unit handling must omit `--auto`.
-2. After building the task graph, take the recommendation instead of presenting the picker (see below).
-
 ### Refactor-Unit Branch Handling (pre-check)
 
-Before building the task graph, perform this refactor-unit check (moved verbatim from the previous `../orchestrate/SKILL.md` Step 5):
+Before building the task graph, perform this refactor-unit check:
 
 1. Check if a refactor roadmap exists at `docs/monorepo-strategy/roadmap.md` OR `docs/layer-architecture/roadmap.md` with unchecked items.
-2. If so, perform a **case-insensitive substring match** of the feature name against the bold roadmap item labels (text between `**` markers in the checkbox line, not the full rationale). The feature name is derived from:
-   - The resolved plan/spec filename (stripped of date prefix and `-plan.md`/`.md` suffix), OR
-   - The hint file's `feature:` field when `/implement` was invoked with no positional arg (i.e., via orchestrate)
+2. If so, perform a **case-insensitive substring match** of the feature name against the bold roadmap item labels (text between `**` markers in the checkbox line, not the full rationale). The feature name is the plan/spec filename, stripped of its date prefix and its `-plan.md`/`.md` suffix.
 3. **If the match succeeds → refactor-unit path:**
    - Skip the task graph generation and execution mode recommendation (steps 1-2 in the normal-feature path below).
    - Load `references/refactor-execution.md` and execute directly following its **Pre-flight → File Operations → Verification** sequence.
    - Perform the checklist pre-flight surfacing: read `tmp/checklists/index.md` if it exists, filter for rows where Phase is `coding` or `both` AND Recommended Skill contains `refactor-to-monorepo` or `refactor-to-layers`. Surface any matching entries to the user before beginning execution. Note: the `refactor-to-layers` filter branch currently returns empty (no checklist crystallization section) — do not warn on an empty result from that branch.
    - **Flag handling:** this path dispatches no agent and resolves no tier, so `--mode`, `--model`, `--effort` and `--tier` are all **ignored** on it. If any of them was passed, print one warning naming each one passed, e.g. `warning: --mode, --model ignored for refactor-unit execution`, and continue.
-   - After the refactor-execution sequence completes, return control to the caller (orchestrate or standalone shell), ending the report with the `## Validation` hand-back block defined in `references/refactor-execution.md`.
+   - **Tick and commit when verification passes.** When the sequence's Verification passes, tick the matched roadmap item (`- [ ]` → `- [x]`) and commit the unit's changes together with the tick, as one commit whose subject names the unit, such as `refactor: extract <unit>`. A run whose verification fails ticks nothing and commits nothing, and says so in its `## Validation` block.
+   - End the report with the `## Validation` hand-back block defined in `references/refactor-execution.md`. The hand-over command follows it (see Handing Over).
 4. **If the match fails (normal-feature path) → proceed to Resolve the Tier, then the normal-feature dispatch below.**
 
 ### Resolve the Tier
 
-Runs after the refactor-unit pre-check has failed to match (`--auto` skips that pre-check) and before the task graph is built. The refactor-unit path dispatches no agent, and a run that exits at Step C dispatches nothing, so neither resolves a tier.
+Runs after the refactor-unit pre-check has failed to match and before the task graph is built. The refactor-unit path dispatches no agent, and a run that stops at Step C dispatches nothing, so neither resolves a tier.
 
 **Every run resolves its tier before it dispatches an agent, prints the tier and its reason first, and takes its process and each agent's model and effort from that tier unless a flag sets them.** Defined once, in `references/shared-rules/risk-tier.md`, and shared with `review-code` and `review-doc`. **Every dispatched agent is the plugin agent that matches its phase's effort, and carries its phase's model on its Agent call; the run's tier sets both unless a flag does.** Defined once, in `references/shared-rules/agent-dispatch-pin.md`, and shared with `review-code` and `review-doc`. Read the tiers, the routing table, the floor format and the tier-line formats at run time, from `${CLAUDE_PLUGIN_ROOT}/references/shared-rules/risk-tier.md`: this skill restates none of them.
 
@@ -145,7 +121,7 @@ Runs after the refactor-unit pre-check has failed to match (`--auto` skips that 
 4. **Write** the floor after printing (create `./tmp/` if needed): `tier`, `reason` (`--tier <level>` for a `--tier` run), `session`, `branch`, `set_by: implement` and `set_at`. A run that carried the floor's tier writes the stored `reason`, `set_by` and `set_at` back unchanged, as the rule defines. Skipped when there is no session id.
 
 **Process by tier:**
-- **FULL:** the mode picker below. `--mode` skips it, and `--auto` takes the recommendation.
+- **FULL:** the mode picker below. `--mode` skips it.
 - **LIGHT:** `single`, with no picker and no per-task reviewers.
 - **MECHANICAL:** `single`, or a scripted exact-once edit by this session. The edit is allowed when the plan's change is a rename, move or reformat that one command applies and an instrument (a grep that must return nothing, a build) proves. The session commits the edit as one commit before it verifies and reports, dispatches no agent, and its second tier line is `mode scripted edit · no agents`.
 - An explicit `--mode` replaces the mode the tier's row gives, on any tier; the scripted edit is then not used.
@@ -157,21 +133,18 @@ Load `references/implementation-step.md` (which transitively loads `references/t
 1. Build the task graph from the plan (per `references/task-graph.md`).
 1.5. **Plan gate — rollback stated per task.** Every task states how to undo it before implementation begins. **"Forward-fix only" is an acceptable answer when stated deliberately** — what is unacceptable is discovering at failure time that nobody considered it. Treat schema migrations and infrastructure applies as requiring an explicit rollback, never a default.
 
-   **Under `--auto` the gate never prompts** — auto mode takes no user input, and this branch overrides both interactive branches below, including the schema-migration exception. If one or more tasks lack the field, print `Rollback not stated: <task names>` before dispatch and append that same list to the dispatch prompt after the override preamble, instructing the agent to record it under "Checks SKIPPED, and why". If every task carries the field, print nothing and append nothing — an empty list is not a skipped check. Either way, continue without prompting.
-
-   Interactive runs (no `--auto`):
+   The two branches below are the whole rule. A plan this skill wrote in Step C reaches neither: every task in it states its `Rollback:`.
    - **No task carries a `Rollback:` field** → the plan predates the field. Print `Plan predates the Rollback field; no per-task rollback stated` and continue without prompting — except for any task the plan itself describes as a schema migration or an infrastructure apply, which is prompted regardless. Judge that from the task's own text and `Files:` paths; do not infer it from anything outside the plan.
    - **Some tasks carry it and some do not** → list every task whose `Rollback:` field is missing or empty, and ask the user to supply one or confirm forward-fix-only. Do not dispatch until each is resolved.
-2. Compute the execution mode recommendation (per `references/implementation-step.md` Execution Mode Recommendation section). Only FULL uses it: for the picker, and for `--auto`.
+2. Compute the execution mode recommendation (per `references/implementation-step.md` Execution Mode Recommendation section). Only FULL uses it, for the picker.
 3. **Settle the mode.**
    - FULL with `--mode` → that mode, with no picker.
-   - FULL with `--auto` (and no `--mode`) → the recommendation, with no picker.
    - FULL otherwise → present the two-option picker exactly as defined in `references/implementation-step.md`:
      ```
      [1] single   — one <coders> agent carries the whole plan
      [2] per-task — one <coders> agent per task, and a spec reviewer per task
      ```
-   - When the picker or `--auto` settles the mode, print `Mode: <mode> (picked)` when the picker answered, and `Mode: <mode> (recommended)` when `--auto` took the recommendation.
+   - When the picker settles the mode, print `Mode: <mode> (picked)`.
    - LIGHT and MECHANICAL → as in Resolve the Tier. With `--mode`, that mode.
 4. **Checks before any dispatch.** They run after the tier and the mode are settled, and only for agents the run will dispatch: the MECHANICAL scripted edit dispatches none, so it raises none of these errors.
    - **A session with no Agent tool cannot run this skill.** Claude Code gives no Agent tool to an agent at its spawn-depth cap. If this session has none, print `Error: this session has no Agent tool, so the coding agents cannot be dispatched. Run the skill from the top-level session, or raise CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH (at least 2 for a first-level sub-agent).` and exit. This is checked before the agent type and before the `--model` value. Never run the coding in this session instead.
@@ -185,7 +158,8 @@ Load `references/implementation-step.md` (which transitively loads `references/t
    - **`per-task`:** this session coordinates `superpowers:subagent-driven-development` with the `per-task` preamble. Every implementer and every task reviewer is dispatched in that form.
    - **Concurrency:** one agent runs at a time. Implementers, fix-round implementers and step 6's escalations write in this working tree and its index, and a task reviewer or a verification run beside one of them would read half-written edits. So none of the three runs beside a task reviewer or a verification run, and an implementer starts only after the task before it is closed: its task reviewer has returned, its fix rounds have ended and the coordinator's verification for that task has passed (the `per-task` preamble's override 2), or the task is marked BLOCKED.
 6. **Escalation.** For each task the coders report BLOCKED, dispatch one fresh agent for that task in that form, given the `single` preamble and that task, at the coders' effort and with `model: "opus"`. Do this even when the coders already ran on Opus. `--effort` moves it with the coders, and `--model` never changes it. Escalations run one at a time and never beside another agent or a verification run, because they write in the same tree (step 5, Concurrency). If it fails, the task stays BLOCKED in the report.
-7. **Verify before reporting.** After the coders return, this session runs the plan's verification commands itself and quotes their output, because a subagent's report is not evidence. The report gives the commits, the exact commands with their output, checks SKIPPED and why, and residual risk.
+7. **Verify before reporting.** After the coders return, this session runs the plan's verification commands itself and quotes their output, because a subagent's report is not evidence. The report gives the commits, the exact commands with their output, checks SKIPPED and why, residual risk, and every spec edit Step C made.
+8. **Hand over.** End the output with the `review-code` command (see Handing Over).
 
 ### Default Mode
 
@@ -193,30 +167,24 @@ When `--mode` is not passed and the picker is not presented (LIGHT and MECHANICA
 
 ---
 
-## Return Contract with Orchestrate
+## Handing Over
 
-When `/implement` is invoked via orchestrate (breadcrumb `/orchestrate (/implement <plan>)`), orchestrate resumes control after `/implement` returns. Orchestrate's post-`/implement` logic (defined in spec 04) runs auto-commit verification, writes `step: 6` to the hint file, and emits the Step 5 → Step 6 breadcrumb. On this path, a plan passed by orchestrate, `/implement` has no early exit: every return that is not an error exit is a normal completion, and it writes no marker file.
+A run that implemented anything ends its output with the command for the next step, alone, after the report. `<sha>` is HEAD when the run started, as recorded before Step A:
 
----
+```
+/ai-dev-tools:review-code <sha> --against <spec-path>
+```
 
-## State Synchronization Rules
-
-**Only orchestrate writes the hint file.** `/implement` is stateless with respect to `tmp/orchestrate-state.md`:
-- Reads the hint file (Step A path resolution) but never writes it.
-- The orchestrate wrapper that invoked `/implement` is responsible for advancing the `step:` field after `/implement` returns.
-- Standalone invocations (not via orchestrate) leave the hint file untouched.
+- A run given a plan prints no `--against`: `/ai-dev-tools:review-code <sha>`. A run given a spec names that spec, whether or not Step C wrote a plan for it.
+- A run **implemented something** when a coder, the scripted edit or the refactor-unit path committed work. A run that stopped at Step C, exited on an error, or ended with nothing committed prints no command.
 
 ---
 
 ## Edge Cases
 
-1. **Both `path` arg and hint file populated** — `path` arg wins (Step A.1).
-2. **`path` arg points to a nonexistent file** — Print `File not found: <path>` and exit.
-3. **Hint file `plan:` field points to nonexistent file but `spec:` field is valid** — Fall through to `spec:` (Step A.3). Do not error on plan-not-found if spec is available.
-4. **Spec has `## Phase 1` but only one phase** — Hard signal triggers, recommendation prompt shows. (Refine the threshold later if this is too aggressive.)
-5. **Plan file has zero actionable tasks** — Task graph is empty; print `Plan contains no actionable tasks. Nothing to implement.` and exit.
-6. **Spec recommendation prompt declined repeatedly** — User passes `--skip-plan-recommendation` once per invocation; not persisted.
-7. **Plan and spec both in `tmp/`** — Location detection ambiguous; content fallback decides. If still ambiguous, error per Step B.4.
-8. **Plan written by `/writing-plans` mid-orchestrate, then `/implement` invoked standalone with no path** — Hint file's `plan:` field has the freshly-written plan. Step A picks it up. Works.
-9. **Concurrent orchestrate sessions writing different plans to the hint file** — Out of scope. Single-session assumption.
-10. **Spec with no hard signals AND user wants a plan anyway** — User manually runs `/writing-plans <spec>` first; `/implement` is not a hard gate.
+1. **`path` arg points to a nonexistent file** — Print `File not found: <path>` and exit.
+2. **Plan file has zero actionable tasks** — Task graph is empty; print `Plan contains no actionable tasks. Nothing to implement.` and exit.
+3. **Plan and spec both in `tmp/`** — Location detection ambiguous; content fallback decides. If still ambiguous, error per Step B.4.
+4. **A plan path passed with `--plan` or `--no-plan`** — The flag is ignored and a one-line warning is printed (Step C).
+5. **`--auto` passed** — `Error: --auto was removed in 7.0.0.` and exit, since continuing could prompt a caller that asked for no prompts.
+6. **`--run-id` or `--skip-plan-recommendation` passed** — `--run-id` is ignored, and `--skip-plan-recommendation` is read as `--no-plan`, each with a one-line `removed in 7.0.0` warning.

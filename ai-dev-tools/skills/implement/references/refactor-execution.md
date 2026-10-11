@@ -1,6 +1,6 @@
 # Refactor Execution Patterns
 
-Loaded at Step 5 only when a refactor roadmap exists (`docs/monorepo-strategy/roadmap.md` or `docs/layer-architecture/roadmap.md`) and the current feature name appears in that roadmap.
+Loaded by `/implement` only when a refactor roadmap exists (`docs/monorepo-strategy/roadmap.md` or `docs/layer-architecture/roadmap.md`) and the current feature name appears in that roadmap.
 
 ---
 
