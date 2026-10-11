@@ -45,9 +45,9 @@ Append to the `issues` array in the review JSON. Every issue you append carries 
 
 One key beyond the six:
 
-- `"origin": "self-review"` — **on every issue you append, without exception.** This is what keeps the iteration that wrote these lines from counting its own churn against the code it was reviewing. Omit it and the loop reports its own sloppiness as evidence the implementation is bad, which via the unresolved-criticals gate can fail the whole pipeline. See `references/shared-rules/counts-exclude-self-review.md`.
+- `"origin": "self-review"` — **on every issue you append, without exception.** This is what keeps the iteration that wrote these lines from counting its own churn against the code it was reviewing. Omit it and the loop reports its own sloppiness as evidence the implementation is bad, which can cost sound code its Approved status. See `references/shared-rules/counts-exclude-self-review.md`.
 
-**Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts that `/orchestrate`'s unresolved-criticals gate reads. Your issues are folded into the counts by the next iteration's reviewer, which re-reads the full scope and emits anything still wrong in your lines as `origin: "document"`.
+**Do NOT recompute `critical_count` or `high_count`.** Leave both exactly as you found them. They carry the pre-fix counts the run's stop check and status are decided from. Your issues are folded into the counts by the next iteration's reviewer, which re-reads the full scope and emits anything still wrong in your lines as `origin: "document"`.
 
 Never reorder or remove existing issues — dispositions are keyed on `issue_index`. You append only. Write the updated `issues` array back to `{{OUTPUT_PATH}}` with the Write tool; that write is the only way your findings reach the orchestrator's artifact.
 

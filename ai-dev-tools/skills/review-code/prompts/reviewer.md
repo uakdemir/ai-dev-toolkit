@@ -133,7 +133,7 @@ Exit 0 means the artifact is well-formed and the recount is printed. On a non-ze
 
 Set `"origin": "document"` on every issue you emit — your findings are against the code under review, which is what these counts are for. `origin` is the only key permitted beyond the six required; `additionalProperties: false` rejects everything else, including the removed `phase`. You never emit `"self-review"`: that value belongs to the self-review pass alone, which appends its findings against the fixer's own edits later in this same iteration. It is not a scope restriction — every defect inside the review scope is yours to report, including one in code the diff did not introduce.
 
-`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the orchestrator lifts these counts from your output to drive the pipeline gates and would act on a wrong number.
+`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the orchestrator lifts these counts from your output to drive the run's stop check and its status, and would act on a wrong number.
 
 If `node` is not installed, skip this step and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
 

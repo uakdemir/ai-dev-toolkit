@@ -54,7 +54,7 @@ Agent(subagent_type: "ai-dev-tools:<fixer effort>-effort", prompt: <substituted 
 
 - **The agent type sets the reasoning effort.** The Agent tool has no effort parameter, and an agent dispatched without `subagent_type` runs at the effort of the session that dispatched it, whatever the tier or a flag says. `{{EFFORT}}` in the prompts is a depth directive: wording about how far to take the analysis. It sets nothing.
 
-**`--must-inspect` is scope direction from the caller, and it is the only cross-round channel into the *reviewer*.** A round reports the files it did not open in `coverage.not_inspected`; it has no way to act on its *own* report, because the next round is a fresh read that knows nothing of this one. A looping caller does know — `orchestrate`'s stage iii reads that list after each dispatch and passes it into the next one — and this flag is where it says so.
+**`--must-inspect` is scope direction from the caller, and it is the only cross-round channel into the *reviewer*.** A round reports the files it did not open in `coverage.not_inspected`; it has no way to act on its *own* report, because the next round is a fresh read that knows nothing of this one. Whoever re-runs the skill after an **Incomplete** run does know: that run named the files it did not inspect, and this flag is where the next invocation says so.
 
 It carries **paths, never findings**. Nothing that could move `critical_count` or `high_count` crosses a round boundary through it, so it is not the carry-forward removed alongside the `phase` field: `references/shared-rules/counts-exclude-self-review.md` keeps counts per-round, and a list of files to open is not a count. Handing the reviewer prior findings would be the other thing, and this flag cannot express it.
 
@@ -63,7 +63,7 @@ Validation: a path is used only if it is inside the reviewed diff **and** exists
 - not in the reviewed diff → `Warning: --must-inspect path not in diff, ignoring: <path>`
 - in the diff but absent on disk, i.e. the diff deletes it → `Warning: --must-inspect path was deleted by the diff, ignoring: <path>`
 
-Continue in both cases; if every path is dropped, proceed as though the flag were absent. The deletion case is not an edge case at stage iii: `prompts/reviewer.md` puts *any* changed file the round did not open into `coverage.not_inspected` "with no exceptions", deletions included, and stage iii passes that list on verbatim. Telling the reviewer to `Read` a file the diff removed would abort the pass over a list the caller assembled correctly.
+Continue in both cases; if every path is dropped, proceed as though the flag were absent. The deletion case is not an edge case on a re-run after **Incomplete**: `prompts/reviewer.md` puts *any* changed file the round did not open into `coverage.not_inspected` "with no exceptions", deletions included, and a caller may pass that list on verbatim. Telling the reviewer to `Read` a file the diff removed would abort the pass over a list the caller assembled correctly.
 
 **Positional argument detection:**
 
@@ -79,7 +79,7 @@ else:
 - **`count` mode** (existing): `git diff HEAD~N..HEAD` — review the last N commits.
 - **`since` mode** (new): `git diff <ref>..HEAD` — review all changes since the given ref.
 
-Both modes are fully backward compatible. The `since` mode is used by orchestrate auto mode's agent iii dispatch.
+Both modes are fully backward compatible. The `since` mode is what `/implement`'s hand-over uses: it ends its output with `/ai-dev-tools:review-code <sha>`, where `<sha>` is HEAD when that run started.
 
 ### `--help` Output
 
@@ -155,7 +155,7 @@ These run before Setup. A run they stop (a `no` at the branch guard, or a dirty 
    - **Interactive:** print `Warning: you are on branch '<name>'. Fix commits will land here. Continue?` and pause for explicit approval. Blocking.
    - **Programmatic or auto dispatch (no user to prompt):** abort — `Error: refusing to run on branch '<name>'; dispatch from a feature branch.`
 
-   This check previously delegated itself to "the invoking skill" whenever the caller was programmatic. **No caller discharged it.** `main` and `master` appear nowhere under `skills/orchestrate/`, and before this check was written `git rev-parse --abbrev-ref` / `git symbolic-ref` appeared nowhere in the plugin at all — no caller resolved the branch. So the one path where no human can be prompted, and where the fixer, the self-review pass and stage-iii all commit, was the path with no guard. A guard that delegates to a caller nobody wrote is not a guard.
+   This check previously delegated itself to "the invoking skill" whenever the caller was programmatic. **No caller discharged it.** Before this check was written, `git rev-parse --abbrev-ref` / `git symbolic-ref` appeared nowhere in the plugin at all — no caller resolved the branch. So the one path where no human can be prompted, and where the fixer and the self-review pass both commit, was the path with no guard. A guard that delegates to a caller nobody wrote is not a guard.
 3. If `git status --porcelain` non-empty: `"Working tree is dirty. Please commit or stash your changes before running review-code."` This check runs once during pre-flight only. Verification command side-effects (coverage reports, cache files) are expected during the loop and do not re-trigger this check. The fixer uses `git add -u` (tracked files only) when committing to avoid including verification artifacts.
 
 ## Setup
@@ -268,11 +268,11 @@ For iteration 1 to max_iterations:
       ran a fix phase — otherwise that path still holds an earlier round's.
 ```
 
-**The stop check is coverage-aware, and that is where the safeguard belongs.** It used to stop on `critical_count == 0` alone, while `orchestrate`'s stage iii separately refused to advance whenever `coverage.not_inspected` was non-empty — two contracts for one decision, and only the outer one protected anything. A standalone `/review-code` run would stop with iterations left unused and report **Incomplete** without trying to open the files it had skipped, and stage iii's re-dispatch started a *fresh* run that made the same call at the same point.
+**The stop check is coverage-aware, and that is where the safeguard belongs.** It used to stop on `critical_count == 0` alone: a run would stop with iterations left unused and report **Incomplete** without trying to open the files it had skipped.
 
-This skill is the party that knows its own coverage, so the condition lives here. Every caller now benefits, `--max-iterations` still bounds it, and a run that cannot close coverage within its cap ends **Incomplete** and says so — a result, not a loop. Stage iii's rule is now a restatement of this one rather than a competing contract.
+This skill is the party that knows its own coverage, so the condition lives here. `--max-iterations` still bounds it, and a run that cannot close coverage within its cap ends **Incomplete** and says so — a result, not a loop.
 
-**Owning the condition is not owning the loop, and the difference decides who can close a hole.** On a run with `--max-iterations > 1` this skill runs the rounds and can reach the condition itself. At `--max-iterations 1` — every stage-iii dispatch — it evaluates the condition once and reports; the caller runs the loop. That caller is also the only party able to *act* on a coverage hole, because a fresh-read round cannot be told by its successor what it missed. `--must-inspect` is the channel: stage iii reads `coverage.not_inspected` off one dispatch's artifact and hands it to the next. Without a looping caller, a standalone single-iteration run reports the hole and stops, which is the right outcome for a run with no round left to spend on it.
+**Owning the condition is not owning the loop, and the difference decides who can close a hole.** On a run with `--max-iterations > 1` this skill runs the rounds and can reach the condition itself. At `--max-iterations 1` it evaluates the condition once, reports the hole and stops, which is the right outcome for a run with no round left to spend on it. Whoever re-runs the skill is then the only party able to *act* on the hole, because a fresh-read round cannot be told by its successor what it missed. `--must-inspect` is the channel: the re-run passes the files the **Incomplete** run named.
 
 No final-gate pattern for review-code. Since every round's reviewer is the same agent reading the same scope, a redundant review-only round on unchanged code adds no value. Verification commands serve as the quality gate instead.
 
@@ -333,7 +333,7 @@ Read `prompts/self-review.md` and dispatch: `Agent(subagent_type: "ai-dev-tools:
 
 It appends every defect to the `issues` array with `origin: "self-review"` and all six schema-required fields, and commits with `fix(review-code): self-review of iteration M's fixes`.
 
-**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** Self-review findings are NOT counted in `critical_count` or `high_count` for the iteration that produced them. That iteration both wrote and reviewed those lines, so counting them there reports the loop's own churn as evidence against the code under review — and the unresolved-criticals gate stops the run on a spec at `any critical remaining`. From the next iteration those lines are ordinary code: the reviewer re-reads the full scope and emits anything still wrong in them as `origin: "document"`, counted normally.
+**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** Self-review findings are NOT counted in `critical_count` or `high_count` for the iteration that produced them. That iteration both wrote and reviewed those lines, so counting them there reports the loop's own churn as evidence against the code under review — and Status Logic would then hold the run at Issues Found over criticals the code never had. From the next iteration those lines are ordinary code: the reviewer re-reads the full scope and emits anything still wrong in them as `origin: "document"`, counted normally.
 
 The exclusion is **round-local**, and needs no boundary flip to stay that way: iterations carry nothing forward, so the next iteration's reviewer re-reads the full scope and reports defects in those lines as ordinary `"document"` findings. It is defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-doc`.
 
@@ -341,7 +341,7 @@ The exclusion is **round-local**, and needs no boundary flip to stay that way: i
 
 **Disclose the depth-1 tail.** The code the self-review pass itself writes is not reviewed within the iteration, and on the FINAL iteration no later one reads it either. Track `self_review_tail_lines` — lines written by the final iteration's self-review pass — and print `Unreviewed tail: N lines committed by the final self-review pass`, omitting the line when the count is 0. `prompts/self-review.md` returns that count. On a `--max-iterations 1` run the final iteration is the only iteration, so every line the pass writes is committed unreviewed. Required by `references/shared-rules/counts-exclude-self-review.md`.
 
-**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, the `critical_count` iteration N+1's reviewer computes measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. This skill's Status Logic and `orchestrate`'s stage-iii unresolved-criticals gate (`../orchestrate/references/auto/stages/stage-iii-code-review.md` — "Pre-fix criticals > 0 → Q2 unresolved-criticals failure") therefore gate on the right signal without either being rewritten. Do not "fix" them to compensate. (A Next-Round Recommendation is `review-doc`'s; this skill has none, and naming it here was a copy from that skill.)
+**Non-obvious consequence, and it is intended.** Because this pass *fixes* what it finds, the `critical_count` iteration N+1's reviewer computes measures code whose previous iteration's churn has already been cleaned up, rather than code still carrying it. This skill's stop check and its Status Logic therefore gate on the right signal without either being rewritten. Do not "fix" them to compensate. (A Next-Round Recommendation is `review-doc`'s; this skill has none, and naming it here was a copy from that skill.)
 
 ## Verification Commands
 
@@ -349,7 +349,7 @@ The exclusion is **round-local**, and needs no boundary flip to stay that way: i
 - Run after each fix phase.
 - Compare to baseline: new non-zero exit = regression.
 - **Status Logic rule 2 reads the last post-fix run, not the run's history.** A regression an earlier iteration's fixer introduced and a later one repaired is absent from the final comparison and does not decide the status. This holds at every `--max-iterations` value; the `Verification with --max-iterations 1` section below works the rule through on one iteration, which is an instance of it, not its scope.
-- **Regressions are never written into the review JSON.** The stop check used to inject them as synthetic critical issues and bump `critical_count`. That bought nothing: the loop continues because the stop check decides to, not because a counter changed; the fixer already receives them through `{{VERIFICATION_REGRESSIONS}}` in `prompts/coder.md`; and Status Logic rule 2 already reads "verification regressions still present at the final post-fix verification run" as an independent disjunct. What it cost was the meaning of the count — **counts measure the artefact under review, never the review loop's own edits**, and a regression the loop's own fixer introduced is exactly the loop's own edits. It also made the count unable to fall: nothing lowers `critical_count` after the injection, so a final iteration whose only criticals were regressions its own fix phase then repaired still ended at Issues Found and still stopped an `--auto` run.
+- **Regressions are never written into the review JSON.** The stop check used to inject them as synthetic critical issues and bump `critical_count`. That bought nothing: the loop continues because the stop check decides to, not because a counter changed; the fixer already receives them through `{{VERIFICATION_REGRESSIONS}}` in `prompts/coder.md`; and Status Logic rule 2 already reads "verification regressions still present at the final post-fix verification run" as an independent disjunct. What it cost was the meaning of the count — **counts measure the artefact under review, never the review loop's own edits**, and a regression the loop's own fixer introduced is exactly the loop's own edits. It also made the count unable to fall: nothing lowers `critical_count` after the injection, so a final iteration whose only criticals were regressions its own fix phase then repaired still ended at Issues Found.
 - Regression details persist between iterations, passed to the **fixer** via `{{VERIFICATION_REGRESSIONS}}` in `prompts/coder.md`. The reviewer prompt has no regression slot: it re-reads the diff each iteration, where a regression is visible as code. Narrowed from "both reviewer and fixer", which named a channel that does not exist.
 - Verification command failures are NOT errors — they are data for regression comparison.
 
@@ -578,7 +578,7 @@ After all issues are processed, update `tmp/_reviews_errors/review-code-summary.
 
 **Response analysis format:** Write to `tmp/[<run_id>-]response_analysis.md` (overwrite — no need to read first):
 
-This file is prefixed by `--run-id` even though it sits outside `tmp/_reviews_errors/` and so falls outside the blanket rule above. Without the prefix it is the one per-round output that a later dispatch destroys: the Respond phase runs at the end of *every* completed run, so under `orchestrate` stage iii — one dispatch per iteration — iteration 2 would overwrite iteration 1's push-back reasoning, which is the opposite of "so the next review cycle can see why the finding was rejected". At stage iii the resolved name is `tmp/<run_id>-iter<N>-response_analysis.md`.
+This file is prefixed by `--run-id` even though it sits outside `tmp/_reviews_errors/` and so falls outside the blanket rule above. Without the prefix it is the one output that a second run in the same worktree destroys: the Respond phase runs at the end of *every* completed run, so the later run would overwrite the earlier one's push-back reasoning, which is the opposite of "so the next review cycle can see why the finding was rejected".
 
 ```markdown
 ## Review-Code Response — <date>
@@ -606,7 +606,7 @@ Reason: <agent's reasoning for why the finding is incorrect, irrelevant, or cann
 Orchestrator maintains running counters across iterations:
 - `total_fixed` (per-severity: critical, high, medium, low). The fix report cannot supply the severity — `prompts/coder.md` emits `{issue_index, action, detail}` and no more — so resolve each disposition's severity by `issue_index` into the CURRENT `tmp/_reviews_errors/review-code.json` *before* the next iteration's reviewer overwrites it, and increment `total_fixed[severity]` there and then. Nothing is cached across iterations: `issue_index` is a position in that iteration's own array, so a map that outlived the iteration would resolve the next one's indices against the previous one's findings.
 - `last_round_fixed` (per-severity: critical, high, medium, low) -- reset before each iteration, tracks only the most recent round (populates "Last round:" line)
-**`Remaining:` is the one exception, and deliberately so.** It adds back every self-review finding that pass reported and could **not** fix, because by then those are unrepaired defects in the artefact rather than churn. `Remaining:` is read by a human; the gate counts are read by a pipeline. A human should see a defect the loop introduced and failed to repair; a gate should never stop a run over the loop's own edits. Status Logic filters on `origin: "document"` and so does not read this counter — an unfixed self-review finding raises `Remaining:` without moving the status.
+**`Remaining:` is the one exception, and deliberately so.** It adds back every self-review finding that pass reported and could **not** fix, because by then those are unrepaired defects in the artefact rather than churn. `Remaining:` is read by a human; the gate counts are read by this skill's stop check and its Status Logic. A human should see a defect the loop introduced and failed to repair; a gate should never fail a run over the loop's own edits. Status Logic filters on `origin: "document"` and so does not read this counter — an unfixed self-review finding raises `Remaining:` without moving the status.
 
 - `remaining` (per-severity: critical, high, medium, low) -- populates the `Remaining:` line. **Defined as the final round's findings minus that round's `fixed` dispositions, plus every self-review finding that pass reported and did NOT fix.** Computed once, after the final iteration's fix phase and its self-review pass.
 
@@ -636,7 +636,7 @@ With a single iteration: if the reviewer finds zero criticals, the stop-check ru
 
 **A regression that the fix phase repaired no longer holds the run at "Issues Found".** It used to, unavoidably: the stop check injected synthetic criticals and nothing could lower `critical_count` afterwards — the fixer writes only the fix report, the self-review pass may not recompute, and validation *requires* the declared count to equal a recount that includes them. So rule 2 fired on `critical_count > 0` and its second trigger never had to be consulted.
 
-Now the count stays the reviewer's, and rule 2's second trigger does the work it was written for: the status is decided by whether the regression is **still present** at the final verification, not by whether one was ever detected. A regression introduced and repaired inside one run reports Approved; one that survives the fix phase reports Issues Found. That is what a caller needs to know. `--auto`'s unresolved-criticals gate reads the pre-fix `critical_count`, which no longer carries a regression at all (`../orchestrate/references/auto/failure-handling/unresolved-criticals.md` > Measurement), so a repaired regression no longer stops the run there either.
+Now the count stays the reviewer's, and rule 2's second trigger does the work it was written for: the status is decided by whether the regression is **still present** at the final verification, not by whether one was ever detected. A regression introduced and repaired inside one run reports Approved; one that survives the fix phase reports Issues Found. That is what a caller needs to know.
 
 ## When `--verify` Is Not Provided
 
@@ -651,7 +651,7 @@ First match wins:
 4. **Approved with suggestions**: any high, medium, or low issue with `origin: "document"` remains
 5. **Approved**: all other cases
 
-**Incomplete** names the files that were not inspected rather than announcing the run clean. It has exactly one trigger. Output that fails validation resolves to **Error** at rule 1 in both standard and auto mode, so it never reaches rule 3.
+**Incomplete** names the files that were not inspected rather than announcing the run clean. It has exactly one trigger. Output that fails validation resolves to **Error** at rule 1, so it never reaches rule 3.
 
 **A run that could not complete reports Error, names the phase that failed and why, and never prints a status or a count that implies a review happened.** Defined once, in `references/shared-rules/run-failure-disclosure.md`, and shared with `review-doc`.
 
@@ -667,7 +667,7 @@ Review Code FAILED
   Counts: not reported — this run did not complete a review
 ```
 
-Interactive runs then ask `Retry the failed phase / continue with what completed / abort the run? [retry|continue|abort]` and wait. **Programmatic or auto dispatch does not ask** — there is nobody to answer and a prompt in auto mode hangs the pipeline. Exit non-zero, write the reason to the run's error log, and let the caller's failure path handle it. The brainstorm handoff line still prints last; on an Error that document is the failure report.
+Interactive runs then ask `Retry the failed phase / continue with what completed / abort the run? [retry|continue|abort]` and wait. **Programmatic or auto dispatch does not ask** — there is nobody to answer, and a prompt there hangs the caller. Append the failure block to `tmp/_reviews_errors/error-logs.md` and exit non-zero: the user reads that log to see how often runs fail. The brainstorm handoff line still prints last; on an Error that document is the failure report.
 
 
 
@@ -740,7 +740,7 @@ The review-code JSON schema for `tmp/_reviews_errors/review-code.json`:
 
 There used to be a second key, `phase`, recording which pass found a finding. It existed only because iterations carried findings forward and reset `origin` at the boundary, destroying that record. Iterations now start fresh, so `origin` is set once and never changes.
 
-Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. A file that passes validation is internally consistent — its declared counts equal its own recount. That is not a freshness guarantee: `../orchestrate/references/common/error-logs-format.md` states that the gates read this value in flight, not off disk, because the file is rewritten mid-iteration and overwritten by the next one. Consistent is not current.
+Note: `medium_count` and a low count are not in the schema — both are derived from the issues array during validation. `critical_count` and `high_count` ARE trusted, because the validator rejects any file whose declared values disagree with its own array; a document that passes validation has counts equal to the recount by construction. A file that passes validation is internally consistent — its declared counts equal its own recount. That is not a freshness guarantee: the stop check reads this value in flight, not off disk, because the file is rewritten mid-iteration and overwritten by the next one. Consistent is not current.
 
 ## Error Handling
 
