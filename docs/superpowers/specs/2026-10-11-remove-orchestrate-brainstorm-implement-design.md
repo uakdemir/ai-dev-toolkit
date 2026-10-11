@@ -12,11 +12,11 @@ The team runs four skills by hand, in this order:
 /ai-dev-tools:brainstorm      → writes and commits the spec
 /ai-dev-tools:review-doc      → reviews the spec until it is sound
 /ai-dev-tools:implement       → decides whether a plan is needed, then implements
-/ai-dev-tools:review-code     → reviews the commits since /implement started (/implement prints the command)
+/ai-dev-tools:review-code     → reviews the commits since /implement started
 ```
 
 `orchestrate` has no users, so it goes. The spec is the only artefact a human reviews. A plan, when there is
-one, is internal to `/implement`.
+one, is internal to `/implement`. Each step prints the command for the next one (section 1).
 
 ## Decisions (founder, 2026-10-11)
 
@@ -24,52 +24,43 @@ one, is internal to `/implement`.
    the way the session would if asked "does this need a plan?". `--plan` / `--no-plan` override the decision
    and replace `--skip-plan-recommendation`.
 2. Plans go to `docs/superpowers/plans/`, as today. That directory is gitignored (`.gitignore:37`), so a plan
-   is never committed. It is deleted before the final push; that process does not change.
+   is never committed. It is deleted before the final push; that process does not change. A repo where the
+   plugin is used ignores that folder too. The plugin adds nothing for a repo that does not: there
+   `/review-code`'s clean-tree check refuses until the folder is ignored.
 3. `/implement` never asks the user to review a plan, and does not bother the user with spec changes that
    have one defensible answer: it makes them itself. Only a change that is both **ambiguous** (it needs a
    decision) and **significant** (the session judges) stops the run: the questions are printed and nothing is
    implemented. When the user answers, the session writes the answer into the spec itself and carries on.
-4. `orchestrate` is removed completely. A small state file stays, so the four skills can find the current spec
-   and plan: `tmp/pipeline-state.md`, which replaces `tmp/orchestrate-state.md`.
+4. `orchestrate` is removed completely, and its state file with it. Nothing replaces
+   `tmp/orchestrate-state.md`: each skill prints the command for the next step with its paths (section 1). The
+   founder asks for the next step in plain words, and the session fills in the paths from that line.
 5. `/implement --auto` is removed. Nobody uses it, and running unattended means asking the session to run
    `review-doc`, `implement` and `review-code` in succession, passing `--mode` to `implement` so its FULL-tier
    picker does not wait. `/implement --run-id` goes with it, because only orchestrate passed it. `review-doc`
    and `review-code` keep `--run-id`: it prefixes their `tmp/` artifact names, so two runs in one worktree do
    not overwrite each other.
+6. `/implement` marks a refactor unit as done: when its refactor-unit run verifies, it ticks the unit in the
+   roadmap. No skill reads or writes a spec's `Status:` line any more.
 
-## 1. The state file — `tmp/pipeline-state.md`
+## 1. Handing over — each skill prints the next command
 
-```
-spec: docs/superpowers/specs/2026-10-11-foo-design.md
-plan: docs/superpowers/plans/2026-10-11-foo.md
-```
+No skill keeps state. The hand-over is a printed command that carries its paths: a person can paste it, and a
+session asked in plain words for the next step reads the paths from it.
 
-Two fields with repo-relative paths. An empty value means none. The file is per worktree, so it holds one
-cycle at a time.
-
-| Skill | Writes | Reads (only when no path is given) |
+| Skill | Prints | When |
 |---|---|---|
-| `brainstorm` | `spec:` = the new spec; `plan:` = empty | — |
-| `review-doc` | given one path under `docs/superpowers/specs/`: `spec:` = it, and `plan:` = empty when that changes `spec:` | `spec:` |
-| `implement` | given a spec: `spec:` = it, `plan:` = the plan it wrote or empty. Given a plan: nothing | `plan:`, then `spec:` (today's order) |
-| `review-code` | — | `spec:`, used as `--against` |
+| `brainstorm` | `/ai-dev-tools:review-doc <spec-path>`, alone, as the run's final output | a spec was committed |
+| `review-doc` | `/ai-dev-tools:implement <spec-path>`, as the command of its `Recommended next:` block | rule 3 ("continue to implementation") on a run that reviewed exactly one document, under `docs/superpowers/specs/` or `docs/specs/`. Otherwise rule 3 prints no command, as today |
+| `implement` | `/ai-dev-tools:review-code <sha> --against <spec-path>`, ending its output | the run implemented anything. `<sha>` is HEAD when the run started; a run given a plan prints no `--against` |
 
-- `brainstorm` clears `plan:` when it writes a new `spec:`. Otherwise `/implement` with no path would pick up
-  the previous feature's plan, because it prefers `plan:` over `spec:` (`skills/implement/SKILL.md:56`).
-- A path given on the command line always wins over the file; the writers above record it only as their
-  rows say (a spec, never a plan), so the state follows the user, not only `brainstorm`.
-- A missing file or an empty field behaves exactly as no state did before: `implement` prints its "no path"
-  error with `/orchestrate` removed from the message, `review-doc` its usual missing-path error, and
-  `review-code` runs without a spec.
-- A skill that takes a path from the file prints `spec: <path> (from tmp/pipeline-state.md)` (or `plan: …`), so
-  a stale entry is visible rather than silent; the review skills print it after their tier lines, which come
-  first. `review-code --against none` runs without a spec whatever the file says.
-- `tmp/orchestrate-state.md` is never read again. There is no migration: `tmp/` is scratch.
+- `review-doc` still ends with the brainstorm line, and its rules 1 and 2 still print the `review-doc` command.
+- `/implement` needs a path. Without one it prints `Error: /implement needs a spec or plan path.` and exits.
+- `tmp/orchestrate-state.md` is never read again, and no file replaces it.
 
 ## 2. `/implement` — Step C becomes a decision, not a prompt
 
-Steps A and B are unchanged apart from the state-file name, and Step A's no-path message and
-`(from tmp/pipeline-state.md)` line (section 1). Step C is replaced:
+Step A keeps only the positional path and its existence check: the hint-file fallback goes, and a run
+without a path prints the error in section 1. Step B is unchanged. Step C is replaced:
 
 **Plan given** → Step D, as today.
 
@@ -96,22 +87,28 @@ Steps A and B are unchanged apart from the state-file name, and Step A's no-path
    no threshold)?
    - **Not both** → the session makes the change itself: it edits the spec and any plan, commits the spec edit
      alone (`docs(spec): <what changed>`), and continues. Every such edit is listed in the final report.
-   - **Ambiguous and significant** → print the questions, delete any unfinished plan file, write the state with
-     `plan:` empty, and stop before any dispatch. Nothing is implemented on a spec known to be undecided. When
-     the user answers, the session writes the answers into the spec, commits that edit alone
-     (`docs(spec): <what changed>`), and resumes Step C with them. The questions are kept nowhere else: a
-     later `/ai-dev-tools:implement <spec-path>` asks again about whatever is still open.
-4. Write the state file (section 1), then continue to Step D with the plan, or with the spec when no plan was
-   needed. The plan stage never prompts.
+   - **Ambiguous and significant** → print the questions, delete any unfinished plan file, and stop before any
+     dispatch. Nothing is implemented on a spec known to be undecided. When the user answers, the session
+     writes the answers into the spec, commits that edit alone (`docs(spec): <what changed>`), and resumes
+     Step C with them. The questions are kept nowhere else: a later `/ai-dev-tools:implement <spec-path>`
+     asks again about whatever is still open.
+4. Print `Plan saved: <plan-path>` when a plan was written, so an interrupted run can resume with
+   `/ai-dev-tools:implement <plan-path>`. Then continue to Step D with the plan, or with the spec when no plan
+   was needed. The plan stage never prompts.
 
-A run that implemented anything ends its output with `/ai-dev-tools:review-code <sha>`, `<sha>` being HEAD when
-the run started.
+A run that implemented anything ends its output with the `review-code` command of section 1.
+
+**Refactor-unit path (decision 6).** When the run's verification passes, the session ticks the matched roadmap
+item (`- [ ]` → `- [x]`) and commits the unit's changes together with the tick. Only orchestrate's step 7
+ticked a unit, and only its `/commit` breadcrumb committed this path's work. A run whose verification fails
+ticks and commits nothing, and says so in its `## Validation` block.
 
 **Removed:** the signal table, Step C's `[1]/[2]` write-a-plan prompt (the single/per-task mode picker stays),
 `--skip-plan-recommendation`, the "Return Contract with Orchestrate" section, the `feature:` hint-file bullet in
 the refactor-unit pre-check (the feature name comes from the filename only), and every other orchestrate mention
-(description, help text, examples, lines 122 and 133). "State Synchronization Rules" and the intro's "stateless
-… Orchestrate is the sole writer" sentence are rewritten to section 1's table.
+(description, help text, examples, lines 122 and 133). With the hint file go Step A's two hint-file steps, its
+fallthrough and its ordering note, the help text's "If omitted" sentence and no-path example, the "State
+Synchronization Rules" section and the intro's "stateless … Orchestrate is the sole writer" sentence.
 
 **Removed with decision 5:** `--auto` in the help text, argument parsing and argument hint, and `--run-id` in the
 help text and argument parsing; the `--auto` pre-check in Step D and the `--auto` mentions at lines 138, 148 and
@@ -120,7 +117,8 @@ whole rule, reached only by a plan `/implement` did not write (Step C item 2); `
 `Mode: <mode> (recommended)` line; and the RUN-ID THREADING overrides 9 and 10 in
 `references/implementation-step.md`, together with that file's `--auto` lines (17, 60, 66).
 
-**Edge cases** 4, 6, 8, 9 and 10 describe the prompt or orchestrate and are removed. New ones:
+**Edge cases** 1, 3, 4, 6, 8, 9 and 10 describe the hint file, the prompt or orchestrate and are removed. New
+ones:
 - A plan path passed with `--plan` or `--no-plan`: the flag is ignored and a one-line warning is printed.
 - `--auto` passed: `Error: --auto was removed in 7.0.0.` and exit, since continuing could prompt a caller that
   asked for no prompts.
@@ -142,12 +140,11 @@ numbers go (the `Step 5: Implementation` banner at 43, Steps 6 and 8 at 123 and 
    > review. A bounded request still gets a short written spec instead of in-chat implementation, because
    > the next skill reads a file. A spike ends as brainstorming defines it, with findings and no spec.
 2. If brainstorming still proposes writing-plans or implementation, decline it and continue with step 3.
-3. When a spec was committed: write `spec:` (and empty `plan:`) to the state file, and print the next command,
-   alone, as the run's final output:
+3. When a spec was committed: print the next command, alone, as the run's final output:
    ```
    /ai-dev-tools:review-doc <spec-path>
    ```
-   A spike writes no state and prints no command.
+   A spike prints no command.
 
 **Wording constraint.** The `handoff-last-line` detector (`scripts/check-shared-semantics.cjs:316`) fails any
 skill outside `brainstorm-handoff` that has a file outside `references/` mentioning both a last line and a
@@ -166,12 +163,12 @@ Delete `ai-dev-tools/skills/orchestrate/`. Then remove or rewrite every live ref
 | `references/shared-rules/agent-dispatch-pin.md`, `risk-tier.md`, `run-failure-disclosure.md` | drop the orchestrate paragraphs and the `skills/orchestrate/…` file lists |
 | `references/shared-rules/risk-tier.md:149-152` | drop `--auto` from the FULL-without-`--mode` bullet: only the picker prints a Mode line, `Mode: <mode> (picked)` |
 | `references/shared-rules/severity-is-consequence.md` | rewrite "Why this is shared", which rests on the three auto-pipeline gates |
-| `references/tasks-file.md` | consumer list and the state-file name |
+| `references/tasks-file.md` | the consumer list names session-handoff only, and line 14 no longer names `tmp/orchestrate-state.md` |
 | `skills/review-doc/SKILL.md`, `prompts/reviewer.md`, `prompts/verifier.md`; `skills/review-code/SKILL.md`, `prompts/reviewer.md`, `prompts/self-review.md` | prose that justifies a rule by orchestrate (stage i/iii, `--auto`, the auto-pipeline and unresolved-criticals gates). The rules stay, with these reasons: the counts feed the skill's own stop check; `--must-inspect` serves a re-run after Incomplete; `since` mode serves `/implement`'s `review-code <sha>`; the run-id prefixes keep two runs in one worktree apart; the error log is read by the user, for failure frequency. review-doc's property 4 (the caller sets phase structure) goes. |
-| `skills/review-doc/SKILL.md`, `skills/review-code/SKILL.md` | the state-file handling from section 1, and `review-code --against none`. `review-doc` commits at the end of every completed run that changed a document, not only when triage applied a fix: orchestrate's `/commit` breadcrumb did that before. |
+| `skills/review-doc/SKILL.md` | rule 3 of the next-round recommendation prints the `implement` command (section 1). `review-doc` commits at the end of every completed run that changed a document, not only when triage applied a fix: orchestrate's `/commit` breadcrumb did that before. |
 | `skills/help/SKILL.md` | replace `/orchestrate` with the four-step workflow; add `/brainstorm` |
-| `skills/session-handoff/SKILL.md` | drop the `/orchestrate (/…)` breadcrumb parsing |
-| `skills/refactor-to-layers/SKILL.md`, `skills/refactor-to-monorepo/SKILL.md` | "orchestrate cycle" → the four-step workflow; refactor-to-monorepo also drops orchestrate from lines 272 and 410 |
+| `skills/session-handoff/SKILL.md` | drop the `/orchestrate (/…)` breadcrumb parsing, and Next Action Validation rule 2, which reads `Status: Draft` (decision 6) |
+| `skills/refactor-to-layers/SKILL.md`, `skills/refactor-to-monorepo/SKILL.md` | Every `Status:` and `finalized` mention goes (decision 6): generated specs carry no `Status:` line, the `--next-unit` triggers lose "and the previous unit is finalized", refactor-to-monorepo's precondition check (line 459) goes, and the two "Spec already exists" rows become one, which prints `A spec for <next-unit> already exists: <path>. /implement ticks the unit when its run verifies.` and exits. refactor-to-monorepo also rewrites its three orchestrate lines: 272 (`coding` = `/implement`), 410 (`/implement` ticks the checkboxes) and 416 (the spec enters the four-step workflow at review-doc). |
 | `skills/document-for-ai/references/adr-extraction.md`, `doc-templates.md` | drop the "orchestrate Step 4" consumer (ADR extraction was already removed there) |
 | `scripts/check-shared-semantics.cjs`, `count-exclusion-test.sh`, `validate-review-json.cjs`, `check-schema-drift.cjs`, `check-doc-links.cjs` | comments only; `check-doc-links.cjs` gets a worked example that still exists in place of `failure-handling/unresolved-criticals.md` |
 | `scripts/shared-semantics-mutation-test.sh` | comments, plus case N9's fixture (lines 582-584): `skills/orchestrate-fake` and its heading take a neutral name such as `breadcrumb-fake`. It tests detector scope, not orchestrate; N9 keeps its label and the suite still reports 66 passed. |
@@ -182,9 +179,10 @@ Not touched: `skills/scaffold/templates/expo/package/CLAUDE.md:57` (the verb "or
 generic nouns "orchestrator" (the session that drives a skill) and "orchestration" outside the manifests, and the
 historical specs and plans under `docs/`.
 
-**Dropped with orchestrate, not moved:** roadmap checks, session bootstrap, post-implement auto-commit
-verification, the step-7 completion phase and the auto-mode profiling log. None of them is part of the
-four-step workflow.
+**Dropped with orchestrate, not moved:** the roadmap suggestions, session bootstrap, post-implement auto-commit
+verification, the step-7 completion phase, the auto-mode profiling log, and the spec `Status:` that step 2 set
+to `Approved` (decision 6). None of them is part of the four-step workflow. **Moved:** the roadmap tick, to
+`/implement`'s refactor-unit path (section 2).
 
 ## Verification
 
@@ -197,11 +195,15 @@ four-step workflow.
   returns nothing: it finds orchestrate's rationale where the name itself is absent.
 - `grep -rn -- '--auto' ai-dev-tools/` and `grep -rnE -- '--run-id|--skip-plan-recommendation'
   ai-dev-tools/skills/implement/` return only `/implement`'s removed-flag handling.
+- `grep -nE 'Status|finalized' ai-dev-tools/skills/refactor-to-layers/SKILL.md
+  ai-dev-tools/skills/refactor-to-monorepo/SKILL.md` and `grep -n 'Status: Draft'
+  ai-dev-tools/skills/session-handoff/SKILL.md` return nothing.
 - `test -f ai-dev-tools/skills/brainstorm/SKILL.md && test ! -e ai-dev-tools/skills/orchestrate`.
 - After `/reload-plugins`: `/ai-dev-tools:brainstorm` is listed and `/ai-dev-tools:orchestrate` is not. In a
-  scratch repo, `/ai-dev-tools:implement <spec> --plan --no-plan` and `… --auto` print their errors,
-  `/ai-dev-tools:implement <spec>` prints its `Plan:` line without pausing, and `/ai-dev-tools:review-code 1`
-  with a hand-written state file prints the `(from tmp/pipeline-state.md)` line after its tier lines.
+  scratch repo, `/ai-dev-tools:implement` with no path, `… <spec> --plan --no-plan` and `… <spec> --auto` print
+  their errors; `/ai-dev-tools:implement <spec>` prints its `Plan:` line without pausing and ends its output
+  with the `review-code` command; and a clean `/ai-dev-tools:review-doc <spec>` prints the `implement` command
+  under `Recommended next:`.
 
 ## Out of scope
 
