@@ -155,7 +155,7 @@ These run before Setup. A run they stop (a `no` at the branch guard) has deleted
    - **Interactive:** print `Warning: you are on branch '<name>'. Fix commits will land here. Continue?` and pause for explicit approval. Blocking.
    - **Programmatic or auto dispatch (no user to prompt):** abort — `Error: refusing to run on branch '<name>'; dispatch from a feature branch.`
 
-   Worded identically to `review-code`'s pre-flight check 2, and for the same reason: **this skill commits.** The Respond to Remaining Issues phase commits what it applies, and it never asks the user first. A skill that commits unattended needs the guard whether or not it dispatches a fixer that commits — the divergence where `review-code` had this check and `review-doc` did not was an oversight, not a policy.
+   Worded identically to `review-code`'s pre-flight check 2, and for the same reason: **this skill commits.** The Respond to Remaining Issues phase commits every document the run changed, and it never asks the user first. A skill that commits unattended needs the guard whether or not it dispatches a fixer that commits — the divergence where `review-code` had this check and `review-doc` did not was an oversight, not a policy.
 
 2. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output).
 
@@ -255,12 +255,11 @@ for iter in 1..max_iterations:
 
    Gating the fix phase on criticals meant a round that found eleven highs and ten mediums and no criticals fixed **nothing** and handed all twenty-one to a human — contradicting `references/shared-rules/brainstorm-handoff.md`, which requires the fix phase to always run and the document to receive only what has more than one defensible answer. It also silently disabled the self-review pass, which runs only after a fix phase: on the zero-critical path the triage phase then applied edits with nothing reviewing them. A minor finding the agent can fix is still worth fixing; whether it justifies another *round* is a different question, and that one is still severity-gated.
 
-   Option Y is unchanged where it is defined: `pre_fix_criticals` is still measured at review output, before fact-check. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker. In orchestrate stage-i phase 2 (`--fact-check true --max-iterations 2`) the abandoned criticals then reach the unresolved-criticals gate as "any critical remaining" and the run stops — for criticals the loop itself declined to fix.
+   Option Y is unchanged where it is defined: `pre_fix_criticals` is still measured at review output, before fact-check. What changed is only which number decides the *early exit*. Gating that on `pre_fix_criticals` meant a run where the reviewer found 0 criticals and the fact-checker found some exited without fixing them — contradicting property 2 below, the skill description, and the Fact-Checker dispatch section, all three of which promise the fixer follows the fact-checker.
 
-   The unresolved-criticals gate is a separate reader, not a different number. It is evaluated once, at the final round rather than at every round, and it takes `critical_count` off the artifact rather than the loop's own variable — but numerically that is the same pre-fix count the early exit tests: on a fact-checked run the artifact field carries the recount `scripts/merge-fact-check.cjs` makes over the full issues array when it merges the fact-check findings, which is `total_criticals`; otherwise it is the reviewer's own count, which is `pre_fix_criticals`. Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the gate, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
-4. The caller (orchestrate `--auto`) decides phase structure by invoking the skill multiple times with different `--fact-check` settings.
-5. The reviewer and the fact-checker are the reviewer-effort agent and the fixer and the self-reviewer the fixer-effort agent, each level from the tier's row or the flag that replaces it, which is what sets their reasoning effort, and every dispatch carries its phase's model on the call. The call forms are in Argument Parsing.
-6. `validate(json)` runs right after `review()` returns — after `join()` when the fact-checker runs:
+   Status Logic is a separate reader, not a different number. It is evaluated once, at the end of the run rather than at every round, and it takes `critical_count` off the artifact rather than the loop's own variable — but numerically that is the same pre-fix count the early exit tests: on a fact-checked run the artifact field carries the recount `scripts/merge-fact-check.cjs` makes over the full issues array when it merges the fact-check findings, which is `total_criticals`; otherwise it is the reviewer's own count, which is `pre_fix_criticals`. Pre-fix, then, but not pre-fact-check — fact-check-added criticals do reach the status, and are meant to: the fact-checker runs against the document as authored, before the fixer, so its findings are document-origin and count like any other.
+4. The reviewer and the fact-checker are the reviewer-effort agent and the fixer and the self-reviewer the fixer-effort agent, each level from the tier's row or the flag that replaces it, which is what sets their reasoning effort, and every dispatch carries its phase's model on the call. The call forms are in Argument Parsing.
+5. `validate(json)` runs right after `review()` returns — after `join()` when the fact-checker runs:
 
    ```bash
    node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc <output-path>
@@ -269,8 +268,8 @@ for iter in 1..max_iterations:
    Exit 0 → use the printed recount as the authoritative severity counts. Exit 1 or 2 → retry the reviewer once, and abort the iteration on a second failure — status **Error**, per `references/shared-rules/run-failure-disclosure.md`. If node is unavailable, fall back to reading the file and record `schema validation not run: node unavailable` in the iteration log.
 
    **This call checks the reviewer's own output and nothing else.** Two later phases rewrite the same file — the fact-check merge appends and recomputes `critical_count`, and the self-review pass appends without recomputing. The merge checks itself: `scripts/merge-fact-check.cjs` validates the merged artifact before it renames it over the review JSON, and leaves the reviewer's file untouched when that fails, so property 3's early exit never reads a recount nothing verified. The self-review pass's appends are not covered here; a wrong entry there is not carried anywhere — the next round writes a fresh artifact over this one rather than recounting it — and the closing validation in the Final Report is the only check on them.
-7. `self_review()` runs after `fix()`, in every iteration where the fixer ran. It is **always on** — there is no flag. It reads the fix report, re-reads only the regions that report names, and both **reports and fixes** what it finds, exactly once (depth 1). It never rewrites `critical_count` or `high_count`, and everything it appends carries `origin: "self-review"` (see the Self-Review dispatch section).
-8. **Depth 1, and the tail is disclosed rather than carried.** The text the self-review pass itself writes is not re-reviewed within the same round — unbounded self-review is the same loop with more steps. If another round runs, its reviewer covers those lines as ordinary document text, because every round re-reads the whole document. The tail is only a real gap on the **final** round, and the summary states how many lines the final self-review pass wrote unreviewed. There is no cross-round carry mechanism: the next round's full re-read already is one.
+6. `self_review()` runs after `fix()`, in every iteration where the fixer ran. It is **always on** — there is no flag. It reads the fix report, re-reads only the regions that report names, and both **reports and fixes** what it finds, exactly once (depth 1). It never rewrites `critical_count` or `high_count`, and everything it appends carries `origin: "self-review"` (see the Self-Review dispatch section).
+7. **Depth 1, and the tail is disclosed rather than carried.** The text the self-review pass itself writes is not re-reviewed within the same round — unbounded self-review is the same loop with more steps. If another round runs, its reviewer covers those lines as ordinary document text, because every round re-reads the whole document. The tail is only a real gap on the **final** round, and the summary states how many lines the final self-review pass wrote unreviewed. There is no cross-round carry mechanism: the next round's full re-read already is one.
 
 ## Agent Dispatch
 
@@ -371,7 +370,7 @@ The dispatch prompt must include:
 
 It appends every defect to the `issues` array with `origin: "self-review"` and either `category: "verify"` (a fidelity defect) or `category: "fact-check"` (a defect in the accuracy of the new text), minting ids from `max + 1` as the merge script does for the fact-check findings.
 
-**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** The self-review pass does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts, which is what `/orchestrate`'s stage-i unresolved-criticals gate reads (`../orchestrate/references/auto/stages/stage-i-spec-review.md` — "Phase 2 final iter pre-fix criticals > 0 → Q2 failure"). Its findings carry `origin: "self-review"` and are excluded from this round's counts: the round that wrote those lines both authored and reviewed them, so counting them here would report the loop's own churn as evidence against the authored document — and via the unresolved-criticals gate, that churn could fail the whole auto-pipeline. Self-review issues are folded into the counts by the NEXT iteration's reviewer, which re-reads the whole document, emits anything still wrong in those lines as `origin: "document"`, and recomputes both fields from the full issues array.
+**Count invariant: Counts measure the artefact under review, never the review loop's own edits.** The self-review pass does NOT recompute `critical_count` or `high_count`. Those fields carry the pre-fix counts: the round's early exit has already tested them, and Status Logic reads them at the end of the run. Its findings carry `origin: "self-review"` and are excluded from this round's counts: the round that wrote those lines both authored and reviewed them, so counting them here would report the loop's own churn as evidence against the authored document — and that churn would then hold the run at Issues Found. Self-review issues are folded into the counts by the NEXT iteration's reviewer, which re-reads the whole document, emits anything still wrong in those lines as `origin: "document"`, and recomputes both fields from the full issues array.
 
 The exclusion is **round-local**, and rounds carry nothing forward — so a later round re-reads the whole document and reports defects in those lines as ordinary `"document"` findings, with no boundary flip to arrange it. Defined once, in `references/shared-rules/counts-exclude-self-review.md`, and shared with `review-code`.
 
@@ -390,7 +389,7 @@ If all files unchanged: print `Warning: no documents were modified. Proceeding t
 
 | File | Purpose | Consumer |
 |---|---|---|
-| `tmp/_reviews_errors/[<run_id>-]review-doc.json` | Structured JSON from last iteration | `/orchestrate`, this skill's own Respond to Remaining Issues phase, machines |
+| `tmp/_reviews_errors/[<run_id>-]review-doc.json` | Structured JSON from last iteration | This skill's own Respond to Remaining Issues phase, machines |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-summary.md` | Curated human summary (max 10 items + aggregates) | Humans |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-fix-report.json` | Coder dispositions per issue | Orchestrator (iteration log) |
 | `tmp/_reviews_errors/[<run_id>-]review-doc-iteration-N.md` | Per-iteration log | Debugging, audit |
@@ -476,7 +475,7 @@ Brainstorm (needs your decisions): /abs/path/tmp/_reviews_errors/review-doc-brai
 
 When `--fact-check false`, the self-review pass still runs; only the accuracy-against-the-codebase half of its remit is out of scope.
 
-The `Recommended next:` block and its command line are described in Next-Round Recommendation below. Under rule 3 the command line is omitted and only the `Recommended next:` line prints.
+The `Recommended next:` block and its command line are described in Next-Round Recommendation below. Under rule 3 the command line is the `implement` command when the run reviewed exactly one spec; otherwise it is omitted and only the `Recommended next:` line prints.
 
 When `--fact-check false`, replace the `Fact-check:` line — in both this terminal output and the summary's `## Fact-Check Accuracy` section — with `Fact-check: not run`.
 
@@ -520,7 +519,7 @@ When the loop completes (final gate passes or max iterations exhausted):
 
 ## Respond to Remaining Issues
 
-**Trigger:** the run completed (status is not **Error**) and anything is left to triage.
+**Trigger:** the run completed (status is not **Error**). With nothing left to triage, only its commit step runs.
 
 **Not gated on status, and not on severity.** Triage used to require "Approved with suggestions", which meant zero criticals — so the runs that most needed automated help got the least of it. A critical the loop could not clear is still a finding with a disposition: `apply` if it has one defensible answer, `push back` with reasoning if the agent believes it is wrong, `defer` if it needs something the repository does not say. Skipping the phase hands every one of them to a human raw, including the ones an agent should simply have fixed.
 
@@ -539,7 +538,7 @@ A `cross-reference` finding reporting the same document diverging across two loc
 
 The agent never asks the user. Every remaining issue resolves to apply, defer, or push back — including critical-severity items the agent cannot confidently fix (push back with explicit reasoning).
 
-After auto-triage, print a summary and commit applied fixes:
+After auto-triage, print a summary:
 
 ```
 ── Remaining Issues ────────────────────────────
@@ -554,13 +553,13 @@ N issues triaged (C critical, H high, M medium, L low).
 Applied: N | Deferred: N | Pushed back: N
 ```
 
-If any fixes were applied, commit with: `fix(review-doc): apply N review suggestions`.
+**Commit at the end of every completed run that changed a document**, not only when triage applied a fix. The fixer and the self-review pass never commit, so a run whose triage applied nothing would otherwise leave their edits in the working tree. A run changed a document when Hash Verification saw a hash differ, or triage applied an edit. Stage the documents the run changed, and nothing else, and commit once: `fix(review-doc): apply N review suggestions`, where N counts every finding the run resolved — the fixer's `fixed` dispositions across all rounds, plus the fixes triage applied. A run that changed no document makes no commit.
 
 After all issues are processed, update `tmp/_reviews_errors/review-doc-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
 **Response analysis format:** Write to `tmp/[<run_id>-]response_analysis.md` (overwrite — no need to read first). Use the issue's stable `id` from `review-doc.json` as the section header so future review iterations and human readers can cross-reference findings unambiguously:
 
-The `--run-id` prefix applies here even though the file sits outside `tmp/_reviews_errors/`, and so outside the blanket rule above. The Respond phase runs at the end of every completed run, and `orchestrate` stage i dispatches this skill twice — `<run_id>-phase1` then `<run_id>-phase2` — so an unprefixed name would have phase 2 overwrite phase 1's push-back reasoning before anyone read it. `review-code` prefixes it for the same reason at stage iii; unprefixed, the two skills also share one path and the later stage would clobber the earlier one's.
+The `--run-id` prefix applies here even though the file sits outside `tmp/_reviews_errors/`, and so outside the blanket rule above. The Respond phase runs at the end of every completed run, so two runs in one worktree each write this file, and an unprefixed name would have the second overwrite the first's push-back reasoning before anyone read it. `review-code` prefixes it for the same reason; unprefixed, the two skills also share one path, and whichever ran later would clobber the other's.
 
 ```markdown
 ## Review-Doc Response — <date>
@@ -582,7 +581,7 @@ Reason: <agent's reasoning for why the finding is incorrect or irrelevant>
 
 **Skipped only on Error.** Every other status runs this phase, including **Issues Found**. That was not always so: the phase used to require "Approved with suggestions", so rule 2 suppressed it on either of its triggers — `critical_count > 0`, or (per skill) a sub-75 fact-check / verification regressions present. Both suppressions were wrong for the same reason. A low fact-check score says some claims were wrong, which is a reason to triage more carefully rather than to stop; and outstanding criticals are precisely the findings a human most needs sorted into "already applied" and "genuinely needs you".
 
-**Approved** reaches this phase and finds nothing to do, which is the correct no-op. **Error** is the only skip: a run that did not complete has no trustworthy artifact to triage from, and its handoff document is the failure report.
+**Approved** reaches this phase and finds nothing to triage, which is the correct no-op; its commit step still runs. **Error** is the only skip: a run that did not complete has no trustworthy artifact to triage from, and its handoff document is the failure report.
 
 ## Brainstorm Document
 
@@ -682,7 +681,7 @@ Review Doc FAILED
   Counts: not reported — this run did not complete a review
 ```
 
-Interactive runs then ask `Retry the failed phase / continue with what completed / abort the run? [retry|continue|abort]` and wait. **Programmatic or auto dispatch does not ask** — there is nobody to answer and a prompt in auto mode hangs the pipeline. Exit non-zero, write the reason to the run's error log, and let the caller's failure path handle it. The brainstorm handoff line still prints last; on an Error that document is the failure report.
+Interactive runs then ask `Retry the failed phase / continue with what completed / abort the run? [retry|continue|abort]` and wait. **Programmatic or auto dispatch does not ask** — there is nobody to answer, and a prompt there hangs the caller. Append the failure block to `tmp/_reviews_errors/error-logs.md` and exit non-zero: the user reads that log to see how often runs fail. The brainstorm handoff line still prints last; on an Error that document is the failure report.
 
 
 
@@ -724,13 +723,16 @@ Recommended next: focused review — collateral recorded in § 3 rule 3, § 7, �
 /review-doc docs/spec.md --fact-check true --max-iterations 2
 ```
 
-**Rule 3** — no command; review-doc does not know the implementation plan path:
+**Rule 3** — the `implement` command, on a run that reviewed exactly one document, under `docs/superpowers/specs/` or `docs/specs/`:
 
 ```
 Recommended next: continue to implementation — 0 criticals, no collateral recorded
+/ai-dev-tools:implement docs/superpowers/specs/2026-10-11-rate-limits-design.md
 ```
 
-The recommendation names a next action, not a scoped review mode. There is no flag that restricts a review to recently-changed regions: document fixes are left uncommitted by the fix phase itself (the fixer never commits; the triage phase does, and its commit spans every edit the run has made, not just the last pass — and orchestrate commits once per phase besides), so no git ref can isolate the last fix pass. Rule 2 therefore names the sections and lets the reader decide.
+Any other run prints the `Recommended next:` line and no command: with several documents, or one outside those two folders, there is no single spec to hand to `/implement`.
+
+The recommendation names a next action, not a scoped review mode. There is no flag that restricts a review to recently-changed regions: document fixes are left uncommitted by the fix phase itself (the fixer never commits; the triage phase does, and its commit spans every edit the run has made, not just the last pass), so no git ref can isolate the last fix pass. Rule 2 therefore names the sections and lets the reader decide.
 
 ## Iteration Log Format
 

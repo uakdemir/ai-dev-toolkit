@@ -173,7 +173,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/validate-review-json.cjs --schema doc {{OUTPU
 
 Exit 0 means the artifact is well-formed and the recount is printed. On a non-zero exit, read the errors on stderr, fix the file, and re-run until it exits 0. Do not finish on a failing exit — your output is the deliverable, and checking it is your job, not the orchestrator's.
 
-`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the orchestrator lifts these counts from your output to drive the pipeline gates and would act on a wrong number.
+`critical_count` and `high_count` must equal the number of `critical` and `high` entries in your own `issues` array that do **not** carry `origin: "self-review"`. The validator rejects a mismatch rather than warning about it, because the orchestrator lifts these counts from your output to drive the run's stop check and its status, and would act on a wrong number.
 
 If `node` is not installed, skip this step and say so explicitly in your response: `validator skipped: node not available`. A stated skip is acceptable; a silent one is not.
 
