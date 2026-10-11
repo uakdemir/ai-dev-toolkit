@@ -25,10 +25,16 @@ one, is internal to `/implement`.
    and replace `--skip-plan-recommendation`.
 2. Plans go to `docs/superpowers/plans/`, as today. That directory is gitignored (`.gitignore:37`), so a plan
    is never committed. It is deleted before the final push; that process does not change.
-3. `/implement` never asks the user to review a plan. It asks only questions whose answer changes the spec.
-   After the user answers, it edits the spec and the plan itself and continues.
+3. `/implement` never asks the user to review a plan, and does not bother the user with spec changes that
+   have one defensible answer: it makes them itself. Only a change that is both **ambiguous** (it needs a
+   decision) and **significant** (the session judges) stops the run: the questions are printed and nothing is
+   implemented.
 4. `orchestrate` is removed completely. A small state file stays, so the four skills can find the current spec
    and plan: `tmp/pipeline-state.md`, which replaces `tmp/orchestrate-state.md`.
+5. `/implement --auto` is removed. Nobody uses it, and running unattended means asking the session to run
+   `review-doc`, `implement` and `review-code` in succession. `/implement --run-id` goes with it, because only
+   orchestrate passed it. `review-doc` and `review-code` keep `--run-id`, because their `tmp/` file names and
+   the gate scripts are built on its prefix.
 
 ## 1. The state file — `tmp/pipeline-state.md`
 
@@ -77,24 +83,31 @@ Steps A and B are unchanged apart from the state-file name. Step C is replaced:
    > user to review the plan and do not present the Execution Handoff; return to /implement when the plan is
    > saved.
 
-   If writing-plans still presents a review request or an Execution Handoff, ignore it and continue. Write
-   `plan:` to the state file.
-3. **Spec questions.** While planning, any question whose answer would change the spec goes to the user, as
-   one `AskUserQuestion` call. Everything else is the session's to decide. After the answer, edit the spec and
-   the plan to match, commit the spec edit alone (`docs(spec): <what changed>`), and continue. Under `--auto`,
-   which takes no input, print the questions instead and exit before any dispatch: nothing is implemented on a
-   spec known to be wrong.
-4. Continue to Step D with the plan, or with the spec when no plan was needed.
+   If writing-plans still presents a review request or an Execution Handoff, ignore it and continue.
+3. **Spec changes found while planning.** Each one is sorted on two questions: is it ambiguous (more than one
+   defensible fix, so a decision is needed), and is it significant (the session judges; there is no threshold)?
+   - **Not both** → the session makes the change itself: it edits the spec and the plan, commits the spec edit
+     alone (`docs(spec): <what changed>`), and continues. Every such edit is listed in the final report.
+   - **Ambiguous and significant** → print the questions, delete the unfinished plan file, leave `plan:` empty,
+     and exit before any dispatch, with `/ai-dev-tools:implement <spec-path>` as the last line. Nothing is
+     implemented on a spec known to be undecided. The user answers by updating the spec, and the re-run plans
+     against it from scratch.
+4. Write `plan:` to the state file, then continue to Step D with the plan, or with the spec when no plan was
+   needed. The plan stage never prompts.
 
 **Removed:** the signal table, the `[1]/[2]` prompt, `--skip-plan-recommendation`, the "Return Contract with
 Orchestrate" section, and the `feature:` hint-file bullet in the refactor-unit pre-check (the feature name comes
 from the filename only). "State Synchronization Rules" is rewritten to section 1's table.
 
-**Kept:** `--auto` and `--run-id`. Both work standalone. Only their orchestrate rationale text goes.
+**Removed with decision 5:** `--auto` and `--run-id` in the help text, argument parsing and argument hint; the
+`--auto` pre-check in Step D; the `--auto` branch of the rollback gate (plan gate 1.5), which leaves its two
+interactive branches as the whole rule; `--auto` in mode settling and the `Mode: <mode> (recommended)` line; and
+the RUN-ID THREADING overrides 9 and 10 in `references/implementation-step.md`, together with that file's
+`--auto` lines (17, 60, 66).
 
 **Edge cases** 4, 6, 8, 9 and 10 describe the prompt or orchestrate and are removed. New ones:
 - A plan path passed with `--plan` or `--no-plan`: the flag is ignored and a one-line warning is printed.
-- A user answer to a spec question that empties the scope: stop with `Spec no longer describes work to implement.`
+- `--auto` or `--run-id` passed: `Error: --auto and --run-id were removed in 7.0.0.` and exit.
 
 `references/implementation-step.md`: "loaded by orchestrate at Step 5" becomes "loaded by `/implement`", and the
 two preamble headers read `(from /implement)`.
@@ -129,6 +142,7 @@ Delete `ai-dev-tools/skills/orchestrate/`. Then remove or rewrite every live ref
 |---|---|
 | `references/shared-rules/counts-exclude-self-review.md` | drop `orchestrate` from `applies-to` and the reader paragraph and file list |
 | `references/shared-rules/agent-dispatch-pin.md`, `risk-tier.md`, `run-failure-disclosure.md` | drop the orchestrate paragraphs and the `skills/orchestrate/…` file lists |
+| `references/shared-rules/risk-tier.md:151` | drop the `--auto` clause of the mode line |
 | `references/tasks-file.md` | consumer list and the state-file name |
 | `skills/review-doc/SKILL.md`, `prompts/verifier.md`; `skills/review-code/SKILL.md`, `prompts/self-review.md` | prose that justifies a rule by orchestrate. The rules stay; the reason given becomes the skill's own stop check and the `tmp/_reviews_errors/` reader. `review-doc` and `review-code` gain the state-file read from section 1. |
 | `skills/help/SKILL.md` | replace `/orchestrate` with the four-step workflow; add `/brainstorm` |
