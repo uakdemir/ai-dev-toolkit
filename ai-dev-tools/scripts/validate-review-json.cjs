@@ -7,7 +7,7 @@
 //
 // The two artifacts share their count semantics and their severity enum, and diverge in their
 // top-level keys, their per-issue keys, and their category enums. One script with a schema table
-// keeps the count-consistency logic — the part three pipeline gates depend on — written once.
+// keeps the count-consistency logic — the part each skill's stop check and status depend on — written once.
 //
 // Node built-ins only. Exit 0 = valid, 1 = invalid, 2 = unreadable.
 const fs = require('node:fs');
@@ -237,10 +237,9 @@ if (!isObj(doc)) {
 
 // A declared count that contradicts the issues array is invalid output, not a
 // warning. The orchestrator lifts these counts from the review output in flight to
-// drive the auto-pipeline gates — references/common/error-logs-format.md specifies
-// every gate against that in-flight value and says not to wire one to this file on
-// disk — so a file that passes validation while under-declaring criticals trips an
-// early exit on a review that found them. Fail closed; the writer fixes its own artifact.
+// drive the skill's stop check and its status, so a file that passes validation while
+// under-declaring criticals trips an early exit on a review that found them. Fail
+// closed; the writer fixes its own artifact.
 //
 // The recount excludes issues carrying `origin: "self-review"` — findings the round's own fix pass
 // introduced. They are reported, never counted.

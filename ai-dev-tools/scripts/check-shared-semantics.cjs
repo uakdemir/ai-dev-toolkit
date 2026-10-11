@@ -156,7 +156,7 @@ const ABORT_CONTEXT =
   /\b(?:abort\w*|sentinel|literal prefix|first line|gives? up|cannot (?:do|proceed|continue|complete))\b/i;
 const LAST_LINE = /\b(?:last|final)\s+line\b/i;
 // A document collecting what a run could not settle. Requiring this alongside LAST_LINE is what
-// keeps orchestrate's breadcrumb rule -- also a last-line rule, about a different output -- out.
+// keeps a last-line rule about a different output -- a skill's own breadcrumb, say -- out.
 const DECISION_DOC =
   /needs your decisions|could not decide|needing a human decision|hands? back|handed back/i;
 // The claim itself, as an assertion rather than a mention.
@@ -311,7 +311,7 @@ const DETECTORS = {
   //
   // Only the LAST line survives a scrollback; two skills each claiming a different one means the
   // reader learns to look in the wrong place. `governs` deliberately requires BOTH a last-line
-  // claim and a decisions-document, so orchestrate/SKILL.md's "breadcrumb as the literal last
+  // claim and a decisions-document, so a skill that requires a "breadcrumb as the literal last
   // line" -- a different output, correctly its own -- is not dragged into this contract.
   'handoff-last-line': {
     describe: 'what a run prints as its final line when it has items to hand back',
@@ -344,7 +344,7 @@ const DETECTORS = {
   // while its agent ran on CLAUDE_CODE_SUBAGENT_MODEL again.
   'untyped-agent-dispatch': {
     describe: 'a dispatch of one of the plugin\'s effort-pinned agents',
-    // `orchestrate` dispatches with a prompt and nothing else, by design: it takes no effort for
+    // A skill outside the rule may dispatch with a prompt and nothing else: it takes no effort for
     // its agents. An untyped call is therefore a violation only inside a governed skill, and the
     // F4 sweep skips this detector in the references/ tree of a skill outside the rule. It still
     // runs it over the plugin-root tree, which the governed skills read.
@@ -454,10 +454,10 @@ function skillFiles(skill) {
 // orchestrated by SKILL.md. A skill's references/ tree is reference material those prompts read --
 // and it is where the corpus keeps `severity` tokens belonging to entirely other domains:
 // convention-enforcer's .editorconfig analyzer levels (`dotnet_diagnostic.CA2200.severity =
-// warning`) and its `suggested_severity` for lint conventions, orchestrate's `count(severity ==
-// "critical")` in the gate read contract. Scanning those with the loose `governs` predicate yields
-// three false positives in skills that have no confidence axis at all, and a coverage check that
-// cries wolf on the corpus it ships with is a check people switch off in week two.
+// warning`) and its `suggested_severity` for lint conventions, and once a `count(severity ==
+// "critical")` formula in a skill since removed. Scanning those with the loose `governs` predicate
+// yielded three false positives in skills that have no confidence axis at all, and a coverage check
+// that cries wolf on the corpus it ships with is a check people switch off in week two.
 //
 // This narrows check D ONLY. Check B still reads every file of a governed skill, references/
 // included, so a rule relocated into a governed skill's references/ is still caught.

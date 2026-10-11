@@ -5,11 +5,9 @@
 #     Findings the review loop introduced in its own fix pass (origin: "self-review")
 #     are reported, but never counted.
 #
-# This is the machine-checkable half of the churn fix. Three pipeline gates read `critical_count`
-# (stage-iii early-exit, stage-i and stage-iii unresolved-criticals --
-# skills/orchestrate/references/common/error-logs-format.md), and the unresolved-criticals gate stops
-# the run at "any critical remaining". Without this invariant enforced at the artefact, the loop's own
-# churn can fail the auto-pipeline, and nothing catches it.
+# This is the machine-checkable half of the churn fix. Each review skill's stop check and its Status
+# Logic read `critical_count`. Without this invariant enforced at the artefact, the loop's own churn
+# can hold a run at Issues Found on an artefact that was sound, and nothing catches it.
 #
 # `origin` is the ONLY per-issue flag. A second field, `phase`, recorded which pass found a finding;
 # it existed solely because rounds carried findings forward and flipped `origin` at the boundary,

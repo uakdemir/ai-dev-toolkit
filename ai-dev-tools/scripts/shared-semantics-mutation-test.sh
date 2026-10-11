@@ -575,13 +575,13 @@ printf '\nThe summary path is printed as the run last line.\n' \
   >> "$BASE/skills/review-fake/SKILL.md"
 expect red "$BASE" "S8  'as the run last line' phrasing is caught too"
 
-# orchestrate/SKILL.md genuinely requires its breadcrumb to be the literal last line. That is a
+# A skill may genuinely require a breadcrumb of its own to be the literal last line. That is a
 # different output, correctly its own, and must not be dragged into this rule -- which is why
 # governs requires a decisions-document alongside the last-line claim.
 build_handoff
-mkdir -p "$BASE/skills/orchestrate-fake"
-printf '# Orchestrate Fake\n\nEvery exit point MUST end with the breadcrumb as the literal last line(s). Commands-only, one per line.\n' \
-  > "$BASE/skills/orchestrate-fake/SKILL.md"
+mkdir -p "$BASE/skills/breadcrumb-fake"
+printf '# Breadcrumb Fake\n\nEvery exit point MUST end with the breadcrumb as the literal last line(s). Commands-only, one per line.\n' \
+  > "$BASE/skills/breadcrumb-fake/SKILL.md"
 expect green "$BASE" "N9  a last-line rule about a different output does NOT join the handoff contract"
 
 echo
@@ -682,10 +682,10 @@ printf '# Help Fake\n\nAGENTS (name one as subagent_type in a prompt, and pass m
   > "$BASE/skills/help-fake/SKILL.md"
 expect green "$BASE" "N11 a skill that lists the pinned agents' names without dispatching one does NOT join the contract"
 
-# `orchestrate` dispatches with a prompt and nothing else, by design: it takes no effort for its
+# A skill outside the rule may dispatch with a prompt and nothing else: it takes no effort for its
 # agents, and the rule says so. The F4 sweep runs every detector over every references/ tree,
-# which would make that design a violation the day it writes its call out. This detector binds
-# governed skills only.
+# which would make that design a violation the day such a skill writes its call out. This detector
+# binds governed skills only.
 build_pin
 mkdir -p "$BASE/skills/implement-fake/references"
 printf '# Implement Fake\n\nDispatch the coder: `Agent(prompt: <coder-prompt>)`.\n' \
