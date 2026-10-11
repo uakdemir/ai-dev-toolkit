@@ -71,7 +71,7 @@ Proceed directly to Step D with the plan path. `--plan` and `--no-plan` are for 
 
 ### If **spec** detected
 
-Nothing in this step pauses for input, and nothing in it asks the user to review a plan.
+This step never prompts, and never asks the user to review a plan. It stops only for a spec change that is both ambiguous and significant (item 3).
 
 1. **Decide.** `--plan` → a plan is needed. `--no-plan` → no plan. Otherwise read the spec, and the code it touches, and judge whether a plan would change the outcome, as you would if asked "does this need a plan?". A plan pays for itself when the coder would otherwise have to settle sequencing, decomposition or interface questions the spec leaves open, or when the work is large enough that per-task execution and review are worth their cost. There is no file count, no signal table and no threshold. Print one line, and do not pause:
 
