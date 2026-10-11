@@ -1,10 +1,6 @@
 # ADR Extraction Algorithm
 
-Single source of truth for ADR extraction. Consumed by:
-- `/document-for-ai adr {spec_path}` (standalone command)
-- orchestrate Step 4 (inline pre-processing before writing-plans)
-
-Both execution contexts follow this same algorithm. Neither defines or extends it.
+Single source of truth for ADR extraction. Consumed by `/document-for-ai adr {spec_path}`, which follows this algorithm and neither defines nor extends it.
 
 ---
 
@@ -16,9 +12,7 @@ Both execution contexts follow this same algorithm. Neither defines or extends i
 
 Bypasses the standard document-for-ai workflow (Steps 1-4). Proceeds directly to the extraction algorithm below. Index and AI_INDEX.md updates correspond to the standard workflow's Step 5 (Output).
 
-**Scan root** for `code_paths` inference (step 5c):
-- **Standalone** (`/document-for-ai adr`): uses CWD.
-- **Orchestrate Step 4**: uses the git repository root.
+**Scan root** for `code_paths` inference (step 5c): CWD.
 
 ---
 
@@ -135,13 +129,6 @@ If extraction fails after writing some ADR files but before completing index/AI_
 - Leave written ADR files in place. Report which files were written and which steps failed.
 - The deduplication check (step 5a) makes retries safe — the next run skips already-created ADRs.
 - To manually undo: delete the reported files.
-
-### Orchestrate Step 4 Failure
-
-If extraction fails during orchestrate, do not auto-proceed to writing-plans. Report the failure and offer three options:
-1. **Retry extraction** — deduplication prevents duplicates, safe to re-run.
-2. **Skip ADRs and write plan** — user explicitly chooses to proceed without ADRs.
-3. **Exit** — no further action. Next `/orchestrate` re-attempts.
 
 ### Index/AI_INDEX Out of Sync
 

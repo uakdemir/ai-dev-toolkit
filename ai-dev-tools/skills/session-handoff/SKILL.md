@@ -70,13 +70,11 @@ not part of conversation scanning (see In-Progress Skill Detection below).
 
 From user messages, extract:
 
-**Done:** Commands the user ran — skill invocations, /orchestrate calls,
-  /orchestrate (/...) wrapped commands. Each invocation = one completed action.
+**Done:** Commands the user ran — skill invocations. Each invocation = one
+  completed action.
 
 **Pending:** Explicit deferrals in user messages ("later", "next session",
-  "TODO", "skip for now"). Also: uncompleted /orchestrate (/...) breadcrumbs
-  where the user ran /orchestrate (/X) but there is no subsequent /orchestrate
-  call in the conversation.
+  "TODO", "skip for now").
 
 **Decisions:** User choices ("go with A", "option 2", "yes to X", "no,
   because Y"). Capture the choice and the stated reason.
@@ -179,9 +177,7 @@ Before writing the Pending section, validate ordering:
 1. If a review or approval step is incomplete in the task list, do not
    list any post-review step (implementation, plan writing) as the
    first pending item.
-2. If a spec file referenced in pending items has Status: Draft, do not
-   list implementation or plan writing as the next action.
-3. The first Pending bullet must be the immediate next action. Downstream
+2. The first Pending bullet must be the immediate next action. Downstream
    steps may follow but must be listed after it.
 
 ### Content Guidelines

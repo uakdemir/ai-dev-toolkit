@@ -8,25 +8,24 @@ Output the following text, then stop:
 <help-output>
 ai-dev-tools — AI-native development automation
 
-MAIN COMMAND
-  /orchestrate              Manages your full development cycle automatically.
-                            Detects where you are and suggests the next step.
+WORKFLOW
+  Four commands, run by hand, in this order. Each one prints the command
+  for the next.
 
-  Orchestrate flow:
-    brainstorm → review-doc → implement → review-code → complete
-    ─────────   ──────────   ─────────   ───────────   ────────
-    Design &    Validate     Execute     Audit code    Update
-    spec the    the spec     the plan    for bugs &    roadmap &
-    feature                              drift         quality gates
+    brainstorm → review-doc → implement → review-code
+    ──────────   ──────────   ─────────   ───────────
+    Design &     Review the   Plan if     Review the
+    write the    spec until   needed,     commits for
+    spec         it is sound  then build  bugs & drift
 
-COMMANDS (ORCHESTRATE FLOW)
-  /orchestrate              Development cycle manager (start here)
+COMMANDS (WORKFLOW)
+  /brainstorm [topic]       Brainstorm an idea into a committed spec (start here)
   /review-doc <path> [...]  Review specs and design documents
-  /implement [path] [...]   Execute a plan or spec (task graph + dispatch)
-  /document-for-ai          Generate AI-optimized docs (auto-invoked by orchestrate)
+  /implement <path> [...]   Implement a spec or plan (task graph + dispatch)
   /review-code <N|ref> [...]  Review recent commits for bugs & drift
 
 COMMANDS (INDEPENDENT QUALITY CHECKS)
+  /document-for-ai          Generate AI-optimized docs
   /changelog-from-commits   Generate release notes from git history
   /session-handoff          Create handoff document for next session
   /test-audit               Audit test quality and coverage gaps
@@ -49,6 +48,5 @@ AGENTS (name one as subagent_type in a prompt, and pass model on the call)
   and --model override it.
 
 TIPS
-  Start with /orchestrate — it handles the workflow for you.
-  Re-invoke /orchestrate after each step completes to continue.
+  Start with /brainstorm. Each step ends by printing the command for the next one.
 </help-output>

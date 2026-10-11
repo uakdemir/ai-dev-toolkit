@@ -124,7 +124,7 @@ Use when documenting known issues, debugging procedures, or incident runbooks.
 
 ## Template: adr
 
-Use when documenting an architectural decision — a choice with significant reversibility cost or blast radius that future development must respect. ADRs are never auto-detected from code analysis. They are produced either via explicit `/document-for-ai adr {spec_path}` command or automatically by orchestrate Step 4 — both use the same extraction algorithm in `references/adr-extraction.md`.
+Use when documenting an architectural decision — a choice with significant reversibility cost or blast radius that future development must respect. ADRs are never auto-detected from code analysis. They are produced via the explicit `/document-for-ai adr {spec_path}` command, which follows the extraction algorithm in `references/adr-extraction.md`.
 
 - **Title**: The decision in imperative or declarative form.
 - **Status**: One of: Proposed, Accepted, Superseded, Deprecated.

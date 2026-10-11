@@ -269,7 +269,7 @@ All checklists live in `tmp/checklists/`. The directory contains an `index.md` r
 
 | Column | Values | Purpose |
 |--------|--------|---------|
-| Phase | `analysis`, `coding`, or `both` | `analysis` = refactor-to-monorepo phases 1-4, `coding` = orchestrate Step 5 implementation, `both` = both contexts |
+| Phase | `analysis`, `coding`, or `both` | `analysis` = refactor-to-monorepo phases 1-4, `coding` = `/implement`, `both` = both contexts |
 | Recommended Skill | Comma-separated skill names | Filter: split on comma, trim whitespace, exact-match each element |
 
 **Entry format** (each entry in a checklist file):
@@ -407,13 +407,13 @@ Ordered by extraction priority (dependency depth, coupling score, risk).
 - [ ] **module-d** — core services, highest coupling, extract last
 ```
 
-Checkbox format so orchestrate can track completion. Module names and descriptions are populated from the Phase 4 synthesis results.
+Checkbox format so `/implement` can tick a unit when its run verifies. Module names and descriptions are populated from the Phase 4 synthesis results.
 
 ### 7. Single-Unit Spec — First Extraction Unit
 
 Detailed analysis for the first unchecked module only. Contains: module boundary, files to extract, dependencies to sever, interface to expose, expected import rewrites.
 
-Written as a normal spec at `docs/superpowers/specs/YYYY-MM-DD-extract-<module>-design.md` with **Status: Draft** that enters the orchestrate cycle at Step 2.
+Written as a normal spec at `docs/superpowers/specs/YYYY-MM-DD-extract-<module>-design.md`. It enters the four-step workflow at `/ai-dev-tools:review-doc`.
 
 The full Phase 4 run always produces both the roadmap and the first-unit spec directly — `--next-unit` is only used for subsequent units (units 2+).
 
@@ -454,16 +454,14 @@ Load reference files only when needed to minimize context window usage:
 
 ## --next-unit Mode
 
-Trigger: invoked when a unit roadmap exists (`docs/monorepo-strategy/roadmap.md`) with unchecked items and the previous unit is finalized.
-
-**Precondition check (enforce, don't assume):** before generating the next unit's spec, read the immediately-prior `[x]` unit's spec and verify `Status: finalized`. If it is not finalized, print `Warning: previous unit '<prev>' is not finalized (Status: <status>) — generating the next spec may run ahead of unfinished work. Continue? [y/N]` and pause for explicit confirmation.
+Trigger: invoked when a unit roadmap exists (`docs/monorepo-strategy/roadmap.md`) with unchecked items.
 
 **Behavior:**
 
 1. Read the roadmap, identify next unchecked unit
 2. Read the immediately prior extraction spec only (the most recently completed unit's spec — not all prior specs) for context on what was learned. The prior spec is the last checked item (`[x]`) immediately before the next unchecked item (`[ ]`) in roadmap checkbox order. Match to `docs/superpowers/specs/` by unit name substring in filename.
 3. Run a lightweight dependency scan limited to the next unit's file set and its direct imports. Re-read `docs/monorepo-strategy/dependency-matrix.md`: read the row and column corresponding to the next unit to identify its direct dependencies and dependents. Do NOT re-run the full 4-phase analysis.
-4. Produce a single-unit spec for the next module at `docs/superpowers/specs/YYYY-MM-DD-extract-<module>-design.md` with **Status: Draft**.
+4. Produce a single-unit spec for the next module at `docs/superpowers/specs/YYYY-MM-DD-extract-<module>-design.md`.
 
 Skips the full 4-phase analysis — uses existing strategy docs as context.
 
@@ -474,5 +472,4 @@ Skips the full 4-phase analysis — uses existing strategy docs as context.
 | No unchecked items in roadmap | Print "All units in the roadmap are complete. Nothing to extract." and exit. |
 | Missing roadmap file | Print "No roadmap found at the expected path. Run the full analysis first to generate a roadmap." and exit. |
 | Missing prior unit's spec/plan artifacts | Warn "Prior unit artifacts not found — proceeding without prior context." Continue with step 2 skipped. |
-| Spec already exists for next unit AND Status is not `finalized` | Print "A spec for `<next-unit>` already exists. Resume the orchestrate cycle for that unit instead of regenerating." and exit. |
-| Spec already exists for next unit AND Status IS `finalized` | Proceed normally (treat as not yet started for --next-unit purposes). |
+| Spec already exists for next unit | Print "A spec for `<next-unit>` already exists: `<path>`. /implement ticks the unit when its run verifies." and exit. |

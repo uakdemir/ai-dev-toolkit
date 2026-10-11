@@ -217,7 +217,7 @@ Generate artifacts after Phase 2 approval. Create the `docs/layer-architecture/`
    - [ ] **ui** — UI components, depends on api + providers
    ```
 
-6. **Single-unit spec** — detailed analysis for the first unchecked layer. Contains: layer boundary definition, files belonging to this layer, dependency violations to resolve (imports that cross layer boundaries downward), provider interfaces to introduce, expected import rewrites. Written at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md` with **Status: Draft**.
+6. **Single-unit spec** — detailed analysis for the first unchecked layer. Contains: layer boundary definition, files belonging to this layer, dependency violations to resolve (imports that cross layer boundaries downward), provider interfaces to introduce, expected import rewrites. Written at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md`.
 
 Note: Roadmap and single-unit spec are only produced in ANALYZE mode Phase 3. SCAFFOLD mode is unchanged.
 
@@ -276,14 +276,14 @@ For empty projects with zero source files:
 
 ## --next-unit Mode
 
-Trigger: invoked when a layer roadmap exists (`docs/layer-architecture/roadmap.md`) with unchecked items and the previous layer is finalized.
+Trigger: invoked when a layer roadmap exists (`docs/layer-architecture/roadmap.md`) with unchecked items.
 
 **Behavior:**
 
 1. Read `docs/layer-architecture/roadmap.md`, identify next unchecked layer
 2. Read the immediately prior layer spec only (the most recently completed layer's spec — not all prior specs) for context. The prior spec is the last checked item (`[x]`) immediately before the next unchecked item (`[ ]`) in roadmap checkbox order. Match to `docs/superpowers/specs/` by layer name substring in filename.
 3. Run a lightweight dependency scan limited to the next layer's file set and its direct cross-layer imports. Re-read the file-to-layer mapping section of `docs/layer-architecture/strategy.md` to identify which files belong to the next layer, and read the violation allowlist section of that file for any permitted cross-boundary imports. Do NOT re-run the full analysis.
-4. Produce a single-unit spec at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md` for the next layer with **Status: Draft**.
+4. Produce a single-unit spec at `docs/superpowers/specs/YYYY-MM-DD-layer-<layer-name>-design.md` for the next layer.
 
 The layer hierarchy (Types > Config > Data > Service > Providers > API > UI) provides natural ordering — extract bottom-up. The roadmap is pre-ordered bottom-up at initial generation time. `--next-unit` always picks the next unchecked item in roadmap checkbox order; it does not re-derive order from the layer hierarchy at invocation time.
 
@@ -294,8 +294,7 @@ The layer hierarchy (Types > Config > Data > Service > Providers > API > UI) pro
 | No unchecked items in roadmap | Print "All units in the roadmap are complete. Nothing to extract." and exit. |
 | Missing roadmap file | Print "No roadmap found at the expected path. Run the full analysis first to generate a roadmap." and exit. |
 | Missing prior unit's spec/plan artifacts | Warn "Prior unit artifacts not found — proceeding without prior context." Continue with step 2 skipped. |
-| Spec already exists for next unit AND Status is not `finalized` | Print "A spec for `<next-unit>` already exists. Resume the orchestrate cycle for that unit instead of regenerating." and exit. |
-| Spec already exists for next unit AND Status IS `finalized` | Proceed normally (treat as not yet started for --next-unit purposes). |
+| Spec already exists for next unit | Print "A spec for `<next-unit>` already exists: `<path>`. /implement ticks the unit when its run verifies." and exit. |
 
 ---
 
