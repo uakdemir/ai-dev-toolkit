@@ -51,9 +51,11 @@ session asked in plain words for the next step reads the paths from it.
 |---|---|---|
 | `brainstorm` | `/ai-dev-tools:review-doc <spec-path>`, alone, as the run's final output | a spec was committed |
 | `review-doc` | `/ai-dev-tools:implement <spec-path>`, as the command of its `Recommended next:` block | rule 3 ("continue to implementation") on a run that reviewed exactly one document, under `docs/superpowers/specs/` or `docs/specs/`. Otherwise rule 3 prints no command, as today |
-| `implement` | `/ai-dev-tools:review-code <sha> --against <spec-path>`, ending its output | the run implemented anything. `<sha>` is HEAD when the run started; a run given a plan prints no `--against` |
+| `implement` | `/ai-dev-tools:review-code <sha> --against <spec-path>`, ending its output | the run implemented anything. `<sha>` is HEAD when the run started; a run given a plan prints no `--against`. A resumed run is the exception (section 2, item 4) |
 
 - `review-doc` still ends with the brainstorm line, and its rules 1 and 2 still print the `review-doc` command.
+  A run whose status is Error derives no recommendation: it prints neither the `Recommended next:` line nor a
+  command.
 - `/implement` needs a path. Without one it prints `Error: /implement needs a spec or plan path.` and exits.
 - `tmp/orchestrate-state.md` is never read again, and no file replaces it.
 
@@ -93,8 +95,12 @@ without a path prints the error in section 1. Step B is unchanged. Step C is rep
      Step C with them. The questions are kept nowhere else: a later `/ai-dev-tools:implement <spec-path>`
      asks again about whatever is still open.
 4. Print `Plan saved: <plan-path>` when a plan was written, so an interrupted run can resume with
-   `/ai-dev-tools:implement <plan-path>`. Then continue to Step D with the plan, or with the spec when no plan
-   was needed. The plan stage never prompts.
+   `/ai-dev-tools:implement <plan-path>`, and under it
+   `After resuming, review with: /ai-dev-tools:review-code <sha> --against <spec-path>`, with the SHA of
+   section 1. The resumed run is a run given a plan: its own command would start at a later SHA and name no
+   spec, and so leave out every commit the interrupted run made. When that line is in the conversation, the
+   resumed run ends its output with that command instead of its own. Then continue to Step D with the plan,
+   or with the spec when no plan was needed. The plan stage never prompts.
 
 A run that implemented anything ends its output with the `review-code` command of section 1.
 
@@ -165,7 +171,7 @@ Delete `ai-dev-tools/skills/orchestrate/`. Then remove or rewrite every live ref
 | `references/shared-rules/severity-is-consequence.md` | rewrite "Why this is shared", which rests on the three auto-pipeline gates |
 | `references/tasks-file.md` | the consumer list names session-handoff only, and line 14 no longer names `tmp/orchestrate-state.md` |
 | `skills/review-doc/SKILL.md`, `prompts/reviewer.md`, `prompts/verifier.md`; `skills/review-code/SKILL.md`, `prompts/reviewer.md`, `prompts/self-review.md` | prose that justifies a rule by orchestrate (stage i/iii, `--auto`, the auto-pipeline and unresolved-criticals gates). The rules stay, with these reasons: the counts feed the skill's own stop check; `--must-inspect` serves a re-run after Incomplete; `since` mode serves `/implement`'s `review-code <sha>`; the run-id prefixes keep two runs in one worktree apart; the error log is read by the user, for failure frequency. review-doc's property 4 (the caller sets phase structure) goes. |
-| `skills/review-doc/SKILL.md` | rule 3 of the next-round recommendation prints the `implement` command (section 1). `review-doc` commits at the end of every completed run that changed a document, not only when triage applied a fix: orchestrate's `/commit` breadcrumb did that before. |
+| `skills/review-doc/SKILL.md` | rule 3 of the next-round recommendation prints the `implement` command (section 1). `review-doc` commits at the end of every completed run that changed a document, not only when triage applied a fix: orchestrate's `/commit` breadcrumb did that before. The commit names those documents on `git add` and on `git commit`, so nothing already staged rides along. It leaves out a changed document that git ignores, such as a plan (decision 2): the run says so, and that is not an Error. |
 | `skills/help/SKILL.md` | replace `/orchestrate` with the four-step workflow; add `/brainstorm` |
 | `skills/session-handoff/SKILL.md` | drop the `/orchestrate (/…)` breadcrumb parsing, and Next Action Validation rule 2, which reads `Status: Draft` (decision 6) |
 | `skills/refactor-to-layers/SKILL.md`, `skills/refactor-to-monorepo/SKILL.md` | Every `Status:` and `finalized` mention goes (decision 6): generated specs carry no `Status:` line, the `--next-unit` triggers lose "and the previous unit is finalized", refactor-to-monorepo's precondition check (line 459) goes, and the two "Spec already exists" rows become one, which prints `A spec for <next-unit> already exists: <path>. /implement ticks the unit when its run verifies.` and exits. refactor-to-monorepo also rewrites its three orchestrate lines: 272 (`coding` = `/implement`), 410 (`/implement` ticks the checkboxes) and 416 (the spec enters the four-step workflow at review-doc). |

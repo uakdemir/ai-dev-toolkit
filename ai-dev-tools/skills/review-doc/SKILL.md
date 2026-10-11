@@ -155,7 +155,7 @@ These run before Setup. A run they stop (a `no` at the branch guard) has deleted
    - **Interactive:** print `Warning: you are on branch '<name>'. Fix commits will land here. Continue?` and pause for explicit approval. Blocking.
    - **Programmatic or auto dispatch (no user to prompt):** abort — `Error: refusing to run on branch '<name>'; dispatch from a feature branch.`
 
-   Worded identically to `review-code`'s pre-flight check 2, and for the same reason: **this skill commits.** The Respond to Remaining Issues phase commits every document the run changed, and it never asks the user first. A skill that commits unattended needs the guard whether or not it dispatches a fixer that commits — the divergence where `review-code` had this check and `review-doc` did not was an oversight, not a policy.
+   Worded identically to `review-code`'s pre-flight check 2, and for the same reason: **this skill commits.** The Respond to Remaining Issues phase commits the documents the run changed, and it never asks the user first. A skill that commits unattended needs the guard whether or not it dispatches a fixer that commits — the divergence where `review-code` had this check and `review-doc` did not was an oversight, not a policy.
 
 2. **Duplicate locations.** For each input path, glob the repository for other files with the same basename (`**/<basename>`, excluding `node_modules/`, `.git/`, and build output).
 
@@ -512,7 +512,7 @@ When the loop completes (final gate passes or max iterations exhausted):
 1. The orchestrator generates `tmp/_reviews_errors/review-doc-summary.md` directly -- no agent dispatch needed. Read `tmp/_reviews_errors/review-doc.json`, extract the top 10 issues by severity (then descending confidence) from the issues array. The array is not capped at 20: the reviewer caps its own findings at 20 but always includes every critical and high finding, so its own array exceeds that cap whenever those alone do (`prompts/reviewer.md` step 4); and the fact-check and self-review entries appended after it are outside the cap as well.
 2. Compute aggregate counts from accumulated fix-report data across all iterations (see Cross-Iteration Tracking).
 3. Apply status logic (see Status Logic below).
-4. Derive the next-round recommendation (see Next-Round Recommendation below).
+4. Unless the status is **Error**, derive the next-round recommendation (see Next-Round Recommendation below).
 5. Print terminal output (see Terminal Output above), ending with the `Found this round:` line — the brainstorm path in step 7 follows it as the run's last line.
 6. Unless the status is **Error**, run the Respond to Remaining Issues phase (below).
 7. Write the brainstorm document and print its absolute path as the run's last line (see Brainstorm Document below). This runs whatever the status is — a run with nothing to hand back still prints the line.
@@ -553,7 +553,16 @@ N issues triaged (C critical, H high, M medium, L low).
 Applied: N | Deferred: N | Pushed back: N
 ```
 
-**Commit at the end of every completed run that changed a document**, not only when triage applied a fix. The fixer and the self-review pass never commit, so a run whose triage applied nothing would otherwise leave their edits in the working tree. A run changed a document when Hash Verification saw a hash differ, or triage applied an edit. Stage the documents the run changed, and nothing else, and commit once: `fix(review-doc): apply N review suggestions`, where N counts every finding the run resolved — the fixer's `fixed` dispositions across all rounds, plus the fixes triage applied. A run that changed no document makes no commit.
+**Commit at the end of every completed run that changed a document**, not only when triage applied a fix. The fixer and the self-review pass never commit, so a run whose triage applied nothing would otherwise leave their edits in the working tree. A run changed a document when Hash Verification saw a hash differ, or triage applied an edit. Commit the documents the run changed, and nothing else, once. Name them on both commands, so that nothing the user had already staged rides along:
+
+```bash
+git add -- <changed docs>
+git commit -m 'fix(review-doc): apply N review suggestions' -- <changed docs>
+```
+
+N counts every finding the run resolved — the fixer's `fixed` dispositions across all rounds, plus the fixes triage applied. A run that changed no document makes no commit.
+
+**A changed document that git ignores stays out of the commit.** `git check-ignore -q -- <doc>` exits 0 for such a document, and a plan under a gitignored `docs/superpowers/plans/` is the usual case. Leave it out of both commands, leave its edits in the working tree, and print `Not committed (ignored by git): <doc>`. That is not an Error: `git add` refuses an ignored path, and forcing it would commit a file the repository keeps out of its history. A run whose changed documents are all ignored makes no commit.
 
 After all issues are processed, update `tmp/_reviews_errors/review-doc-summary.md` with final dispositions and reprint the terminal output with updated counts.
 
@@ -688,6 +697,8 @@ Interactive runs then ask `Retry the failed phase / continue with what completed
 ## Next-Round Recommendation
 
 After the status is computed, the orchestrator derives a recommendation for what to do next. It is computed directly from orchestrator state — no agent dispatch, no judgment call, identical output for identical inputs.
+
+**An Error run gets no recommendation.** When the status is **Error**, derive none, and print neither the `Recommended next:` line nor a command. Rule 3 below is the fallthrough, so a failed run with no critical counted and no collateral recorded would otherwise be sent on to implementation, with the `implement` command to paste, under a `0 criticals` that implies a review happened. That is the outcome `references/shared-rules/run-failure-disclosure.md` exists to prevent: a spec handed on that was never reviewed.
 
 Inputs:
 

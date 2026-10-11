@@ -35,7 +35,7 @@ Parse arguments: if `--help` is present, output ONLY the text inside `<help-text
 
 # implement
 
-Execute a written implementation plan or implement directly from a spec. `/implement` owns plan/spec detection, the decision whether a spec needs a plan, tier resolution, task-graph construction, execution-mode recommendation, the two-option mode picker, and the refactor-unit branch. It keeps no state and reads none. Before Step A, record HEAD (`git rev-parse HEAD`): a run that implemented anything ends its output with the command for the next step, and that command names this SHA (see Handing Over).
+Execute a written implementation plan or implement directly from a spec. `/implement` owns plan/spec detection, the decision whether a spec needs a plan, tier resolution, task-graph construction, execution-mode recommendation, the two-option mode picker, and the refactor-unit branch. Before Step A, record HEAD (`git rev-parse HEAD`): a run that implemented anything ends its output with the command for the next step, and that command names this SHA (see Handing Over).
 
 ---
 
@@ -88,7 +88,14 @@ This step never prompts, and never asks the user to review a plan. It stops only
 3. **Spec changes found while deciding or planning.** Sort each one on two questions: is it ambiguous (more than one defensible fix, so a decision is needed), and is it significant (your judgement; there is no threshold)?
    - **Not both** → make the change yourself: edit the spec and any plan, commit the spec edit alone (`docs(spec): <what changed>`), and continue. Every such edit is listed in the final report.
    - **Ambiguous and significant** → print the questions, delete any unfinished plan file, and stop before any dispatch. Nothing is implemented on a spec known to be undecided. When the user answers, write the answers into the spec, commit that edit alone (`docs(spec): <what changed>`), and resume this step with them. The questions are kept nowhere else: a later `/ai-dev-tools:implement <spec-path>` asks again about whatever is still open.
-4. When a plan was written, print `Plan saved: <plan-path>`, so an interrupted run can resume with `/ai-dev-tools:implement <plan-path>`. Then continue to Step D with the plan, or with the spec when no plan was needed.
+4. When a plan was written, print two lines, so an interrupted run can resume with `/ai-dev-tools:implement <plan-path>` and still be reviewed as a whole:
+
+   ```
+   Plan saved: <plan-path>
+   After resuming, review with: /ai-dev-tools:review-code <sha> --against <spec-path>
+   ```
+
+   `<sha>` is the HEAD recorded before Step A. The resumed run is a run given a plan, so it cannot rebuild that command (see Handing Over). Then continue to Step D with the plan, or with the spec when no plan was needed.
 
 ---
 
@@ -176,6 +183,7 @@ A run that implemented anything ends its output with the command for the next st
 ```
 
 - A run given a plan prints no `--against`: `/ai-dev-tools:review-code <sha>`. A run given a spec names that spec, whether or not Step C wrote a plan for it.
+- A resumed run is a run given a plan that an interrupted run of this skill wrote. Its own command would start at the resumed run's SHA and name no spec, and so leave out every commit the interrupted run made. The command that reviews the whole work is the one the interrupted run printed under `Plan saved:` (Step C, item 4): when that line is in the conversation, end the output with that command instead of this run's own.
 - A run **implemented something** when a coder, the scripted edit or the refactor-unit path committed work. A run that stopped at Step C, exited on an error, or ended with nothing committed prints no command.
 
 ---
