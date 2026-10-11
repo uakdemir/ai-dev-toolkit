@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.0.1 (2026-10-11)
+
+The fixes from the `review-code` round on 7.0.0.
+
+### Fixes
+
+- **implement:** a run that writes a plan prints `After resuming, review with: /ai-dev-tools:review-code <sha> --against <spec-path>` under `Plan saved:`, and a resumed run ends its output with that command when the line is in its conversation. A run resumed from the plan used to hand over a review that started after the interrupted run's commits and named no spec (8ce9f5a)
+- **review-doc:** the end-of-run commit names its documents on `git add` and on `git commit`, so nothing already staged rides along. A changed document that git ignores, such as a plan, stays out of it: the run prints `Not committed (ignored by git): <doc>`, and that is not an Error (8ce9f5a)
+- **review-doc:** a run whose status is Error derives no recommendation and prints neither `Recommended next:` nor a command. A failed run with no critical counted could print the `implement` command before (8ce9f5a)
+- **shared-rules:** `agent-tool-discipline.md` no longer says that `review-doc` leaves its edits in the working tree: the skill commits the documents a run changed (8ce9f5a)
+- **implement:** the intro no longer says the skill keeps no state and reads none, which the tier floor and the roadmap tick contradicted (8ce9f5a)
+
 ## 7.0.0 (2026-10-11)
 
 The release that removes `orchestrate`. The team runs four skills by hand, in this order:
