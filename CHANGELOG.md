@@ -13,7 +13,7 @@ when there is one, is internal to `implement`.
 - **implement:** the path is required. A run without one prints `Error: /implement needs a spec or plan path.`; the hint-file fallback is gone (bec77ec)
 - **implement:** `--auto` is removed, and a call that passes it gets `Error: --auto was removed in 7.0.0.` To run unattended, ask the session to run `review-doc`, `implement` and `review-code` in succession, and pass `--mode` so that a FULL run's picker does not wait. `--run-id` is ignored with a warning (bec77ec)
 - **implement:** given a spec, a run no longer stops at a write-a-plan prompt. It judges whether a plan would change the outcome, prints `Plan: needed — <reason>` or `Plan: skipped — <reason>`, writes the plan itself when one is needed, and carries on. `--plan` and `--no-plan` override the decision; `--skip-plan-recommendation` is read as `--no-plan`, with a warning (bec77ec)
-- **review-doc:** a completed run commits every document it changed, where it committed only when its triage applied a fix. `N` in `fix(review-doc): apply N review suggestions` now counts the fixer's fixes as well (ac62a38)
+- **review-doc:** a completed run commits every document it changed that git does not ignore, where it committed only when its triage applied a fix. `N` in `fix(review-doc): apply N review suggestions` now counts the fixer's fixes as well (ac62a38, 8ce9f5a)
 - **refactor-to-layers, refactor-to-monorepo:** generated specs carry no `Status:` line, and `--next-unit` no longer asks whether the previous unit is finalized. No skill reads or writes a spec's `Status:` (fab1a75)
 
 > As in 6.0.0, no commit carries a `BREAKING CHANGE:` footer. The commits that remove the skill and
