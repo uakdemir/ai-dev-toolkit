@@ -1,6 +1,6 @@
 # Tasks File
 
-> Shared contract used by orchestrate and session-handoff for reading and updating a
+> Contract used by session-handoff for reading and updating a
 > repo-tracked `TASKS.md`. Optional — skills that load this file operate normally when no
 > tasks file exists.
 
@@ -11,8 +11,8 @@ board. **A tracked file's staleness is visible in the diff.** A pull request tha
 without touching `TASKS.md` shows the omission to a reviewer. A `tmp/` file or an external board
 rots with no signal at all.
 
-This does not replace `tmp/orchestrate-state.md` or `tmp/session-handoff.md`. Those are
-single-session scratch state; `TASKS.md` is the durable, reviewable record.
+This does not replace `tmp/session-handoff.md`. That is single-session scratch state; `TASKS.md` is
+the durable, reviewable record.
 
 ## Discovery
 

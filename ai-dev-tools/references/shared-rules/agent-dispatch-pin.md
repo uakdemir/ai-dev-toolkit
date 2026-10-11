@@ -65,9 +65,7 @@ round ran its reviewer, fact-checker, fixer and self-reviewer at `max` on Opus u
 
 The tier's row decides, from the routing table in `references/shared-rules/risk-tier.md`, and every
 call names a model. A flag replaces one field of the row and leaves the others where the row put
-them. `orchestrate` passes none of `--effort`, `--fix-effort` and `--model`, so its stages take the
-tier's row for every phase. A value outside the table is an argument error, never a fallback to
-another level:
+them. A value outside the table is an argument error, never a fallback to another level:
 
 ```
 Error: --effort must be one of: high, xhigh, max.
@@ -146,11 +144,8 @@ The cap is the one cause observed here, and the error's two remedies address it.
 is on the tool's absence, whatever removed it: a session that lacks the tool for another reason
 gets the same text, and neither remedy is written for it.
 
-`orchestrate --auto` invokes `/review-doc` at stage i, `/implement` at stage ii and `/review-code`
-at stage iii inside a sub-agent (`skills/orchestrate/references/auto/pipeline-overview.md`), so it
-needs a cap of at least two. Under a cap of one its stages stop with the error above, except a
-MECHANICAL stage, which dispatches nothing. A cap of at least two is necessary and not known to be
-sufficient: the nested run itself is not measured under any cap.
+A cap of at least two is necessary and not known to be sufficient: the nested run itself is not
+measured under any cap.
 Nobody has run a review skill inside a sub-agent since the plugin's agents were added, so two
 things are open: whether a sub-agent's Agent tool offers the plugin's agent types, and whether the
 pin holds for an agent dispatched from inside a sub-agent.
@@ -222,16 +217,7 @@ That sentence is for a prompt author who wants a particular model.
 
 Restatements outside the three skills, to be kept in step with this file:
 
-- `skills/orchestrate/references/auto/stages/stage-i-spec-review.md`: the default agent and the
-  spawn-depth cap, at both phases
-- `skills/orchestrate/references/auto/stages/stage-iii-code-review.md`: the same, for its
-  per-iteration dispatch
-- `skills/orchestrate/references/auto/stages/stage-ii-implement.md`: the spawn-depth cap
-- `skills/orchestrate/references/auto/profiling-log.md`: the model the tier names
 - `skills/help/SKILL.md`: the agent names
-
-`orchestrate` dispatches agents too and is outside this rule. It reaches this rule only by invoking
-the three governed skills.
 
 Detector `untyped-agent-dispatch`, in `scripts/check-shared-semantics.cjs`: a manual gate, run per
 the root CLAUDE.md, not an automatic one. In a governed skill, check B fails on any line where the
@@ -251,9 +237,8 @@ or a placeholder. It reads the file as a whole and not call by call, so a call w
 several lines counts, and so does that text outside any call. A skill that only lists the agents'
 names, as `skills/help/SKILL.md` does, is not one: no name there follows `subagent_type:`. Under the
 `references/` tree of a skill outside this rule no check reads the call: check D skips the tree,
-and the sweep that reads it skips this detector. That tree is where `orchestrate` describes the
-agents it dispatches (`skills/orchestrate/references/auto/`). Check B reads every file of a
-governed skill, `references/` included, so a call in
+and the sweep that reads it skips this detector. Check B reads every file of a governed skill,
+`references/` included, so a call in
 `skills/implement/references/implementation-step.md` is judged as one in
 `skills/implement/SKILL.md` is.
 

@@ -26,9 +26,11 @@ paragraph around it.
 ## Why this is shared
 
 `review-code` and `review-doc` emit different artifacts that share a `severity` enum and a
-`critical_count` field, and three auto-pipeline gates read that field without knowing which skill
-produced it. If one skill rates by consequence and the other by certainty, the same number means two
-different things and the gates compare incomparable quantities.
+`critical_count` field, and one validator, `scripts/validate-review-json.cjs`, checks that field in
+both. Each skill's stop check and status read it, and so does whoever runs one skill after the
+other. If one skill rates by consequence and the other by certainty, the same number means two
+different things, and a spec's zero criticals and its implementation's zero criticals stop being the
+same claim.
 
 That is not hypothetical. `review-code` gained this rule in `6f22c6a`; that commit touched two
 files, both under `review-code`. `review-doc` went on deriving severity from its confidence score,

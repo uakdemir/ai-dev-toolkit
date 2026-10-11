@@ -147,9 +147,8 @@ Variants:
 - **review-doc:** `1 round · reviewer, fact-checker Opus·max · fixer Opus·high`
 - **implement:** `mode single · coders Sonnet·high · escalation Opus·high`
 - **implement on a FULL run without `--mode`:** the mode is not chosen yet, so the line
-  reads `mode pending · coders Sonnet·high · escalation Opus·high`. When the picker answers, or
-  `--auto` takes the recommendation, the run prints `Mode: per-task (picked)` or
-  `Mode: single (recommended)`.
+  reads `mode pending · coders Sonnet·high · escalation Opus·high`. When the picker answers, the
+  run prints `Mode: <mode> (picked)`.
 - **implement's scripted edit (MECHANICAL):** `mode scripted edit · no agents`
 - **MECHANICAL:** `no review agents · runs --verify` (review-code) or `no review round` (review-doc)
 
@@ -184,6 +183,3 @@ Restatements of the routing table, to be kept in step with it. No gate reads the
 
 - `skills/implement/SKILL.md` (Escalation) and `references/shared-rules/agent-dispatch-pin.md` (The
   call): the escalation's `model: "opus"`
-- `skills/orchestrate/references/auto/stages/stage-i-spec-review.md` (both phases) and
-  `skills/orchestrate/references/auto/stages/stage-iii-code-review.md`: the review agents' model
-- `skills/orchestrate/references/auto/stages/stage-ii-implement.md`: the coders' model

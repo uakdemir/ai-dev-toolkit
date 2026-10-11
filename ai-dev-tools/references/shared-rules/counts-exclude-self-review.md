@@ -1,6 +1,6 @@
 ---
 name: counts-exclude-self-review
-applies-to: [review-code, review-doc, orchestrate]
+applies-to: [review-code, review-doc]
 canonical: Counts measure the artefact under review, never the review loop's own edits.
 ---
 
@@ -36,14 +36,12 @@ regression one round's fixer introduced and a later round's repaired then leaves
 either the count or the status — which is the whole point of keeping it out of the count.
 
 This half is `review-code`'s alone: `review-doc` runs no verification commands and so has no
-regressions to exclude, and `orchestrate` is governed here as a reader of the counts, which it reads
-the same way whichever half kept a number out of them.
+regressions to exclude.
 
 ## The exclusion is round-local
 
 It holds only within the round that wrote those lines. That round both authored and reviewed them,
-so counting them there reports the loop's own sloppiness as evidence against the authored artefact
-— and the unresolved-criticals gate stops the run when any critical remains.
+so counting them there reports the loop's own sloppiness as evidence against the authored artefact.
 
 **A later round counts them normally, and needs no mechanism to do it.** Rounds carry nothing
 forward: the next reviewer re-reads the whole artefact from scratch and reports what it finds,
@@ -86,7 +84,6 @@ independent facts, and `category` already carries the first.
 
 - `skills/review-code/SKILL.md`
 - `skills/review-doc/SKILL.md`
-- `skills/orchestrate/references/common/error-logs-format.md` (the gate read contract)
 
 Enforced by `scripts/validate-review-json.cjs`, which both review skills invoke, and covered by
 `scripts/count-exclusion-test.sh` (a manual gate, run per the root CLAUDE.md). This is a
