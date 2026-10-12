@@ -35,6 +35,7 @@ COMMANDS (INDEPENDENT QUALITY CHECKS)
   /refactor-to-monorepo     Analyze monolith, produce unit extraction roadmap
   /refactor-to-layers       Enforce layered architecture, produce unit roadmap
   /scaffold --stack <name>  Bootstrap a project or add a package (node-fastify-react | expo | dotnet-mvc-react)
+  /create-artifact [action]  Make, publish or finalize an engineering artifact (one portable HTML page)
 
   Run any command with --help for usage details.
 

@@ -49,6 +49,7 @@ node ./ai-dev-tools/scripts/check-schema-drift.cjs ./ai-dev-tools       # exit 0
 ./ai-dev-tools/scripts/check-detector-coverage.sh ./ai-dev-tools        # PASS
 ./ai-dev-tools/scripts/check-fixtures.sh ./ai-dev-tools                 # PASS
 ./ai-dev-tools/scripts/merge-fact-check-test.sh ./ai-dev-tools          # 8 passed
+./ai-dev-tools/scripts/check-artifact-test.sh ./ai-dev-tools            # 66 passed
 ```
 
 | gate | what it stops |
@@ -60,6 +61,7 @@ node ./ai-dev-tools/scripts/check-schema-drift.cjs ./ai-dev-tools       # exit 0
 | `check-detector-coverage.sh` | the severity detector silently gaining or losing a file |
 | `check-fixtures.sh` | a review round editing the read-only eval oracle |
 | `merge-fact-check-test.sh` | a fact-check merge that renumbers, recounts or writes wrongly |
+| `check-artifact-test.sh` | the `create-artifact` check passing a page that breaks a rule, or refusing the skill's own starter page |
 
 And one reporter, which never fails a build:
 

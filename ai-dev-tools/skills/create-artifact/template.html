@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Topic name</title>
+<style>
+/* Layout: one column. A header, then one section for each subject, then the answer line, then the footer. */
+:root {
+  --bg: #f1f3f6; --surface: #ffffff; --sunk: #e6eaef; --ink: #17212b; --soft: #55626e; --line: #cdd5dd;
+  --accent: #1f4fa3; --accent-soft: #e0e8f8; --on-accent: #ffffff;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+/* The dark values are written two times. The first block follows the system setting. The second
+   block follows the theme that the Claude viewer sets. Keep the two blocks the same. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10161c; --surface: #18212a; --sunk: #212c37; --ink: #e5ebf0; --soft: #9aa7b3; --line: #2e3b47;
+    --accent: #8db4ff; --accent-soft: #1b2c48; --on-accent: #0d1420;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10161c; --surface: #18212a; --sunk: #212c37; --ink: #e5ebf0; --soft: #9aa7b3; --line: #2e3b47;
+  --accent: #8db4ff; --accent-soft: #1b2c48; --on-accent: #0d1420;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5; }
+.page { max-width: 60rem; margin-inline: auto; padding-inline: 1.25rem; padding-block: 2.25rem 4rem; display: flex; flex-direction: column; gap: 2.5rem; }
+header, section, footer { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+h1 { margin: 0; font-size: clamp(1.7rem, 4.5vw, 2.4rem); line-height: 1.12; text-wrap: balance; }
+h2 { margin: 0; font-size: 1.35rem; line-height: 1.2; text-wrap: balance; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font-size: .75rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--soft); }
+.lede { color: var(--soft); }
+code, .mono { font-family: var(--mono); font-size: .86em; }
+code { background: var(--sunk); padding: 0 .3em; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+img, svg { max-width: 100%; }
+/* A table, a diagram or a code block that is wider than the page goes inside .scroll. */
+.scroll { overflow-x: auto; }
+button { font: inherit; font-weight: 600; font-size: .88rem; color: var(--on-accent); background: var(--accent); border: 1.5px solid var(--accent); border-radius: 7px; padding: .3rem .8rem; cursor: pointer; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* One question: a fieldset with one radio input for each option. */
+.question { display: flex; flex-direction: column; gap: .6rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+.question legend { padding: 0; font-weight: 700; }
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .6rem; }
+.option { position: relative; display: flex; flex-direction: column; gap: .25rem; min-width: 0; padding: .6rem .7rem; background: var(--surface); border: 1.5px solid var(--line); border-radius: 8px; cursor: pointer; }
+.option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.option:has(input:disabled) { cursor: default; }
+.option .letter { font-family: var(--mono); color: var(--accent); margin-right: .35rem; }
+.option small { color: var(--soft); }
+
+/* The answer line. The person selects it, or uses Copy, and puts it in the conversation. */
+.answer { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding-top: 1rem; border-top: 2px solid var(--line); }
+.answer output { font-family: var(--mono); font-weight: 700; font-size: 1.1rem; background: var(--sunk); border-radius: 6px; padding: .2rem .7rem; user-select: all; }
+.answer .note { flex-basis: 100%; font-size: .85rem; color: var(--soft); min-height: 1.3em; }
+
+footer { border-top: 1px solid var(--line); padding-top: 1rem; gap: .25rem; font-size: .85rem; color: var(--soft); }
+footer p { max-width: none; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <p class="eyebrow">Decision page · draft</p>
+  <h1>Topic name</h1>
+  <p class="lede">One or two sentences: what the person decides here, and what changes as a result.</p>
+</header>
+
+<section aria-labelledby="context">
+  <h2 id="context">Context</h2>
+  <p>The facts that the person must know before the decision. Draw a diagram as inline SVG.</p>
+</section>
+
+<!-- A page with no decision has no form and no script. Remove the two blocks, and the styles of
+     .question, .options, .option and .answer. -->
+<form id="decisions" aria-labelledby="decide">
+  <section>
+    <h2 id="decide">Decisions</h2>
+    <!-- One fieldset for each question. data-q is the number in the answer line. The recommended
+         option has the attribute "checked". Give each input an id. -->
+    <fieldset class="question" data-q="1">
+      <legend>1. The question, as one sentence?</legend>
+      <div class="options">
+        <label class="option" for="q1a">
+          <input type="radio" name="q1" id="q1a" value="A" checked>
+          <b><span class="letter">A</span>First option (recommended)</b>
+          <small>What this option does, and what it costs.</small>
+        </label>
+        <label class="option" for="q1b">
+          <input type="radio" name="q1" id="q1b" value="B">
+          <b><span class="letter">B</span>Second option</b>
+          <small>What this option does, and what it costs.</small>
+        </label>
+      </div>
+    </fieldset>
+  </section>
+
+  <!-- Write the line of the recommended answers into the output element. It is then correct before
+       the script runs, and when the script does not run. -->
+  <div class="answer">
+    <span>Answer line</span>
+    <output id="answer-line">1A</output>
+    <button type="button" id="copy-answer">Copy</button>
+    <p class="note" id="answer-note" role="status">Select the line, or use Copy. Then put it in the conversation.</p>
+  </div>
+</form>
+
+<footer>
+  <p>Draft of YYYY-MM-DD. The decision is not final.</p>
+  <p>Sources: <code>path/to/the-spec.md</code>, <code>path/to/the-source-file</code></p>
+</footer>
+
+</div>
+<script>
+(() => {
+  const form = document.getElementById("decisions");
+  const line = document.getElementById("answer-line");
+  const note = document.getElementById("answer-note");
+
+  /* The answer line: the number of each question and the letter of its checked option. */
+  function answerLine() {
+    return [...form.querySelectorAll("[data-q]")]
+      .map((question) => question.dataset.q + (question.querySelector("input:checked") || { value: "?" }).value)
+      .join(" ");
+  }
+
+  function selectLine() {
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    note.textContent = "Selected. Copy it with your keyboard.";
+  }
+
+  /* The clipboard call must be inside the click. Some viewers refuse it. Then select the text. */
+  function copyLine() {
+    try {
+      navigator.clipboard.writeText(line.textContent).then(() => { note.textContent = "Copied."; }, selectLine);
+    } catch (error) {
+      selectLine();
+    }
+  }
+
+  form.addEventListener("change", () => { line.textContent = answerLine(); });
+  form.addEventListener("submit", (event) => event.preventDefault());
+  document.getElementById("copy-answer").addEventListener("click", copyLine);
+})();
+</script>
+</body>
+</html>
