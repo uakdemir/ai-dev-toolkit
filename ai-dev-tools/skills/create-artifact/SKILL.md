@@ -155,6 +155,7 @@ A board (`*.dc.html`) draws only inside the Claude Design runtime. The approved 
 4. Remove the font link. Use system fonts. If the mockup must show the app typeface, load it from the shared fonts folder. If the typeface file is not there, ask the person for it.
 5. Change each `/_blob/` picture into a picture from the shared pictures folder. The picture at the platform address is not in Git. If no shared picture fits, ask the person.
 6. Remove the `support.js` script tag and the `text/x-dc` script. If the `DCLogic` class holds state or handlers, port them into plain functions and pointer events in the one script at the end. Each control then does in the page what it does on the board. A class that only returns `{}` from `renderVals` has no logic, and the page gets no script.
+   - A control that has no handler on the board stays a button that does nothing. Say so in the text of the page. Do not give a control a behaviour that the design did not approve.
    - Change each `sc-if` into the `hidden` attribute, and each `{{ }}` value into a value that the script sets.
    - Write the start state into the markup, so that the page is correct before the script runs.
    - A part that only a pointer can move, such as a slider rail, gets an `input` also, so that the keyboard can reach it.
