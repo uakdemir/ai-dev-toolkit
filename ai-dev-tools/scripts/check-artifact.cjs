@@ -8,13 +8,15 @@
 //                   folder name has no date, and a tracked Markdown file links to the page
 //   --assets <dir>  the shared folder, when it is not <repository root>/docs/superpowers/artifacts/assets
 //
-// One line for each broken rule:  FAIL  <rule>  line <n>: <what is wrong>
-// A page above the soft size target gets a WARN line and passes.
+// FAIL  <rule>  line <n>: <what is wrong>   a rule that the gate `engineering-artifacts-are-portable`
+//                                            refuses: the page does not open the same way in each place
+// WARN  <rule>  line <n>: <what is wrong>   each other rule of the skill that a script can see. The
+//                                            page passes: the author corrects it or tells the person
 //
 // The check reads text with patterns. It does not run the page. Thus it does not see a request that a
 // script builds from parts, and it does not see the layout: look at the page at a width of 400 pixels.
 //
-// Node built-ins only. Exit 0 = pass, 1 = one or more broken rules, 2 = the check cannot run.
+// Node built-ins only. Exit 0 = no FAIL line, 1 = one or more FAIL lines, 2 = the check cannot run.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -62,8 +64,10 @@ if (assetsDir === null && repoRoot !== null) assetsDir = path.join(repoRoot, 'do
 if (final && repoRoot === null) stop('--final needs a page inside a Git repository');
 
 const fails = [];
+const warns = [];
 const lineOf = (index) => raw.slice(0, index).split('\n').length;
 const fail = (rule, index, message) => fails.push({ rule, line: lineOf(index), message });
+const warn = (rule, index, message) => warns.push({ rule, line: lineOf(index), message });
 
 // Each view has the length of the file, with the text of other kinds changed into spaces. A match
 // in a view is then at the same position, and on the same line, as in the file.
@@ -144,7 +148,7 @@ function isTracked(file) {
 for (const tag of tags.matchAll(/<([a-z][a-z0-9-]*)\b([^>]*)>/gi)) {
   const name = tag[1].toLowerCase();
   if (name === 'a' || name === 'area') {
-    if (/\sdownload\b/i.test(tag[2])) fail('download', tag.index, 'a download link. The Claude viewer blocks it');
+    if (/\sdownload\b/i.test(tag[2])) warn('download', tag.index, 'a download link. The Claude viewer blocks it');
     continue;
   }
   for (const attr of tag[2].matchAll(/\s(src|href|xlink:href|poster|data|srcset)\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)/gi)) {
@@ -161,8 +165,9 @@ for (const m of css.matchAll(/url\(\s*(["']?)([\s\S]*?)\1\s*\)/gi)) checkAddress
 for (const m of css.matchAll(/@import\s+(["'])(.*?)\1/gi)) checkAddress(m[2], m.index, 'CSS @import');
 
 // ---- text patterns ----
+const WARN_RULES = ['data-font', 'dialog', 'download'];
 function each(view, pattern, rule, message) {
-  for (const m of view.matchAll(pattern)) fail(rule, m.index, message(m));
+  for (const m of view.matchAll(pattern)) (WARN_RULES.includes(rule) ? warn : fail)(rule, m.index, message(m));
 }
 each(code, /\b(fetch\s*\(|XMLHttpRequest\b|WebSocket\b|EventSource\b|sendBeacon\b)/g, 'network',
   (m) => `the script makes a network request: ${m[1].replace(/\s*\($/, '')}`);
@@ -181,22 +186,22 @@ each(code, /(?:\bwindow\.|(?<![.\w$]))(alert|confirm|prompt)\s*\(/g, 'dialog',
   (m) => `the script calls ${m[1]}(). The Claude viewer does not show it`);
 each(code, /\.download\s*=/g, 'download', () => 'the script starts a download. The Claude viewer blocks it');
 
-// ---- one file: a title, one style block, the content, one script at the end ----
+// ---- one file: a title, one style block, the content, one script at the end (warnings) ----
 // A page that comes back from the Claude publisher has no document tags of its own. From a disk, a
 // browser then draws it in quirks mode, and a phone draws it at desktop width.
-if (!/^\s*<!doctype html>/i.test(raw)) fail('structure', 0, 'the page does not start with <!doctype html>');
-if (!/<meta\b[^>]*\bname\s*=\s*["']?viewport/i.test(tags)) fail('structure', 0, 'the page has no viewport meta tag');
-if (!/<title\b[^>]*>\s*\S/i.test(tags)) fail('structure', 0, 'the page has no title');
-if (styles.length > 1) fail('structure', styles[1].index, `the page has ${styles.length} style blocks. Use one`);
-if (scripts.length > 1) fail('structure', scripts[1].index, `the page has ${scripts.length} scripts. Use one, at the end`);
+if (!/^\s*<!doctype html>/i.test(raw)) warn('structure', 0, 'the page does not start with <!doctype html>');
+if (!/<meta\b[^>]*\bname\s*=\s*["']?viewport/i.test(tags)) warn('structure', 0, 'the page has no viewport meta tag');
+if (!/<title\b[^>]*>\s*\S/i.test(tags)) warn('structure', 0, 'the page has no title');
+if (styles.length > 1) warn('structure', styles[1].index, `the page has ${styles.length} style blocks. Use one`);
+if (scripts.length > 1) warn('structure', scripts[1].index, `the page has ${scripts.length} scripts. Use one, at the end`);
 if (scripts.length === 1 && tags.slice(scripts[0].end).replace(/<\/(body|html)\s*>/gi, '').trim() !== '') {
-  fail('structure', scripts[0].index, 'content comes after the script. Put the script at the end');
+  warn('structure', scripts[0].index, 'content comes after the script. Put the script at the end');
 }
 
-// ---- colors and motion ----
-if (!/prefers-color-scheme/.test(css)) fail('colors', 0, 'the styles have no prefers-color-scheme rule, so the page has no dark colors');
+// ---- colors and motion (warnings) ----
+if (!/prefers-color-scheme/.test(css)) warn('colors', 0, 'the styles have no prefers-color-scheme rule, so the page has no dark colors');
 const moves = /@keyframes|\banimation(?:-name)?\s*:|\btransition\s*:/.test(css) || /\brequestAnimationFrame\b|\.animate\s*\(/.test(code);
-if (moves && !/prefers-reduced-motion/.test(css + code)) fail('motion', 0, 'the page has motion and no prefers-reduced-motion rule');
+if (moves && !/prefers-reduced-motion/.test(css + code)) warn('motion', 0, 'the page has motion and no prefers-reduced-motion rule');
 
 // ---- size ----
 if (bytes > MAX_PAGE_BYTES) fail('size', 0, `the page is ${bytes} bytes. The limit is ${MAX_PAGE_BYTES}`);
@@ -204,8 +209,8 @@ if (bytes > MAX_PAGE_BYTES) fail('size', 0, `the page is ${bytes} bytes. The lim
 // ---- a page that goes into Git ----
 if (final) {
   const folder = path.basename(pageDir);
-  if (/^\d{4}-\d{2}-\d{2}/.test(folder)) fail('name', 0, `the folder ${folder} starts with a date. A final has a topic name and no date`);
-  if (path.basename(page) !== 'index.html') fail('name', 0, `the file is ${path.basename(page)}. A final is <topic>/index.html`);
+  if (/^\d{4}-\d{2}-\d{2}/.test(folder)) warn('name', 0, `the folder ${folder} starts with a date. A final has a topic name and no date`);
+  if (path.basename(page) !== 'index.html') warn('name', 0, `the file is ${path.basename(page)}. A final is <topic>/index.html`);
   if (!hasMarkdownLink()) fail('orphan', 0, 'no tracked Markdown file links to this page. Add a link from the topic spec');
 }
 
@@ -222,11 +227,12 @@ function hasMarkdownLink() {
   return false;
 }
 
-fails.sort((a, b) => a.line - b.line);
-for (const f of fails) process.stdout.write(`FAIL  ${f.rule}  line ${f.line}: ${f.message}\n`);
 if (bytes > SOFT_PAGE_BYTES && bytes <= MAX_PAGE_BYTES) {
-  process.stdout.write(`WARN  size  the page is ${bytes} bytes, above the soft target of ${SOFT_PAGE_BYTES}. Tell the author why\n`);
+  warn('size', 0, `the page is ${bytes} bytes, above the soft target of ${SOFT_PAGE_BYTES}. Tell the author why`);
 }
+const byLine = (a, b) => a.line - b.line;
+for (const f of fails.sort(byLine)) process.stdout.write(`FAIL  ${f.rule}  line ${f.line}: ${f.message}\n`);
+for (const w of warns.sort(byLine)) process.stdout.write(`WARN  ${w.rule}  line ${w.line}: ${w.message}\n`);
 if (fails.length > 0) {
   process.stdout.write(`${fails.length} broken rule(s) in ${page}\n`);
   process.exit(1);

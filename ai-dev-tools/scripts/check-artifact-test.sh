@@ -2,7 +2,8 @@
 # TDD harness for scripts/check-artifact.cjs -- the check that the create-artifact skill runs on a page.
 #
 # Each case makes one small page from tests/fixtures/artifact-pages/base.html with one part changed.
-# The changed part is the broken rule, and the case names the rule ids that the check must report.
+# The changed part is the broken rule, and the case names the rule ids that the check must report:
+# as FAIL lines for a rule that the gate refuses, or as WARN lines ("warn:<ids>") for each other rule.
 # The pages go into a scratch Git repository: the check finds the shared folder from the repository
 # root, and --final reads the tracked files.
 #
@@ -43,15 +44,20 @@ A='../../../docs/superpowers/artifacts/assets'   # from a draft folder to the sh
 # swap <text> <find> <put>: the text with each <find> changed into <put>, both literal.
 swap() { printf '%s' "${1//"$2"/"$3"}"; }
 
-# check <want> <label> <check-artifact arguments>: <want> is the sorted rule ids, or "" for a pass.
+# ids <FAIL|WARN> <output>: the sorted rule ids of the lines of that kind.
+ids() { printf '%s\n' "$2" | sed -n "s/^$1  \\([a-z-]*\\)  .*/\\1/p" | sort -u | tr '\n' ' ' | sed 's/ $//'; }
+
+# check <want> <label> <check-artifact arguments>: <want> is the sorted rule ids of the FAIL lines,
+# "warn:<sorted rule ids>" for a pass with those WARN lines, or "" for a pass with no line.
 check() {
-  local want="$1" label="$2" out code got
+  local want="$1" label="$2" out code got warned
   shift 2
   out="$(node "$CHECK" "$@" 2>&1)"; code=$?
-  got="$(printf '%s\n' "$out" | sed -n 's/^FAIL  \([a-z-]*\)  .*/\1/p' | sort -u | tr '\n' ' ' | sed 's/ $//')"
-  if [ -z "$want" ] && [ "$code" -eq 0 ] && [ -z "$got" ]; then ok "passes: $label"
+  got="$(ids FAIL "$out")"; warned="$(ids WARN "$out")"
+  if [ -z "$want" ] && [ "$code" -eq 0 ] && [ -z "$got$warned" ]; then ok "passes: $label"
+  elif [ "${want#warn:}" != "$want" ] && [ "$code" -eq 0 ] && [ -z "$got" ] && [ "$warned" = "${want#warn:}" ]; then ok "warns (${want#warn:}): $label"
   elif [ -n "$want" ] && [ "$code" -eq 1 ] && [ "$got" = "$want" ]; then ok "refuses ($want): $label"
-  else bad "$label -- want '${want:-pass}', got exit $code and '${got:-no rule}'"; fi
+  else bad "$label -- want '${want:-pass}', got exit $code, FAIL '${got:-none}', WARN '${warned:-none}'"; fi
 }
 
 # draft <want> <label> <page text>: check the text as a draft page.
@@ -96,7 +102,7 @@ one "network" "a picture address that the script sets" '/*JS*/' 'new Image().src
 echo
 echo "pictures and fonts inside the file"
 one "data-picture" "a raster picture as data: text" '<!--BODY-->' '<img src="data:image/png;base64,iVBORw0KGgo=" alt="">'
-one "data-font" "a font as data: text" '/*CSS*/' '@font-face { font-family: "X"; src: url(data:font/woff2;base64,AAAA); }'
+one "warn:data-font" "a font as data: text" '/*CSS*/' '@font-face { font-family: "X"; src: url(data:font/woff2;base64,AAAA); }'
 
 echo
 echo "Claude runtime"
@@ -115,25 +121,25 @@ one "storage" "storage in an event attribute" '<!--BODY-->' '<button type="butto
 
 echo
 echo "dialogs and downloads"
-one "dialog" "alert" '/*JS*/' 'alert("Done");'
-one "dialog" "confirm" '/*JS*/' 'if (confirm("Sure?")) {}'
-one "dialog" "window.prompt" '/*JS*/' 'const answer = window.prompt("Name");'
-one "download" "a download link" '<!--BODY-->' '<a href="data.csv" download>Get the data</a>'
+one "warn:dialog" "alert" '/*JS*/' 'alert("Done");'
+one "warn:dialog" "confirm" '/*JS*/' 'if (confirm("Sure?")) {}'
+one "warn:dialog" "window.prompt" '/*JS*/' 'const answer = window.prompt("Name");'
+one "warn:download" "a download link" '<!--BODY-->' '<a href="data.csv" download>Get the data</a>'
 
 echo
 echo "one file"
-one "structure" "no doctype" '<!doctype html>' ''
-one "structure" "no viewport meta tag" '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' ''
-one "structure" "no title" '<title>Test page</title>' ''
-one "structure" "two style blocks" '<!--HEAD-->' '<style>h1 { margin: 0; }</style>'
-one "structure" "two scripts" '<!--BODY-->' '<script>/* first */</script>'
-draft "structure" "content after the script" "$(swap "$(swap "$BASE" '<h1>Test page</h1>' '')" '</script>' $'</script>\n<h1>Test page</h1>')"
+one "warn:structure" "no doctype" '<!doctype html>' ''
+one "warn:structure" "no viewport meta tag" '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' ''
+one "warn:structure" "no title" '<title>Test page</title>' ''
+one "warn:structure" "two style blocks" '<!--HEAD-->' '<style>h1 { margin: 0; }</style>'
+one "warn:structure" "two scripts" '<!--BODY-->' '<script>/* first */</script>'
+draft "warn:structure" "content after the script" "$(swap "$(swap "$BASE" '<h1>Test page</h1>' '')" '</script>' $'</script>\n<h1>Test page</h1>')"
 
 echo
 echo "colors and motion"
-one "colors" "no dark colors" '@media (prefers-color-scheme: dark) { :root { --bg: #111111; --ink: #eeeeee; } }' ''
-one "motion" "CSS motion with no reduced-motion rule" '/*CSS*/' 'h1 { animation: spin 1s linear infinite; }'
-one "motion" "script motion with no reduced-motion rule" '/*JS*/' 'requestAnimationFrame(function step() {});'
+one "warn:colors" "no dark colors" '@media (prefers-color-scheme: dark) { :root { --bg: #111111; --ink: #eeeeee; } }' ''
+one "warn:motion" "CSS motion with no reduced-motion rule" '/*CSS*/' 'h1 { animation: spin 1s linear infinite; }'
+one "warn:motion" "script motion with no reduced-motion rule" '/*JS*/' 'requestAnimationFrame(function step() {});'
 
 echo
 echo "files that the page names"
@@ -153,10 +159,7 @@ check "asset" "no repository and no --assets" "$OTHER/page/index.html"
 echo
 echo "size"
 PAD="$(head -c 60000 /dev/zero | tr '\0' 'x')"
-printf '%s\n' "$(swap "$BASE" '<!--BODY-->' "<p>$PAD</p>")" > "$DRAFT/index.html"
-out="$(node "$CHECK" "$DRAFT/index.html" 2>&1)"; code=$?
-if [ "$code" -eq 0 ] && printf '%s\n' "$out" | grep -q '^WARN  size  '; then ok "passes with a warning: a page above 60,000 bytes"
-else bad "a page above 60,000 bytes -- got exit $code"; fi
+one "warn:size" "a page above 60,000 bytes" '<!--BODY-->' "<p>$PAD</p>"
 one "size" "a page above 150,000 bytes" '<!--BODY-->' "<p>$PAD$PAD$PAD</p>"
 
 echo
@@ -179,7 +182,7 @@ DATED="$REPO/docs/superpowers/artifacts/2026-10-12-topic"
 mkdir -p "$DATED"
 printf '%s\n' "$BASE" > "$DATED/index.html"
 printf '[The dated page](superpowers/artifacts/2026-10-12-topic/index.html)\n' >> "$REPO/docs/spec.md"
-check "name" "a date in the name of a final" --final "$DATED/index.html"
+check "warn:name" "a date in the name of a final" --final "$DATED/index.html"
 
 OWNED="$REPO/apps/mobile/docs/superpowers/artifacts/topic"
 mkdir -p "$OWNED"

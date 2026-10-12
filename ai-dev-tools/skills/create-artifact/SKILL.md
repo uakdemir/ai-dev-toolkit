@@ -72,20 +72,22 @@ tmp/artifacts/published/<topic>/index.html                          publish copy
 7. **Real controls.** Each control is a `button`, an `input`, a `details` or a link, with a label and a visible focus state.
 8. **A width of 400 pixels, light and dark colors, reduced motion.** At a width of 400 pixels, the page body does not scroll to the side: an object that is wider goes into a box with `overflow-x: auto`. A mockup of a screen keeps the colors of the screen. The page around it has light and dark colors.
 9. **Content readable with no script.**
-10. **A soft target of 60,000 bytes** for each page. When a page is larger, tell the author the size and the cause. The check refuses a page above 150,000 bytes.
+10. **A soft target of 60,000 bytes** for each page. When a page is larger, tell the author the size and the cause. The gate refuses a page above 150,000 bytes.
 11. **No download link, and no `alert`, `confirm` or `prompt`.** The Claude viewer blocks them.
 
 ## The starter page and the check script
 
 - The starter page is `${CLAUDE_PLUGIN_ROOT}/skills/create-artifact/template.html`. It holds the color tokens for light and dark, the system font stack, a header, a section, the answer line with Copy, and a footer with the date and the source paths. Start each page from it.
-- The check script reads one page and prints one `FAIL` line for each broken rule:
+- The check script reads one page. It prints a `FAIL` line for a rule that the gate `engineering-artifacts-are-portable` refuses, and a `WARN` line for each other rule that a script can see:
 
   ```bash
   node ${CLAUDE_PLUGIN_ROOT}/scripts/check-artifact.cjs <page>            # a draft
   node ${CLAUDE_PLUGIN_ROOT}/scripts/check-artifact.cjs --final <page>    # a page that goes into Git
   ```
 
-  Exit 0 is a pass. Exit 1 is one or more broken rules: correct each one and run the check again. Exit 2 means that the check did not run. A `WARN  size` line is a pass: tell the author the size and the cause.
+  Exit 1 is one or more `FAIL` lines: correct each one and run the check again. Exit 0 is a pass. Exit 2 means that the check did not run.
+
+  A `FAIL` rule is one of these: a load from another host, a raster picture inside the file, the Claude runtime, browser storage, a file that is not in the shared folder, a page above 150,000 bytes and, with `--final`, a page with no link from a Markdown file. A `WARN` line does not refuse the page. Read each one. Correct it, or tell the person which rule the page does not obey, and why.
 - The check reads text. It does not see the layout, a missing label or a control that does nothing. If the session can open a browser, look at the page at a width of 400 pixels in light and in dark colors. If it cannot, tell the person that nobody looked at the layout.
 
 ## Actions
@@ -99,7 +101,7 @@ tmp/artifacts/published/<topic>/index.html                          publish copy
 4. For a decision page, give each question a number and each option a letter. Mark the recommended option with `checked`. Write the line of the recommended answers into the `output` element.
 5. If the page needs a picture or the app typeface, use a file from the shared folder. If the file is not there, ask the person for it. Do not put it into the page, and do not download it.
 6. Put the date and the paths of the source files in the footer.
-7. Run the check script. Correct each `FAIL` line.
+7. Run the check script. Correct each `FAIL` line, and read each `WARN` line.
 8. Give the person the path of the page. For a decision page, tell them to send the answer line back in the conversation.
 
 ### Publish to Claude
@@ -134,7 +136,7 @@ The file in the repository stays the true version. To change a published page, c
 4. Move the page to the final folder of its topic (see **Folders**): `<owning-package>/docs/superpowers/artifacts/<topic>/index.html`, or the root folder if no package owns the topic. The folder name is the topic, with no date. Delete the draft folder.
 5. Calculate each relative path to the shared folder again. `git add` each shared file that is new.
 6. Add a Markdown link to the page from the topic spec. A final page with no link from a Markdown file is an orphan.
-7. Run the check script with `--final`. Correct each `FAIL` line.
+7. Run the check script with `--final`. Correct each `FAIL` line, and read each `WARN` line.
 8. Commit the page, the spec and each new shared file in one commit, on the branch that the session started on. Use the commit message form of the repository. Do not make a branch, do not change the branch, and do not push.
 
 ### Change a final
@@ -169,7 +171,7 @@ A board (`*.dc.html`) draws only inside the Claude Design runtime. The approved 
 | The thought | The fact |
 |---|---|
 | "The font link follows the artifact page rules", "that host is allowed in the Claude viewer" | The page must open from a disk with no network. Offline, the face changes with no warning, and a mockup shows the wrong face |
-| "A path to the typeface file fails offline, or the viewer blocks it, so I put the font into the file" | A relative path to the shared folder works from a disk. The publish step sends the file with the page |
+| "A path to the typeface file fails offline, or the viewer blocks it, so I put the font into the file" | A relative path to the shared folder works from a disk. The publish step sends the file with the page, and the viewer shows it: see the first run in `references/viewer-contract.md` |
 | "A relative path breaks when the page moves or is published" | **Make final** calculates the path again, and the publish copy uses `assets/…` |
 | "The Claude viewer adds the document tags, so the file has none" | With no doctype, a browser draws the file from a disk in quirks mode. The file has the tags, and the publish copy has none |
 | "Git ignores `tmp/`, so the draft goes into `docs/`" | A draft stays out of Git on purpose. Only a final goes into `docs/` |

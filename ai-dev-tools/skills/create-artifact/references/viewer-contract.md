@@ -13,7 +13,7 @@ The contract can change. Before each publish, get the contract in the session, a
 | Only the first 8,000 bytes are read for the `<title>`. The title is the name of the page: two to four words, the same at each publish. | The title is the first line of the copy. |
 | `icon` is one plain word at the first publish. A later publish does not give it. | See the publish step. |
 | The page is 16 megabytes or less. Each other file is 15 megabytes or less. | A page is 150,000 bytes or less, and a shared file is 200,000 bytes or less. |
-| The other files go in `files`. Each key is the path that the HTML names: relative, with no `/` at the start. The type comes from the file name for the usual types. Give `contentType` for other types. | Keys are `assets/pictures/<file>` and `assets/fonts/<file>`. Give `contentType` for a typeface file. |
+| The other files go in `files`. Each key is the path that the HTML names: relative, with no `/` at the start. The type comes from the file name for the usual types. Give `contentType` for other types. | Keys are `assets/pictures/<file>` and `assets/fonts/<file>`. Give `contentType` for a typeface file. The design guidance of the Artifact tool says to put a font into the file as `data:` text. That is not necessary: the first run below showed a typeface from a file. |
 | A page is private when it is published. A session cannot change the sharing. | The person shares the page from its Share menu. |
 
 ## What the viewer refuses
@@ -59,4 +59,4 @@ Date: 2026-10-12. The test page had one picture (`assets/pictures/test-card.png`
 |---|---|
 | The publisher stores the page and the two files | Confirmed. The file list showed `index.html` (`text/html`), the picture (`image/png`) and the typeface (`font/ttf`). |
 | The publisher adds its document tags around a copy that has none | Confirmed. The page that came back started with the tags of the publisher, then the `<title>` of the copy. |
-| The picture and the typeface show in the Claude viewer | Not confirmed. A session cannot see the viewer. The test page shows a result line for a person to read. |
+| The picture and the typeface show in the Claude viewer | Confirmed by the founder. A session cannot see the viewer, so the test page showed a result line for a person to read. The line was `picture=yes typeface=yes`. |
