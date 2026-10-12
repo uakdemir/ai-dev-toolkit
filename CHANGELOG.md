@@ -1,5 +1,23 @@
 # Changelog
 
+## 7.1.1 (2026-10-12)
+
+The release that adds `create-artifact`. An engineering artifact is one HTML page that shows a
+decision, a system or a screen to a person. The page opens the same way from a disk with no network,
+in a browser and in the Claude artifact viewer, and only its final version goes into Git.
+
+### Features
+
+- **create-artifact:** new skill, `/ai-dev-tools:create-artifact [new|publish|final|change|convert]`. It holds the rules of a portable page, a starter page (`template.html`) and the steps of each action: a draft in `tmp/artifacts/<date>-<topic>/`, a private copy published to Claude, a final in `<owning-package>/docs/superpowers/artifacts/<topic>/` with a link from the topic spec, a change in place, and the conversion of a Claude Design board. A repository's `CLAUDE.md` can name other folders (4b6f4b4)
+- **create-artifact:** `scripts/check-artifact.cjs [--final] [--assets <dir>] <page>` reads one page. It refuses what the gate `engineering-artifacts-are-portable` refuses: a load from another host, a raster picture inside the file, the Claude runtime, browser storage, a file outside the shared folder, a page above 150,000 bytes and, with `--final`, a page that no Markdown file links to. Each other rule that a script can see is a `WARN` line, and the page passes (4b6f4b4, afb824a)
+- **create-artifact:** a conversion keeps each interaction of a board. The `DCLogic` state becomes plain functions and pointer events, and a control with no handler on the board stays a button that does nothing (d2ad317, a6580e1)
+- **create-artifact:** `references/viewer-contract.md` records the page contract of the Claude viewer on 2026-10-12, and the first run of the publish step: the viewer shows a picture and a typeface that the page loads from files beside it (4b6f4b4, afb824a)
+- **help:** `/create-artifact` is in the command list (4b6f4b4)
+
+### Tests
+
+- `scripts/check-artifact-test.sh` pins the check with 66 cases, and is in the gate block of `CLAUDE.md` (4b6f4b4)
+
 ## 7.0.1 (2026-10-11)
 
 The fixes from the `review-code` round on 7.0.0.
