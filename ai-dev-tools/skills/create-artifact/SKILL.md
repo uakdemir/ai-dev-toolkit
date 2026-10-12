@@ -10,7 +10,7 @@ description: "Use when the user asks to make, change, publish or finalize an eng
 Usage: /create-artifact [action] [topic or path]
 
 Actions:
-  new <topic>        Make a draft page in tmp/artifacts/<date>-<topic>/
+  new <topic>        Make a draft page tmp/artifacts/<date>-<topic>.html
   publish <path>     Publish a copy of a page to Claude as a private page
   final <path>       Write the answers into a draft and move it into Git
   change <path>      Change a final page in place
@@ -21,7 +21,7 @@ Without an action, the skill takes the action from the request.
 
 Examples:
   /create-artifact new notification-settings
-  /create-artifact final tmp/artifacts/2026-10-12-notification-settings/index.html
+  /create-artifact final tmp/artifacts/2026-10-12-notification-settings.html
 </help-text>
 
 If the user's arguments contain `--help`, output ONLY the text inside `<help-text>` tags above verbatim. Do not execute any skill logic.
@@ -47,18 +47,19 @@ Do not change a rule. If a rule does not work for a page, stop and tell the pers
 Read the `CLAUDE.md` of the repository first. If it names folders for artifacts, use those folders, and give the shared folder to the check script with `--assets`. If it names none, use these:
 
 ```
-tmp/artifacts/<YYYY-MM-DD>-<topic>/index.html                       draft, gitignored
-<owning-package>/docs/superpowers/artifacts/<topic>/index.html      final, in Git
-docs/superpowers/artifacts/<topic>/index.html                       final that no package owns
+tmp/artifacts/<YYYY-MM-DD>-<topic>.html                             draft, gitignored
+<owning-package>/docs/superpowers/artifacts/<topic>.html            final, in Git
+docs/superpowers/artifacts/<topic>.html                             final that no package owns
 docs/superpowers/artifacts/assets/pictures/                         shared raster pictures
 docs/superpowers/artifacts/assets/fonts/                            shared typeface files and licences
-tmp/artifacts/published/<topic>/index.html                          publish copy, gitignored
+tmp/artifacts/published/<topic>.html                                publish copy, gitignored
 ```
 
 - `<topic>` is a short name in lower case with hyphens. `<YYYY-MM-DD>` is the date of today.
+- A page is one file named for its topic. It has no folder of its own, because its pictures and its typeface are in the shared folder.
 - The owning package is the package that holds the topic spec of the page.
 - A draft is in `tmp/artifacts/` also when the person wants to keep it for some days. A draft does not go into a `docs/` folder, because its decision is not final.
-- A page reaches the shared folder by a relative path. From a draft at the repository root, the path is `../../../docs/superpowers/artifacts/assets/pictures/<file>`. When you move a page, calculate each path again.
+- A page reaches the shared folder by a relative path. From a draft in `tmp/artifacts/`, the path is `../../docs/superpowers/artifacts/assets/pictures/<file>`. From a final in the root `docs/superpowers/artifacts/`, it is `assets/pictures/<file>`. When you move a page, calculate each path again.
 - A page that names a shared file shows it only while the page is in its folder in the repository. Tell the person, if they want to copy the page to a different place.
 
 ## Rules
@@ -94,8 +95,8 @@ tmp/artifacts/published/<topic>/index.html                          publish copy
 
 ### New draft
 
-1. Make the folder and copy the starter page:
-   `mkdir -p tmp/artifacts/<YYYY-MM-DD>-<topic> && cp ${CLAUDE_PLUGIN_ROOT}/skills/create-artifact/template.html tmp/artifacts/<YYYY-MM-DD>-<topic>/index.html`
+1. Copy the starter page:
+   `mkdir -p tmp/artifacts && cp ${CLAUDE_PLUGIN_ROOT}/skills/create-artifact/template.html tmp/artifacts/<YYYY-MM-DD>-<topic>.html`
 2. Run `git check-ignore -q tmp/artifacts`. If the exit code is not 0, Git does not ignore the folder: tell the person before you continue.
 3. Write the content into the copy. The title is a name of two to four words. A page with no decision has no form and no script: remove them, as the comment in the starter page says.
 4. For a decision page, give each question a number and each option a letter. Mark the recommended option with `checked`. Write the line of the recommended answers into the `output` element.
@@ -110,7 +111,7 @@ The file in the repository stays the true version. To change a published page, c
 
 1. Run the check script on the page in the repository. Publish only a page that passes. Do not run the check on the publish copy: the copy has no document tags and its paths name no file on the disk, so the check refuses it.
 2. Get the page contract of the Claude viewer in this session: do what the Artifact tool tells you to do before a publish (it names the `artifact-design` skill). Then read `references/viewer-contract.md` in this skill folder. If the contract of today refuses something that this skill makes, stop and tell the person.
-3. Copy the page to `tmp/artifacts/published/<topic>/index.html`.
+3. Copy the page to `tmp/artifacts/published/<topic>.html`.
 4. In the copy, delete these lines: `<!doctype html>`, `<html …>`, `<head>`, the `charset` and `viewport` meta tags, `</head>`, `<body>`, `</body>` and `</html>`. The copy then starts with `<title>`. The publisher adds its own document tags.
 5. In the copy, change each relative path to the shared folder into `assets/pictures/<file>` or `assets/fonts/<file>`. A published page cannot name a file with `../`.
 6. Publish the copy with the Artifact tool:
@@ -133,9 +134,9 @@ The file in the repository stays the true version. To change a published page, c
    - Remove the Copy button and its note. Remove the script also, if it has no other task.
    - Change the words that say "draft" or "recommended" where they are no longer true.
 3. Put the date of the decision in the footer.
-4. Move the page to the final folder of its topic (see **Folders**): `<owning-package>/docs/superpowers/artifacts/<topic>/index.html`, or the root folder if no package owns the topic. The folder name is the topic, with no date. Delete the draft folder.
+4. Move the page to the artifacts folder of its owner (see **Folders**): `<owning-package>/docs/superpowers/artifacts/<topic>.html`, or the root folder if no package owns the topic. The file name is the topic, with no date. Delete the draft file.
 5. Calculate each relative path to the shared folder again. `git add` each shared file that is new.
-6. Add a Markdown link to the page from the topic spec. A final page with no link from a Markdown file is an orphan.
+6. Add a Markdown link to the page from the topic spec. A final page with no link from a Markdown file is an orphan. Use the link form of that spec: a path relative to it, `~/<path>` from the repository root, or `@<scope>/<package>/<path>`. The check reads the three forms. A link from a plan does not count, because a plan does not reach the trunk.
 7. Run the check script with `--final`. Correct each `FAIL` line, and read each `WARN` line.
 8. Commit the page, the spec and each new shared file in one commit, on the branch that the session started on. Use the commit message form of the repository. Do not make a branch, do not change the branch, and do not push.
 
@@ -149,7 +150,7 @@ The file in the repository stays the true version. To change a published page, c
 
 A board (`*.dc.html`) draws only inside the Claude Design runtime. The approved board becomes one final page.
 
-1. Copy the starter page to the final folder: `<owning-package>/docs/superpowers/artifacts/<topic>/index.html`. A conversion has no draft, because the design is approved. Remove the form, the script and their styles, as the comment in the starter page says.
+1. Copy the starter page to the artifacts folder of its owner: `<owning-package>/docs/superpowers/artifacts/<topic>.html`. A conversion has no draft, because the design is approved. Remove the form, the script and their styles, as the comment in the starter page says.
 2. Take the markup out of the `x-dc` tag. Do not take the `helmet` tag. Put the markup of each board into one wrapper `div` that has the width and the height of the board (the `$preview` values in `data-props`).
 3. Move the styles from the `helmet` tag into the one style block. A rule for `body`, `button` or `a` in the board applies to the whole page now: change its selector so that it applies only inside the wrapper. The `button` rule and the `box-sizing` rule of the starter page apply inside the board also: set them back inside the wrapper, or the buttons of the board change their size.
 4. Remove the font link. Use system fonts. If the mockup must show the app typeface, load it from the shared fonts folder. If the typeface file is not there, ask the person for it.

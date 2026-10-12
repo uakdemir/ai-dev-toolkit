@@ -30,8 +30,8 @@ trap 'rm -rf "$WORK"' EXIT
 
 REPO="$WORK/repo"
 SHARED="$REPO/docs/superpowers/artifacts/assets"
-DRAFT="$REPO/tmp/artifacts/2026-10-12-case"
-mkdir -p "$SHARED" "$DRAFT" "$REPO/elsewhere"
+DRAFT="$REPO/tmp/artifacts/2026-10-12-case.html"
+mkdir -p "$SHARED" "$(dirname "$DRAFT")" "$REPO/elsewhere"
 cp -r "$FIX/assets/." "$SHARED/"
 cp "$FIX/elsewhere/dot.png" "$REPO/elsewhere/dot.png"
 head -c 200001 /dev/zero > "$SHARED/pictures/big.png"
@@ -39,7 +39,7 @@ git -C "$REPO" init -q
 git -C "$REPO" add docs
 
 BASE="$(cat "$FIX/base.html")"
-A='../../../docs/superpowers/artifacts/assets'   # from a draft folder to the shared folder
+A='../../docs/superpowers/artifacts/assets'   # from a draft in tmp/artifacts/ to the shared folder
 
 # swap <text> <find> <put>: the text with each <find> changed into <put>, both literal.
 swap() { printf '%s' "${1//"$2"/"$3"}"; }
@@ -61,7 +61,7 @@ check() {
 }
 
 # draft <want> <label> <page text>: check the text as a draft page.
-draft() { printf '%s\n' "$3" > "$DRAFT/index.html"; check "$1" "$2" "$DRAFT/index.html"; }
+draft() { printf '%s\n' "$3" > "$DRAFT"; check "$1" "$2" "$DRAFT"; }
 # one <want> <label> <find> <put>: check the base page with one part changed.
 one() { draft "$1" "$2" "$(swap "$BASE" "$3" "$4")"; }
 
@@ -70,7 +70,7 @@ echo "pages that pass"
 one "" "the base page" 'NO-SUCH-TEXT' ''
 check "" "the starter page of the skill" "$STARTER"
 one "" "a link to another host, a link to a file, and the word fetch in the text" '<!--BODY-->' \
-  '<p>We fetch the data. <a href="https://example.com/">Example</a> <a href="../../../docs/spec.md">Spec</a></p>'
+  '<p>We fetch the data. <a href="https://example.com/">Example</a> <a href="../../docs/spec.md">Spec</a></p>'
 one "" "an SVG drawing as data: text" '/*CSS*/' \
   "h1 { background: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E\"); }"
 one "" "an inline SVG drawing" '<!--BODY-->' \
@@ -144,7 +144,7 @@ one "warn:motion" "script motion with no reduced-motion rule" '/*JS*/' 'requestA
 echo
 echo "files that the page names"
 one "asset" "a file that does not exist" '<!--BODY-->' "<img src=\"$A/pictures/none.png\" alt=\"\">"
-one "asset" "a file outside the shared folder" '<!--BODY-->' '<img src="../../../elsewhere/dot.png" alt="">'
+one "asset" "a file outside the shared folder" '<!--BODY-->' '<img src="../../elsewhere/dot.png" alt="">'
 one "asset" "a file beside the page" '<!--BODY-->' '<img src="dot.png" alt="">'
 one "asset" "a shared file larger than 200,000 bytes" '<!--BODY-->' "<img src=\"$A/pictures/big.png\" alt=\"\">"
 one "asset" "a shared file that is not a picture or a typeface" '<script>' "<script src=\"$A/pictures/lib.js\">"
@@ -164,34 +164,47 @@ one "size" "a page above 150,000 bytes" '<!--BODY-->' "<p>$PAD$PAD$PAD</p>"
 
 echo
 echo "--final"
-FINAL="$REPO/docs/superpowers/artifacts/topic"
-mkdir -p "$FINAL"
-swap "$BASE" '<!--BODY-->' '<img src="../assets/pictures/dot.png" alt="Dot">' > "$FINAL/index.html"
-check "orphan" "no Markdown file links to the page" --final "$FINAL/index.html"
-printf '[The page](superpowers/artifacts/topic/index.html)\n' > "$REPO/docs/spec.md"
-check "orphan" "only a Markdown file outside Git links to the page" --final "$FINAL/index.html"
+FINAL="$REPO/docs/superpowers/artifacts/topic.html"
+swap "$BASE" '<!--BODY-->' '<img src="assets/pictures/dot.png" alt="Dot">' > "$FINAL"
+check "orphan" "no Markdown file links to the page" --final "$FINAL"
+printf '[The page](superpowers/artifacts/topic.html)\n' > "$REPO/docs/spec.md"
+check "orphan" "only a Markdown file outside Git links to the page" --final "$FINAL"
 git -C "$REPO" add docs/spec.md
-check "" "a final page with a link from a tracked Markdown file" --final "$FINAL/index.html"
+check "" "a final page with a link from a tracked Markdown file" --final "$FINAL"
 
 cp "$FIX/assets/pictures/dot.png" "$SHARED/pictures/new.png"
-swap "$BASE" '<!--BODY-->' '<img src="../assets/pictures/new.png" alt="Dot">' > "$FINAL/index.html"
-check "asset" "a shared file that is not in Git" --final "$FINAL/index.html"
-check "" "the same page as a draft" "$FINAL/index.html"
+swap "$BASE" '<!--BODY-->' '<img src="assets/pictures/new.png" alt="Dot">' > "$FINAL"
+check "asset" "a shared file that is not in Git" --final "$FINAL"
+check "" "the same page as a draft" "$FINAL"
 
-DATED="$REPO/docs/superpowers/artifacts/2026-10-12-topic"
-mkdir -p "$DATED"
-printf '%s\n' "$BASE" > "$DATED/index.html"
-printf '[The dated page](superpowers/artifacts/2026-10-12-topic/index.html)\n' >> "$REPO/docs/spec.md"
-check "warn:name" "a date in the name of a final" --final "$DATED/index.html"
+DATED="$REPO/docs/superpowers/artifacts/2026-10-12-topic.html"
+printf '%s\n' "$BASE" > "$DATED"
+printf '[The dated page](superpowers/artifacts/2026-10-12-topic.html)\n' >> "$REPO/docs/spec.md"
+check "warn:name" "a date in the name of a final" --final "$DATED"
 
-OWNED="$REPO/apps/mobile/docs/superpowers/artifacts/topic"
-mkdir -p "$OWNED"
-swap "$BASE" '<!--BODY-->' '<img src="../../../../../../docs/superpowers/artifacts/assets/pictures/dot.png" alt="Dot">' > "$OWNED/index.html"
-printf '[The page](../superpowers/artifacts/topic/index.html#top)\n' > "$REPO/apps/mobile/docs/specs.md"
+FOLDER="$REPO/docs/superpowers/artifacts/legacy"
+mkdir -p "$FOLDER"
+printf '%s\n' "$BASE" > "$FOLDER/index.html"
+printf '[The folder page](superpowers/artifacts/legacy/index.html)\n' >> "$REPO/docs/spec.md"
+check "warn:name" "a final named index.html" --final "$FOLDER/index.html"
+
+OWNED="$REPO/apps/mobile/docs/superpowers/artifacts/topic.html"
+mkdir -p "$(dirname "$OWNED")" "$REPO/apps/mobile/docs/superpowers/plans"
+swap "$BASE" '<!--BODY-->' '<img src="../../../../../docs/superpowers/artifacts/assets/pictures/dot.png" alt="Dot">' > "$OWNED"
+printf '[The page](../superpowers/artifacts/topic.html#top)\n' > "$REPO/apps/mobile/docs/specs.md"
 git -C "$REPO" add apps/mobile/docs/specs.md
-check "orphan" "a link that goes to a different page" --final "$OWNED/index.html"
-printf '[The page](superpowers/artifacts/topic/index.html#top)\n' > "$REPO/apps/mobile/docs/specs.md"
-check "" "a final page in a package folder" --final "$OWNED/index.html"
+check "orphan" "a link that goes to a different page" --final "$OWNED"
+printf '[The page](superpowers/artifacts/topic.html)\n' > "$REPO/apps/mobile/docs/superpowers/plans/plan.md"
+git -C "$REPO" add apps/mobile/docs/superpowers/plans/plan.md
+check "orphan" "only a plan links to the page" --final "$OWNED"
+printf '[The page](superpowers/artifacts/topic.html#top)\n' > "$REPO/apps/mobile/docs/specs.md"
+check "" "a final page in a package folder" --final "$OWNED"
+printf '[The page](~/apps/mobile/docs/superpowers/artifacts/topic.html#top)\n' > "$REPO/apps/mobile/docs/specs.md"
+check "" "a link from the repository root with ~/" --final "$OWNED"
+printf '[The page](@tune-dating/mobile/docs/superpowers/artifacts/topic.html)\n' > "$REPO/apps/mobile/docs/specs.md"
+check "" "a link through the package name" --final "$OWNED"
+printf '[The page](@tune-dating/other/docs/superpowers/artifacts/topic.html)\n' > "$REPO/apps/mobile/docs/specs.md"
+check "orphan" "a link through a different package name" --final "$OWNED"
 
 echo
 echo "commands that cannot run"

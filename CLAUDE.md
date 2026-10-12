@@ -49,7 +49,7 @@ node ./ai-dev-tools/scripts/check-schema-drift.cjs ./ai-dev-tools       # exit 0
 ./ai-dev-tools/scripts/check-detector-coverage.sh ./ai-dev-tools        # PASS
 ./ai-dev-tools/scripts/check-fixtures.sh ./ai-dev-tools                 # PASS
 ./ai-dev-tools/scripts/merge-fact-check-test.sh ./ai-dev-tools          # 8 passed
-./ai-dev-tools/scripts/check-artifact-test.sh ./ai-dev-tools            # 66 passed
+./ai-dev-tools/scripts/check-artifact-test.sh ./ai-dev-tools            # 71 passed
 ```
 
 | gate | what it stops |

@@ -1,5 +1,22 @@
 # Changelog
 
+## 7.1.2 (2026-10-12)
+
+A page of `create-artifact` is one file named for its topic, and the final check reads the link forms
+that the repositories use.
+
+### Changes
+
+- **create-artifact:** a page is `<topic>.html`, not `<topic>/index.html`. A draft is `tmp/artifacts/<date>-<topic>.html`, a final is `<owning-package>/docs/superpowers/artifacts/<topic>.html`, and the publish copy is `tmp/artifacts/published/<topic>.html`. A page needs no folder of its own, because its pictures and its typeface are in the shared folder. The final check warns on a final named `index.html` or with a date in its name
+
+### Fixes
+
+- **create-artifact:** `check-artifact.cjs --final` refused a page that a topic spec links to with `~/<path>`, the repository-root form of the Tune specs, while the gate `engineering-artifacts-are-portable` passed it. The check now reads a link relative to the Markdown file, `~/<path>` from the repository root, and `@<scope>/<package>/<path>` for a package in `apps/` or `packages/`. A link from a plan does not count, as in the gate
+
+### Tests
+
+- `scripts/check-artifact-test.sh` moves to the topic-file layout and adds the cases of each link form, a link from a plan, and a final named `index.html`
+
 ## 7.1.1 (2026-10-12)
 
 The release that adds `create-artifact`. An engineering artifact is one HTML page that shows a

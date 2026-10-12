@@ -5,7 +5,7 @@
 //   node check-artifact.cjs [--final] [--assets <dir>] <page.html>
 //
 //   --final         also apply the rules of a page that goes into Git: each shared file is in Git, the
-//                   folder name has no date, and a tracked Markdown file links to the page
+//                   file is <topic>.html with no date, and a tracked Markdown file links to the page
 //   --assets <dir>  the shared folder, when it is not <repository root>/docs/superpowers/artifacts/assets
 //
 // FAIL  <rule>  line <n>: <what is wrong>   a rule that the gate `engineering-artifacts-are-portable`
@@ -208,20 +208,30 @@ if (bytes > MAX_PAGE_BYTES) fail('size', 0, `the page is ${bytes} bytes. The lim
 
 // ---- a page that goes into Git ----
 if (final) {
-  const folder = path.basename(pageDir);
-  if (/^\d{4}-\d{2}-\d{2}/.test(folder)) warn('name', 0, `the folder ${folder} starts with a date. A final has a topic name and no date`);
-  if (path.basename(page) !== 'index.html') warn('name', 0, `the file is ${path.basename(page)}. A final is <topic>/index.html`);
+  const name = path.basename(page);
+  if (/^\d{4}-\d{2}-\d{2}/.test(name)) warn('name', 0, `the file ${name} starts with a date. A final has a topic name and no date`);
+  if (name === 'index.html') warn('name', 0, 'the file is index.html. A final is <topic>.html');
   if (!hasMarkdownLink()) fail('orphan', 0, 'no tracked Markdown file links to this page. Add a link from the topic spec');
 }
 
+// A link target in the forms that the repositories use: relative to the Markdown file, `~/<path>` from the
+// repository root, or `@<scope>/<package>/<path>` for a package in apps/ or packages/.
+function linkTargets(markdownFile, target) {
+  if (target.startsWith('~/')) return [path.join(repoRoot, target.slice(2))];
+  const scoped = /^@[^/]+\/([^/]+)\/(.+)$/.exec(target);
+  if (scoped) return ['apps', 'packages'].map((parent) => path.join(repoRoot, parent, scoped[1], scoped[2]));
+  return [path.resolve(path.dirname(markdownFile), target)];
+}
+
+// A plan never reaches the trunk, so a link in a plan does not keep a page from being an orphan.
 function hasMarkdownLink() {
   const tracked = execFileSync('git', ['-C', repoRoot, 'ls-files', '-z', '--', '*.md'], { encoding: 'utf8' });
   for (const name of tracked.split('\0').filter(Boolean)) {
+    if (name.split('/').includes('plans')) continue;
     const file = path.join(repoRoot, name);
     if (!fs.existsSync(file)) continue;
     for (const m of fs.readFileSync(file, 'utf8').matchAll(/\]\(\s*<?([^)\s>]+)/g)) {
-      const target = path.resolve(path.dirname(file), m[1].replace(/[?#].*$/, ''));
-      if (target === page || target === pageDir) return true;
+      if (linkTargets(file, m[1].replace(/[?#].*$/, '')).includes(page)) return true;
     }
   }
   return false;
