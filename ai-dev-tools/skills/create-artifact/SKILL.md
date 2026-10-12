@@ -151,10 +151,14 @@ A board (`*.dc.html`) draws only inside the Claude Design runtime. The approved 
 
 1. Copy the starter page to the final folder: `<owning-package>/docs/superpowers/artifacts/<topic>/index.html`. A conversion has no draft, because the design is approved. Remove the form, the script and their styles, as the comment in the starter page says.
 2. Take the markup out of the `x-dc` tag. Do not take the `helmet` tag. Put the markup of each board into one wrapper `div` that has the width and the height of the board (the `$preview` values in `data-props`).
-3. Move the styles from the `helmet` tag into the one style block. A rule for `body`, `button` or `a` in the board applies to the whole page now: change its selector so that it applies only inside the wrapper.
+3. Move the styles from the `helmet` tag into the one style block. A rule for `body`, `button` or `a` in the board applies to the whole page now: change its selector so that it applies only inside the wrapper. The `button` rule and the `box-sizing` rule of the starter page apply inside the board also: set them back inside the wrapper, or the buttons of the board change their size.
 4. Remove the font link. Use system fonts. If the mockup must show the app typeface, load it from the shared fonts folder. If the typeface file is not there, ask the person for it.
 5. Change each `/_blob/` picture into a picture from the shared pictures folder. The picture at the platform address is not in Git. If no shared picture fits, ask the person.
-6. Remove the `support.js` script tag and the `text/x-dc` script. If the `DCLogic` class holds state or handlers, port them into plain functions and pointer events in the one script at the end. A class that only returns `{}` from `renderVals` has no logic, and the page gets no script.
+6. Remove the `support.js` script tag and the `text/x-dc` script. If the `DCLogic` class holds state or handlers, port them into plain functions and pointer events in the one script at the end. Each control then does in the page what it does on the board. A class that only returns `{}` from `renderVals` has no logic, and the page gets no script.
+   - Change each `sc-if` into the `hidden` attribute, and each `{{ }}` value into a value that the script sets.
+   - Write the start state into the markup, so that the page is correct before the script runs.
+   - A part that only a pointer can move, such as a slider rail, gets an `input` also, so that the keyboard can reach it.
+   - If `node` is available, run the class of the board and the script of the page on the same events, and compare the results.
 7. Put several boards side by side in a grid, each board in a box with `overflow-x: auto`. Browser zoom and scroll replace the canvas pan.
 8. Keep the colors of the board inside the wrapper. The page around it keeps the light and dark tokens of the starter page. If the board has a transition or an animation, the reduced-motion rule of the starter page must stay.
 9. Put the date of the approval in the footer. If the person did not give it, ask for it.
